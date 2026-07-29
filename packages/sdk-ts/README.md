@@ -5,7 +5,7 @@ TypeScript SDK for [agent-media](https://agent-media.ai) — UGC video generatio
 Generate AI videos with realistic talking heads, B-roll, voiceover, animated subtitles, and music. One function call, finished video.
 
 [![npm version](https://img.shields.io/npm/v/@agentmedia/sdk)](https://www.npmjs.com/package/@agentmedia/sdk)
-[![license](https://img.shields.io/npm/l/@agentmedia/sdk)](https://github.com/gitroomhq/agent-media/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/@agentmedia/sdk)](https://github.com/gitroomhq/agent-media-app/blob/main/LICENSE)
 
 ## Install
 
@@ -281,7 +281,7 @@ videos.forEach(v => console.log(v.video_url));
 - [Interactive API Docs](https://agent-media.ai/docs/api-reference)
 - [OpenAPI Spec](https://agent-media.ai/openapi.json)
 - [Website](https://agent-media.ai)
-- [GitHub](https://github.com/gitroomhq/agent-media)
+- [GitHub](https://github.com/gitroomhq/agent-media-app)
 
 ## License
 

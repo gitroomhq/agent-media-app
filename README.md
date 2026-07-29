@@ -25,39 +25,71 @@ For AI agents (Claude Code, Cursor, Claude.ai/Cowork, …) the surface is a **si
 
 Pricing lives at <https://agent-media.ai/pricing>. The API debits internally — agents and SDK consumers should never need to quote credit numbers to end users.
 
-## Install
+## Connect — no API key needed
 
-The fastest path is the public install hub: <https://agent-media.ai/skill>. It routes you by client.
+**One server URL. Sign in with your browser. That's it.**
 
-### Claude Code
-
-```bash
-npm install -g agent-media-cli@latest
-agent-media login
-claude skills add github:gitroomhq/agent-media-app
+```
+https://api.agent-media.ai/mcp
 ```
 
-### Claude.ai / Cowork / Claude Desktop
+The hosted connector speaks **OAuth 2.1 with dynamic client registration**, so your
+agent registers itself and opens a sign-in page — you never copy a key, and no
+secret is stored in a config file.
 
-Settings → Integrations → **Add custom MCP server**
+### The fastest way: paste this to your agent
 
-- URL: `https://api.agent-media.ai/mcp`
-- Auth header: `Authorization: Bearer <your-ma_xxx-key>`
+Works in Claude Code, Cursor, Claude Desktop, or anything that speaks MCP — the
+agent sets *itself* up:
+
+```text
+Set up agent-media for me so I can generate UGC videos from here.
+1. Add the agent-media MCP server: https://api.agent-media.ai/mcp (Streamable HTTP).
+2. Authenticate: complete the sign-in in the browser it opens.
+3. Install the companion skills: run `npx skills add gitroomhq/agent-media-app`.
+Once that's done, let me know when it's ready.
+```
+
+Then just ask: *"make me a UGC video of a woman reviewing my hair oil."*
+
+### Claude.ai / Claude Desktop / Cowork
+
+Settings → **Connectors** → Add custom connector → name it `agent-media`, paste
+`https://api.agent-media.ai/mcp` → **Connect** → sign in. Done.
 
 ### Cursor / Continue / Windsurf
+
+Point the client at the same hosted URL and it will run the OAuth flow:
 
 ```jsonc
 // ~/.cursor/mcp.json (or your client's equivalent)
 {
   "mcpServers": {
+    "agent-media": { "url": "https://api.agent-media.ai/mcp" }
+  }
+}
+```
+
+<details>
+<summary>Prefer an API key, or need a local stdio server? (optional)</summary>
+
+Keys still work everywhere OAuth does — useful for CI and headless scripts.
+Get one with `npm i -g agent-media-cli && agent-media login`, or from the
+dashboard, then either send `Authorization: Bearer ma_...` to the hosted URL, or
+run the stdio server locally:
+
+```jsonc
+{
+  "mcpServers": {
     "agent-media": {
       "command": "npx",
       "args": ["-y", "@agentmedia/mcp-server"],
-      "env": { "AGENT_MEDIA_API_KEY": "<your-ma_xxx-key>" }
+      "env": { "AGENT_MEDIA_API_KEY": "ma_..." }
     }
   }
 }
 ```
+</details>
 
 ### Standalone CLI / scripts / CI
 
@@ -91,9 +123,16 @@ Every CLI invocation also runs a once-per-day background check and prints a one-
 | [`@agentmedia/sdk`](https://www.npmjs.com/package/@agentmedia/sdk) | `0.5.0+` | TypeScript SDK |
 | [`@agentmedia/schema`](https://www.npmjs.com/package/@agentmedia/schema) | `0.5.0+` | shared zod schemas + registry |
 
-## Public skill repo
+## The skill pack
 
-<https://github.com/gitroomhq/agent-media> — public mirror of the `public-skill/` subtree: the `make-ugc` skill (one agent tool) plus `agent-media-ugc` and `publish-to-social`, a plugin/marketplace manifest, and `reference/` docs. Mirrored by `.github/workflows/mirror-public-skill.yml` (subtree split on `public-skill/` only — nothing else in this monorepo is ever pushed).
+[`public-skill/`](public-skill/) is the agent-facing pack: the `make-ugc` skill (the one
+generation tool) plus `agent-media-ugc`, `make-podcast`, `publish-to-social`, a
+plugin/marketplace manifest, and `reference/` docs. It is generated from the skill
+registry by `services/api-v2/scripts/generate-public-skill.ts` — edit the registry, not
+the emitted files.
+
+Install it into an agent with `npx skills add gitroomhq/agent-media-app`, or as a Claude
+Code plugin (see [`public-skill/README.md`](public-skill/README.md)).
 
 ## Repository layout (this monorepo)
 
@@ -109,7 +148,7 @@ packages/
 services/
   api-v2/                    REST API (api.agent-media.ai) — routes, auth, dispatch
   media-worker-v2/           pipeline runner — gpt-image-2 + Seedance + ffmpeg
-public-skill/                public mirror source — subtree pushed to gitroomhq/agent-media (one agent tool: make_ugc)
+public-skill/                generated agent skill pack (one agent tool: make_ugc)
 supabase/migrations/         schema, RLS, edge functions
 docs/v2/api-reference.md     auto-generated REST reference
 ```

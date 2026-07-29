@@ -10,7 +10,7 @@
  * Runs via `pnpm gen:skills`. CI guards drift with
  * `git diff --exit-code public-skill/`.
  *
- * Plugin is mirrored to github.com/gitroomhq/agent-media on push via the
+ * Plugin is mirrored to github.com/gitroomhq/agent-media-app on push via the
  * .github/workflows/mirror-public-skill.yml workflow (subtree split).
  */
 
@@ -104,6 +104,13 @@ const EXAMPLE_INPUTS: Record<string, unknown> = {
 
 function writeFile(rel: string, body: string): void {
   const path = join(OUT, rel);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, body, 'utf-8');
+}
+
+/** Write relative to the REPO ROOT rather than public-skill/ (marketplace manifest). */
+function writeRepoFile(rel: string, body: string): void {
+  const path = join(REPO_ROOT, rel);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, body, 'utf-8');
 }
@@ -291,7 +298,7 @@ function skillBody(skill: SkillEntry): string {
     '',
     '- See [reference/realism-rubric.md](../../reference/realism-rubric.md) for the realism doctrine baked into every prompt.',
     skill.slug === 'make_simple_selfie' || skill.slug === 'make_ugc_video'
-      ? '- See [reference/pacing.md](../../reference/pacing.md) for the 2–4 words-per-second script rule.'
+      ? '- See [reference/pacing.md](../../reference/pacing.md) for how word count picks the take duration.'
       : null,
     '- See [reference/auth.md](../../reference/auth.md) for first-time install and `agent-media login`.',
     '',
@@ -312,7 +319,7 @@ function pluginJson(): string {
       version: pluginVersion(),
       author: { name: 'gitroomhq', url: 'https://github.com/gitroomhq' },
       homepage: 'https://agent-media.ai',
-      repository: 'https://github.com/gitroomhq/agent-media',
+      repository: 'https://github.com/gitroomhq/agent-media-app',
       license: 'Apache-2.0',
       keywords: [
         'claude-plugin',
@@ -343,9 +350,16 @@ function pluginJson(): string {
 }
 
 /**
- * Marketplace manifest — REQUIRED for `/plugin marketplace add gitroomhq/agent-media`
- * to find the plugin. The plugin itself lives at the repo root (its
- * .claude-plugin/plugin.json), so the single plugin's source is "." (root).
+ * Marketplace manifest — written to the REPO ROOT (`/.claude-plugin/marketplace.json`),
+ * which is where `/plugin marketplace add gitroomhq/agent-media-app` looks.
+ *
+ * `source` must be `./public-skill`, NOT `./`.
+ *
+ * History: when `public-skill/` was subtree-mirrored to its own repo it WAS the
+ * repo root, so `source: "./"` resolved correctly. Now that the whole monorepo is
+ * public, `"./"` points at the monorepo root — where there is no plugin.json, no
+ * skills/, and no .mcp.json — so the install silently resolves to the wrong
+ * directory and the user gets a plugin with no tools.
  */
 function marketplaceJson(): string {
   return JSON.stringify(
@@ -359,9 +373,9 @@ function marketplaceJson(): string {
       plugins: [
         {
           name: 'agent-media',
-          source: './',
+          source: './public-skill',
           description:
-            'Agent-Media UGC Video — one tool. Give a script + a person/image/character; get a finished captioned vertical UGC video (short clip, multi-take monologue, or narrated b-roll). Via one MCP server.',
+            'Agent-Media UGC Video — one tool. Give a script + a person/image/character; get a finished captioned vertical UGC video (short clip, multi-take monologue, or narrated b-roll). Connects over the hosted MCP server with browser sign-in — no API key.',
         },
       ],
     },
@@ -370,16 +384,26 @@ function marketplaceJson(): string {
   ) + '\n';
 }
 
+/**
+ * Point the plugin at the HOSTED connector, not a local stdio process.
+ *
+ * The hosted server speaks OAuth 2.1 with dynamic client registration, so the
+ * client registers itself and opens a browser sign-in — the user never copies an
+ * API key and no secret lands in a config file. Emitting the old
+ * `npx @agentmedia/mcp-server` + `${AGENT_MEDIA_API_KEY}` form made a
+ * zero-config product look like it needed a key.
+ *
+ * API keys still work (send `Authorization: Bearer ma_...` to the same URL) and
+ * the stdio server is still published for CI/headless use — both are documented
+ * in the README as the optional path.
+ */
 function mcpJson(): string {
   return JSON.stringify(
     {
       mcpServers: {
         'agent-media': {
-          command: 'npx',
-          // Explicit `-p` + bin name avoids npx ambiguity (the package
-          // declares two bins: `mcp-server` and `agent-media-mcp`).
-          args: ['-y', '-p', '@agentmedia/mcp-server@latest', 'agent-media-mcp'],
-          env: { AGENT_MEDIA_API_KEY: '${AGENT_MEDIA_API_KEY}' },
+          type: 'http',
+          url: 'https://api.agent-media.ai/mcp',
         },
       },
     },
@@ -394,23 +418,40 @@ function readme(): string {
     '',
     '[![npm — mcp-server](https://img.shields.io/npm/v/%40agentmedia%2Fmcp-server?label=%40agentmedia%2Fmcp-server)](https://www.npmjs.com/package/@agentmedia/mcp-server)',
     '[![npm — CLI](https://img.shields.io/npm/v/agent-media-cli?label=agent-media-cli)](https://www.npmjs.com/package/agent-media-cli)',
-    '[![Claude plugin](https://img.shields.io/badge/claude-%2Fplugin%20install-A78BFA)](https://github.com/gitroomhq/agent-media)',
+    '[![Claude plugin](https://img.shields.io/badge/claude-%2Fplugin%20install-A78BFA)](https://github.com/gitroomhq/agent-media-app)',
     '[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)',
     '',
     '**Agents: read this whole page. It is everything you need to create UGC videos with agent-media — no other docs required.**',
     '',
-    'agent-media turns a short description (or a photo) + a script into a finished, captioned, lip-synced vertical UGC video. Works in Claude Code, Cursor, or any MCP / HTTP agent. One Bearer token authenticates everything.',
+    'agent-media turns a short description (or a photo) + a script into a finished, captioned, lip-synced vertical UGC video. Works in Claude Code, Cursor, Claude.ai, or any MCP / HTTP agent — connect with one URL and a browser sign-in, no API key.',
     '',
-    '## 1. Connect (pick one)',
+    '## 1. Connect — no API key needed',
     '',
-    '- **One-liner (recommended):** `npx skills add gitroomhq/agent-media` — installs all of agent-media\'s skills into your agent (Claude Code, Cursor, etc.).',
-    '- **Claude Code plugin (skills + MCP tools):** inside a Claude Code session run `/plugin marketplace add gitroomhq/agent-media` then `/plugin install agent-media@agent-media`.',
-    '- **Any MCP agent:** run the MCP server `npx -y -p @agentmedia/mcp-server@latest agent-media-mcp` with env `AGENT_MEDIA_API_KEY=ma_...`. All skills self-describe via `tools/list`.',
-    '- **Plain HTTP:** call the REST API directly (below).',
+    '**One URL. Sign in with your browser.**',
+    '',
+    '```',
+    'https://api.agent-media.ai/mcp',
+    '```',
+    '',
+    'The hosted connector speaks OAuth 2.1 with dynamic client registration: your agent registers itself, opens a sign-in page, and gets a token. Nothing to copy, no secret in a config file.',
+    '',
+    '**Fastest path — paste this to your agent and it sets itself up:**',
+    '',
+    '```text',
+    'Set up agent-media for me so I can generate UGC videos from here.',
+    '1. Add the agent-media MCP server: https://api.agent-media.ai/mcp (Streamable HTTP).',
+    '2. Authenticate: complete the sign-in in the browser it opens.',
+    '3. Install the companion skills: run `npx skills add gitroomhq/agent-media-app`.',
+    'Once that\'s done, let me know when it\'s ready.',
+    '```',
+    '',
+    'Other routes: **Claude.ai / Desktop** → Settings → Connectors → add custom connector → paste the URL → Connect. **Claude Code plugin** → `/plugin marketplace add gitroomhq/agent-media-app` then `/plugin install agent-media@agent-media`. **Skills only** → `npx skills add gitroomhq/agent-media-app`.',
     '',
     '## 2. Auth',
     '',
-    'Get a Bearer token: `npm i -g agent-media-cli && agent-media login` (stores it at `~/.agent-media/credentials.json`), or grab the `ma_*` token from the dashboard. Every call uses `Authorization: Bearer ma_...`. You need credits on the account (buy at agent-media.ai).',
+    'OAuth (above) is the default and needs no key. You need credits on the account — buy at agent-media.ai.',
+    '',
+    '**API keys** remain supported for CI, scripts, and the local stdio server: get one with `npm i -g agent-media-cli && agent-media login` (stored at `~/.agent-media/credentials.json`) or from the dashboard, then send `Authorization: Bearer ma_...` — including to the same hosted URL above.',
     '',
     '## 3. Make a video — `make_ugc` (the one tool)',
     '',
@@ -457,7 +498,7 @@ function readme(): string {
     '## Reference docs',
     '',
     '- [reference/auth.md](reference/auth.md) — first-time setup',
-    '- [reference/pacing.md](reference/pacing.md) — the 2–4 words-per-second script rule',
+    '- [reference/pacing.md](reference/pacing.md) — how word count picks the take duration',
     '- [reference/realism-rubric.md](reference/realism-rubric.md) — realism props baked into every prompt',
     '',
     '## How this repo is built',
@@ -505,24 +546,36 @@ function refAuth(): string {
 
 function refPacing(): string {
   return [
-    '# Script pacing — 2 to 4 words per second',
+    // ⚠ These thresholds MUST match `fitDuration()` in
+    // services/api-v2/src/skills/credit-quotes.ts — they decide both the take
+    // length AND the price. The previous table (10-20 / 20-40 / 30-60) did not:
+    // an agent writing a "5s" 15-word script silently got a 10s video and was
+    // charged 280 credits instead of 140.
+    '# Script pacing — how word count picks the duration',
     '',
-    'Agent-Media UGC Video (`make_ugc`) enforces a word-count window per take, based on the duration it infers from your script:',
+    '`make_ugc` does **not** ask you for a duration. It counts the words in your `script` and picks the take length for you:',
     '',
-    '| Duration | Words (min) | Words (max) |',
-    '| -------- | ----------- | ----------- |',
-    '| 5s       | 10          | 20          |',
-    '| 10s      | 20          | 40          |',
-    '| 15s      | 30          | 60          |',
+    '| Words in your script | Duration you get | Credits |',
+    '| -------------------- | ---------------- | ------- |',
+    '| 1 – 11               | 5s               | 140     |',
+    '| 12 – 22              | 10s              | 280     |',
+    '| 23 +                 | 15s              | 420     |',
     '',
-    'Scripts outside this window get rejected at submit with HTTP 400 — no spend.',
+    'That mapping is the server\'s `fitDuration()` — the same function the quote and the run both use, so the number `/quote` returns is the number you are charged.',
     '',
-    'Why: too few words = silence dead-air the model fills with filler ums; too many words = the model races and the lip-sync breaks. 2–4 wps is the natural TikTok talking-head cadence.',
+    '**The boundaries are what matter.** A 12-word script is a 10-second video, not a 5-second one — and costs 280 credits, not 140. For a 5s take, stay at **11 words or fewer**.',
+    '',
+    'Roughly 2.5 words per second is the natural TikTok talking-head cadence: too few words leaves dead air the model fills with filler "um"s, too many and it races and the lip-sync breaks.',
+    '',
+    '## Longer scripts',
+    '',
+    'There is no rejection for a long script. Anything past 22 words becomes a 15s take, and a multi-sentence script is split into several takes stitched together — each priced by the same table. Call `/quote` first if you want the cost before spending.',
     '',
     '## Examples',
     '',
-    '- 5s clip: *"Honestly, this app changed my whole morning routine, you have to try it."* (13 words)',
-    '- 10s clip: *"Okay so I\'ve been using this for two weeks and it genuinely saves me thirty minutes every single morning, no joke, my coffee is still hot by the time I\'m done."* (32 words)',
+    '- 5s clip: *"This app completely changed my morning routine — try it."* (9 words)',
+    '- 10s clip: *"I\'ve used this for two weeks and it saves me thirty minutes every morning. My coffee is still hot."* (20 words)',
+    '- 15s clip: *"Okay so I\'ve been using this for two weeks now and it genuinely saves me thirty minutes every single morning, no joke — my coffee is still hot by the time I\'m finished."* (33 words)',
     '',
   ].join('\n');
 }
@@ -558,7 +611,8 @@ if (existsSync(OUT)) {
 mkdirSync(OUT, { recursive: true });
 
 writeFile('.claude-plugin/plugin.json', pluginJson());
-writeFile('.claude-plugin/marketplace.json', marketplaceJson());
+// Repo ROOT, not public-skill/ — see marketplaceJson() for why.
+writeRepoFile('.claude-plugin/marketplace.json', marketplaceJson());
 writeFile('.mcp.json', mcpJson());
 writeFile('README.md', readme());
 writeFile('LICENSE', readFromRepo('LICENSE'));
@@ -730,7 +784,7 @@ function playbookBody(): string {
     '## See also',
     '',
     '- [reference/auth.md](../../reference/auth.md) — first-time setup',
-    '- [reference/pacing.md](../../reference/pacing.md) — 2–4 words/sec rule with examples',
+    '- [reference/pacing.md](../../reference/pacing.md) — word-count → duration table with examples',
     '- [reference/realism-rubric.md](../../reference/realism-rubric.md) — the 9 realism props baked into every prompt',
     '',
   ].join('\n');

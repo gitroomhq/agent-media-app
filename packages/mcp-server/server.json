@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.gitroomhq/agent-media",
+  "name": "io.github.gitroomhq/agent-media-app",
   "description": "Generate AI UGC videos with talking heads, B-roll, and subtitles.",
   "repository": {
-    "url": "https://github.com/gitroomhq/agent-media",
+    "url": "https://github.com/gitroomhq/agent-media-app",
     "source": "github",
     "subfolder": "packages/mcp-server"
   },

@@ -6,7 +6,7 @@ Generate AI videos with realistic talking heads, B-roll, voiceover, animated sub
 
 [![PyPI version](https://img.shields.io/pypi/v/agent-media)](https://pypi.org/project/agent-media/)
 [![Python](https://img.shields.io/pypi/pyversions/agent-media)](https://pypi.org/project/agent-media/)
-[![license](https://img.shields.io/pypi/l/agent-media)](https://github.com/gitroomhq/agent-media/blob/main/LICENSE)
+[![license](https://img.shields.io/pypi/l/agent-media)](https://github.com/gitroomhq/agent-media-app/blob/main/LICENSE)
 
 ## Install
 
@@ -270,7 +270,7 @@ for v in videos:
 - [Interactive API Docs](https://agent-media.ai/docs/api-reference)
 - [OpenAPI Spec](https://agent-media.ai/openapi.json)
 - [Website](https://agent-media.ai)
-- [GitHub](https://github.com/gitroomhq/agent-media)
+- [GitHub](https://github.com/gitroomhq/agent-media-app)
 
 ## License
 

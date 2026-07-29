@@ -5,7 +5,7 @@ MCP server for [agent-media](https://agent-media.ai) — generate AI UGC videos 
 UGC for developers. Script in, video URL out — directly from your IDE.
 
 [![npm version](https://img.shields.io/npm/v/@agentmedia/mcp-server)](https://www.npmjs.com/package/@agentmedia/mcp-server)
-[![license](https://img.shields.io/npm/l/@agentmedia/mcp-server)](https://github.com/gitroomhq/agent-media/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/@agentmedia/mcp-server)](https://github.com/gitroomhq/agent-media-app/blob/main/LICENSE)
 
 ## What It Does
 
@@ -174,7 +174,7 @@ Must be `https://`, publicly reachable, max 2048 chars. On non-2xx response, age
 - [Interactive API Docs](https://agent-media.ai/docs/api-reference)
 - [OpenAPI Spec](https://agent-media.ai/openapi.json)
 - [Website](https://agent-media.ai)
-- [GitHub](https://github.com/gitroomhq/agent-media)
+- [GitHub](https://github.com/gitroomhq/agent-media-app)
 
 ## License
 

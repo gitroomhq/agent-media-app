@@ -7,7 +7,7 @@
     "url": "https://github.com/gitroomhq"
   },
   "homepage": "https://agent-media.ai",
-  "repository": "https://github.com/gitroomhq/agent-media",
+  "repository": "https://github.com/gitroomhq/agent-media-app",
   "license": "Apache-2.0",
   "keywords": [
     "claude-plugin",

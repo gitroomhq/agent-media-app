@@ -1,22 +1,18 @@
 {
   "name": "agent-media",
   "owner": {
-    "name": "Nevo David",
-    "email": "nevo@postiz.com"
+    "name": "gitroomhq",
+    "url": "https://github.com/gitroomhq"
   },
   "metadata": {
-    "description": "AI UGC video production — generate complete videos with talking heads, B-roll, subtitles, and SaaS review videos from the terminal",
-    "version": "2.0.0"
+    "description": "Agent-Media UGC Video for Claude Code — one tool: give a script + a person/image/character, get a finished captioned vertical UGC video.",
+    "version": "1.3.0"
   },
   "plugins": [
     {
       "name": "agent-media",
-      "description": "Produce complete UGC videos with AI talking heads, B-roll, voiceover, and animated subtitles. Generate SaaS review videos, manage personas, and add subtitles — all from the terminal via the agent-media CLI.",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./"
-      ]
+      "source": "./public-skill",
+      "description": "Agent-Media UGC Video — one tool. Give a script + a person/image/character; get a finished captioned vertical UGC video (short clip, multi-take monologue, or narrated b-roll). Connects over the hosted MCP server with browser sign-in — no API key."
     }
   ]
 }

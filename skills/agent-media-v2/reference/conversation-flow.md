@@ -18,15 +18,18 @@ Pre-fill what you can infer from the prompt and ask the user to confirm or red-l
 
 Start by asking duration first. Use script-pacing guidance to propose the right value and avoid filler audio.
 
-| Duration | Sweet-spot script length |
-|---|---:|
-| 5s | 10-20 words (single hook, 1 punchy sentence) |
-| 10s | 20-40 words (default UGC, 2-3 sentences) |
-| 15s | 30-60 words (mini-story, setup + reveal) |
+Speech runs about **2.5 words per second**, so each duration has a hard word
+ceiling — scripts longer than this get truncated to fit:
+
+| Duration | Sweet-spot script length | Hard max |
+|---|---|---:|
+| 5s | 8-12 words (single hook, 1 punchy sentence) | 12 |
+| 10s | 18-25 words (default UGC, 2-3 sentences) | 25 |
+| 15s | 28-37 words (mini-story, setup + reveal) | 37 |
 
 Allowed durations: `5`, `10`, `15` only. The schema rejects 6, 8, 12, etc.
 
-> *"Quick first choice: do you want **5s**, **10s**, or **15s**? If you already have script length in mind, I can map it: 10-20 words ≈ 5s, 20-40 ≈ 10s, 30-60 ≈ 15s."*
+> *"Quick first choice: do you want **5s**, **10s**, or **15s**? If you already have script length in mind, I can map it: up to 12 words ≈ 5s, up to 25 ≈ 10s, up to 37 ≈ 15s."*
 
 If they give script first and duration is missing, still make duration Gate 1 by proposing the best fit from word count before moving on.
 
@@ -187,7 +190,7 @@ There is no 5th gate about pricing. The API debits internally and allows a soft 
 - ❌ **Auto-picking a character from `agent-media character list`.** Even if there's only one, even if it's the "most recent" — you MUST show the user the list and wait for them to explicitly pick the id or say "new". Picking on their behalf wastes credits on the wrong person.
 - ❌ Forgetting to forward `subtitles: true` (or `--subtitles true`) on the selfie call when the user accepted the brief. The default is on, but defaults only fire if you don't override — be explicit.
 - ❌ **Defaulting to subtitles ON when the user explicitly says "no subs".** If the user's prompt or any Gate-3 reply contains "no subs", "without subtitles", "no captions", or similar — the call MUST include `--subtitles false` (CLI) or `subtitles: false` (REST). Failure mode: a subtitled video gets shipped against the user's wishes + the Whisper transcription may capture model garbage and burn it as text.
-- ❌ **Mismatching script length and duration** (e.g. 10-word script + 15s duration without enough visual action). Normal speech is 2-4 words/sec. Size duration to fit the script and action plan.
+- ❌ **Mismatching script length and duration** (e.g. 10-word script + 15s duration without enough visual action). Normal speech is ~2.5 words/sec. Size duration to fit the script and action plan.
 - ❌ Passing removed flags such as `--preset`, `--voice-brief`, or `--sync` to the current v2 Selfie CLI. (Note: `--shot-preset` and `--vibe` ARE supported as optional overrides — use them only when the user explicitly pins a scene or tone.)
 - ❌ **Overriding the handheld camera default with `--camera-locked` for normal UGC.** Default handheld feel is the #1 realism cue — only lock the camera for product/demo shots where stability is essential.
 - ❌ **Forbidding phone-in-frame by default.** Default is `optional` — phone may appear if natural. Only set `--phone-in-frame forbidden` when the user explicitly says "no phone in frame".

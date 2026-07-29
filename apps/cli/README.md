@@ -119,10 +119,10 @@ agent-media update --cli-only
 agent-media update --skills-only
 ```
 
-Skill docs are refreshed from `gitroomhq/agent-media` with Claude Code selected non-interactively:
+Skill docs are refreshed from `gitroomhq/agent-media-app` with Claude Code selected non-interactively:
 
 ```bash
-npx --yes skills add gitroomhq/agent-media --agent claude-code --yes
+npx --yes skills add gitroomhq/agent-media-app --agent claude-code --yes
 ```
 
 Self-updates use npm by default. If you intentionally manage global packages with pnpm or yarn, set `AGENT_MEDIA_UPDATE_PM=pnpm` or `AGENT_MEDIA_UPDATE_PM=yarn`.
@@ -150,7 +150,7 @@ Self-updates use npm by default. If you intentionally manage global packages wit
 - [Interactive API Docs](https://agent-media.ai/docs/api-reference)
 - [OpenAPI Spec](https://agent-media.ai/openapi.json)
 - [Website](https://agent-media.ai)
-- [GitHub](https://github.com/gitroomhq/agent-media)
+- [GitHub](https://github.com/gitroomhq/agent-media-app)
 
 ## License
 

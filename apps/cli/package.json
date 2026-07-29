@@ -8,7 +8,7 @@
   "homepage": "https://agent-media.ai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gitroomhq/agent-media.git"
+    "url": "git+https://github.com/gitroomhq/agent-media-app.git"
   },
   "keywords": [
     "ai",

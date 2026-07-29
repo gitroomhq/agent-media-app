@@ -2,23 +2,40 @@
 
 [![npm — mcp-server](https://img.shields.io/npm/v/%40agentmedia%2Fmcp-server?label=%40agentmedia%2Fmcp-server)](https://www.npmjs.com/package/@agentmedia/mcp-server)
 [![npm — CLI](https://img.shields.io/npm/v/agent-media-cli?label=agent-media-cli)](https://www.npmjs.com/package/agent-media-cli)
-[![Claude plugin](https://img.shields.io/badge/claude-%2Fplugin%20install-A78BFA)](https://github.com/gitroomhq/agent-media)
+[![Claude plugin](https://img.shields.io/badge/claude-%2Fplugin%20install-A78BFA)](https://github.com/gitroomhq/agent-media-app)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 **Agents: read this whole page. It is everything you need to create UGC videos with agent-media — no other docs required.**
 
-agent-media turns a short description (or a photo) + a script into a finished, captioned, lip-synced vertical UGC video. Works in Claude Code, Cursor, or any MCP / HTTP agent. One Bearer token authenticates everything.
+agent-media turns a short description (or a photo) + a script into a finished, captioned, lip-synced vertical UGC video. Works in Claude Code, Cursor, Claude.ai, or any MCP / HTTP agent — connect with one URL and a browser sign-in, no API key.
 
-## 1. Connect (pick one)
+## 1. Connect — no API key needed
 
-- **One-liner (recommended):** `npx skills add gitroomhq/agent-media` — installs all of agent-media's skills into your agent (Claude Code, Cursor, etc.).
-- **Claude Code plugin (skills + MCP tools):** inside a Claude Code session run `/plugin marketplace add gitroomhq/agent-media` then `/plugin install agent-media@agent-media`.
-- **Any MCP agent:** run the MCP server `npx -y -p @agentmedia/mcp-server@latest agent-media-mcp` with env `AGENT_MEDIA_API_KEY=ma_...`. All skills self-describe via `tools/list`.
-- **Plain HTTP:** call the REST API directly (below).
+**One URL. Sign in with your browser.**
+
+```
+https://api.agent-media.ai/mcp
+```
+
+The hosted connector speaks OAuth 2.1 with dynamic client registration: your agent registers itself, opens a sign-in page, and gets a token. Nothing to copy, no secret in a config file.
+
+**Fastest path — paste this to your agent and it sets itself up:**
+
+```text
+Set up agent-media for me so I can generate UGC videos from here.
+1. Add the agent-media MCP server: https://api.agent-media.ai/mcp (Streamable HTTP).
+2. Authenticate: complete the sign-in in the browser it opens.
+3. Install the companion skills: run `npx skills add gitroomhq/agent-media-app`.
+Once that's done, let me know when it's ready.
+```
+
+Other routes: **Claude.ai / Desktop** → Settings → Connectors → add custom connector → paste the URL → Connect. **Claude Code plugin** → `/plugin marketplace add gitroomhq/agent-media-app` then `/plugin install agent-media@agent-media`. **Skills only** → `npx skills add gitroomhq/agent-media-app`.
 
 ## 2. Auth
 
-Get a Bearer token: `npm i -g agent-media-cli && agent-media login` (stores it at `~/.agent-media/credentials.json`), or grab the `ma_*` token from the dashboard. Every call uses `Authorization: Bearer ma_...`. You need credits on the account (buy at agent-media.ai).
+OAuth (above) is the default and needs no key. You need credits on the account — buy at agent-media.ai.
+
+**API keys** remain supported for CI, scripts, and the local stdio server: get one with `npm i -g agent-media-cli && agent-media login` (stored at `~/.agent-media/credentials.json`) or from the dashboard, then send `Authorization: Bearer ma_...` — including to the same hosted URL above.
 
 ## 3. Make a video — `make_ugc` (the one tool)
 
@@ -46,6 +63,7 @@ In Claude/Cursor you just say it in words: *"Make a UGC video of a friendly woma
 
 ## Skills
 
+- `make_subtitles` (v1.0.0) — Burn TikTok / Hormozi-style captions onto any vNext video (R2-hosted). Auto-transcribes via Whisper when transcript is omitted. Styles: hormozi (default), tiktok, minimal.
 - `make_podcast` (v1.0.0) — Two saved characters recording a podcast in ONE room — the camera cuts to whoever is speaking, and each actor stays in their IDENTICAL seat, desk and mic position across every cut. Provide character_a and character_b (saved char_… ids from list_characters, or https image URLs) and an ordered `script` of A/B dialogue turns (each { speaker: "A" | "B", line: "…" }). The pipeline renders ONE shared two-shot, locks a close-up per actor, animates every turn with native lip-synced Seedance voice (each actor keeps a consistent look AND voice across the whole episode), and hard-cuts the turns together as a 9:16 vertical video. Long turns auto-split into ≤15s takes. Captions are OPT-IN — ask the user first, then set subtitles:true.
 - `make_ugc` (v1.0.0) — The ONE tool for UGC video. Give a `script` (any length) and optionally a `person` description, an `image` (photo), or a `character` (saved char_… or sheet URL); it returns the finished vertical video. Short script → one clip; long monologue → full multi-take (never trimmed); pass `broll_url` → narrated b-roll overlay. Captions are OPT-IN — ASK the user if they want them (and which style) before generating; set `captions:true` only if they say yes. You never pick a sub-tool.
 
@@ -63,7 +81,7 @@ See `skills/publish-to-social/SKILL.md` for the full flow.
 ## Reference docs
 
 - [reference/auth.md](reference/auth.md) — first-time setup
-- [reference/pacing.md](reference/pacing.md) — the 2–4 words-per-second script rule
+- [reference/pacing.md](reference/pacing.md) — how word count picks the take duration
 - [reference/realism-rubric.md](reference/realism-rubric.md) — realism props baked into every prompt
 
 ## How this repo is built

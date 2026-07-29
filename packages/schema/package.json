@@ -7,7 +7,7 @@
   "homepage": "https://agent-media.ai/docs/api-reference",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gitroomhq/agent-media.git",
+    "url": "git+https://github.com/gitroomhq/agent-media-app.git",
     "directory": "packages/schema"
   },
   "keywords": [

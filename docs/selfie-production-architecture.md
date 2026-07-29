@@ -5,7 +5,7 @@ Last verified: 2026-05-24.
 This document describes the production Selfie path as shipped in:
 
 - product repo `yuvalsuede/agent-media`, `main` at `aba8d703ff927772f432e0a4584a16b2d6f3c623`
-- public skill repo `gitroomhq/agent-media`, `main` at `939c29f65bc0d9884fd80c7ef9adf237149f0118`
+- public skill repo `gitroomhq/agent-media-app`, `main` at `939c29f65bc0d9884fd80c7ef9adf237149f0118`
 - npm `agent-media-cli@1.15.1`
 - npm `@agentmedia/schema@0.5.1`
 
@@ -858,8 +858,8 @@ There are two skill copies:
    - `skills/agent-media-v2/SKILL.md`
    - `skills/agent-media-v2/reference/*`
 2. Public install/update source:
-   - GitHub repo `gitroomhq/agent-media`
-   - raw base `https://raw.githubusercontent.com/gitroomhq/agent-media/main`
+   - GitHub repo `gitroomhq/agent-media-app`
+   - raw base `https://raw.githubusercontent.com/gitroomhq/agent-media-app/main`
    - current `SKILL.md` frontmatter has `version: 3.4.0`
 
 CLI updater:
@@ -868,7 +868,7 @@ CLI updater:
 - local install path: `~/.claude/skills/agent-media-v2`
 - checks at most once per 24h
 - stamp file: `~/.agent-media/.skill-update-check`
-- remote base hardcoded to `https://raw.githubusercontent.com/gitroomhq/agent-media/main`
+- remote base hardcoded to `https://raw.githubusercontent.com/gitroomhq/agent-media-app/main`
 
 Skill tree manifest:
 
@@ -951,7 +951,7 @@ Product repo:
 
 Skill repo:
 
-- remote: `https://github.com/gitroomhq/agent-media.git`
+- remote: `https://github.com/gitroomhq/agent-media-app.git`
 - production `main`: `939c29f65bc0d9884fd80c7ef9adf237149f0118`
 
 Production health checks verified:
@@ -1028,7 +1028,7 @@ The intended multi-skill/product architecture is registry-first:
 10. Generate/update docs from schema.
 11. Add `skills/agent-media-v2/reference/generators/<scenario>.md`.
 12. Add the new skill reference to `SKILL_TREE` in `apps/cli/src/lib/skill-update.ts`.
-13. Update the public skill repo `gitroomhq/agent-media`.
+13. Update the public skill repo `gitroomhq/agent-media-app`.
 14. Publish schema and CLI to npm.
 15. Deploy `api-v2` and `media-worker-v2`.
 16. Run a live production job and verify intermediate artifacts plus final output.

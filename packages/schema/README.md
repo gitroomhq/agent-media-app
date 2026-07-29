@@ -3,7 +3,7 @@
 Single source of truth for the [agent-media](https://agent-media.ai) platform — enums, Zod validation schemas, TypeScript types, and the generator registry.
 
 [![npm version](https://img.shields.io/npm/v/@agentmedia/schema)](https://www.npmjs.com/package/@agentmedia/schema)
-[![license](https://img.shields.io/npm/l/@agentmedia/schema)](https://github.com/gitroomhq/agent-media/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/@agentmedia/schema)](https://github.com/gitroomhq/agent-media-app/blob/main/LICENSE)
 
 ## Why This Package Exists
 
