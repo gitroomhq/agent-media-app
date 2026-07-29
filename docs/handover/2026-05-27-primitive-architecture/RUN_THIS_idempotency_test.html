@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Idempotency test — see the numbers</title>
+<style>
+:root{color-scheme:dark}body{background:#0d0e14;color:#e7e7ef;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:40px 24px}
+.wrap{max-width:860px;margin:0 auto}h1{font-size:25px;margin:0 0 6px}p{color:#bcc}
+pre{background:#14161f;border:1px solid #2a2d3a;border-radius:12px;padding:18px;overflow:auto;font-size:13px;line-height:1.5;font-family:ui-monospace,Menlo,monospace;color:#d6e2ff}
+.exp{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.35);border-radius:10px;padding:14px 16px;margin:16px 0;font-size:13.5px}
+.exp b{color:#34d399}code{background:#1a1c25;padding:1px 6px;border-radius:5px;font-family:ui-monospace,monospace;font-size:12.5px;color:#c9d4ff}
+button{background:#A78BFA;color:#0d0e14;border:0;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer;font-size:13px;margin:8px 0}
+.note{color:#9aa;font-size:13px}table{border-collapse:collapse;margin:8px 0;font-size:13px}th,td{border:1px solid #2a2d3a;padding:6px 12px;text-align:left}th{color:#9aa}
+.ok{border-left:3px solid #34d399;padding-left:14px}
+</style></head><body><div class="wrap">
+<h1>Idempotency test — returns rows so you see the numbers</h1>
+<div class="exp ok"><b>Your first run already PASSED.</b> The block does <code>RAISE EXCEPTION</code> on failure — a double-charge would have shown a red <code>FAIL</code> error. "Success. No rows returned" = both assertions held + rolled back. This version just makes the proof visible as a 3-row table.</div>
+
+<p>Run in the Supabase SQL editor. Still <code>BEGIN … ROLLBACK</code> — nothing persists.</p>
+<button onclick="navigator.clipboard.writeText(document.getElementById('sql').textContent).then(()=>{this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy SQL',1500)})">Copy SQL</button>
+
+<pre id="sql">BEGIN;
+
+CREATE TEMP TABLE _proof (step text, result jsonb, balance int) ON COMMIT DROP;
+
+DO $$
+DECLARE
+    v_user uuid; v_job uuid := gen_random_uuid(); v_before int; r1 jsonb; r2 jsonb;
+BEGIN
+    SELECT user_id, monthly_credits_remaining + purchased_balance
+      INTO v_user, v_before
+      FROM public.user_credits
+      WHERE monthly_credits_remaining + purchased_balance >= 2
+      ORDER BY 2 DESC LIMIT 1;
+
+    INSERT INTO _proof VALUES ('0_before', NULL, v_before);
+
+    r1 := public.deduct_credits(v_user, 1, v_job, 'idem test call 1');
+    INSERT INTO _proof VALUES ('1_first_charge', r1,
+      (SELECT monthly_credits_remaining + purchased_balance FROM public.user_credits WHERE user_id = v_user));
+
+    r2 := public.deduct_credits(v_user, 1, v_job, 'idem test call 2 (SAME job)');
+    INSERT INTO _proof VALUES ('2_replay_same_job', r2,
+      (SELECT monthly_credits_remaining + purchased_balance FROM public.user_credits WHERE user_id = v_user));
+END $$;
+
+SELECT * FROM _proof ORDER BY step;
+
+ROLLBACK;</pre>
+
+<div class="exp">
+<b>Expected rows:</b>
+<table>
+<tr><th>step</th><th>result</th><th>balance</th></tr>
+<tr><td>0_before</td><td>—</td><td>N</td></tr>
+<tr><td>1_first_charge</td><td>{"success":true,"monthly_deducted":1,…}</td><td>N − 1</td></tr>
+<tr><td>2_replay_same_job</td><td>{"success":true,<b>"idempotent_replay":true</b>,"monthly_deducted":0,…}</td><td>N − 1 <i>(unchanged)</i></td></tr>
+</table>
+Balance after the 2nd (same-job) charge stays at <b>N − 1</b>, not N − 2. That's the double-charge being prevented.
+</div>
+<p class="note">If the grid still shows nothing after the rows (trailing ROLLBACK), it doesn't matter — the first test already proved it. Paste whatever you see.</p>
+</div></body></html>

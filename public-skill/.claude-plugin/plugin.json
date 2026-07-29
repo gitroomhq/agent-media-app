@@ -1,0 +1,38 @@
+{
+  "name": "agent-media",
+  "description": "Agent-Media UGC Video — one tool. Give a script + a person (description, photo, or saved character) and get a finished, captioned, lip-synced vertical UGC video. Short line → one clip; full monologue → seamless multi-take; b-roll URL → narrated overlay. One Bearer token, one MCP server.",
+  "version": "1.3.0",
+  "author": {
+    "name": "gitroomhq",
+    "url": "https://github.com/gitroomhq"
+  },
+  "homepage": "https://agent-media.ai",
+  "repository": "https://github.com/gitroomhq/agent-media",
+  "license": "Apache-2.0",
+  "keywords": [
+    "claude-plugin",
+    "claude-skill",
+    "claude-code",
+    "mcp",
+    "model-context-protocol",
+    "ugc-video",
+    "ai-video",
+    "ai-actors",
+    "tiktok",
+    "hormozi-subtitles",
+    "gpt-image-2",
+    "seedance",
+    "video-generation",
+    "agent-media"
+  ],
+  "categories": [
+    "video",
+    "media",
+    "ai-creative"
+  ],
+  "api": {
+    "rest": "https://api.agent-media.ai",
+    "openapi": "https://api.agent-media.ai/openapi.json",
+    "mcp": "https://api.agent-media.ai/mcp"
+  }
+}

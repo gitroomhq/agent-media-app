@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ── Deploy Supabase Edge Functions ────────────────────────────────────────
+  deploy-functions:
+    name: Deploy Edge Functions
+    runs-on: ubuntu-latest
+    if: |
+      contains(toJson(github.event.commits.*.modified), 'supabase/functions/') ||
+      contains(toJson(github.event.commits.*.added), 'supabase/functions/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy all edge functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          PROJECT_REF=ppwvarkmpffljlqxkjux
+          # FIX 3 (M2): iterate DIRECTORIES only. `ls supabase/functions/` also
+          # lists import_map.json; under `set -e` a `functions deploy import_map.json`
+          # aborts the step, so every function after it alphabetically (incl.
+          # webhook-stripe, webhook-provider, schedule-runner, ugc-video) silently
+          # never deployed. Globbing */ skips files and _shared.
+          for dir in supabase/functions/*/; do
+            fn=$(basename "$dir")
+            [ "$fn" = "_shared" ] && continue
+            echo "Deploying $fn..."
+            supabase functions deploy "$fn" --no-verify-jwt --project-ref "$PROJECT_REF"
+          done

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Skills refactor — current spec + migration plan</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 980px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 22px; margin-top: 30px; color: #1a3a5c; }
+  h3 { font-size: 17px; margin-top: 22px; color: #444; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  .gap { background: #fef2f2; border-left: 4px solid #dc2626; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>Skills — what I learned + concrete refactor plan</h1>
+
+<h2>The current Claude Skills format (2026-05)</h2>
+
+<div class="ok">
+<strong>Key concepts:</strong>
+<ul>
+  <li>A <strong>plugin</strong> is the unit of install. <code>claude /plugin install &lt;github-url&gt;</code>.</li>
+  <li>A plugin has a <code>.claude-plugin/plugin.json</code> manifest at its root.</li>
+  <li>A plugin can contain <strong>many skills</strong> under <code>skills/&lt;name&gt;/SKILL.md</code>.</li>
+  <li>A plugin can ship <strong>its own MCP server</strong> via <code>.mcp.json</code>.</li>
+  <li>There is <strong>no Anthropic Skills Hub</strong> yet — distribution is github URLs + a community marketplace at <code>@claude-community</code>.</li>
+</ul>
+</div>
+
+<h3>SKILL.md frontmatter</h3>
+<table>
+  <tr><th>Field</th><th>Notes</th></tr>
+  <tr><td><code>name</code></td><td>Optional; defaults to directory name.</td></tr>
+  <tr><td><code>description</code></td><td>Recommended. Drives Claude's auto-invocation. Cap ~1500 chars.</td></tr>
+  <tr><td><code>when_to_use</code></td><td>Extra trigger context.</td></tr>
+  <tr><td><code>allowed-tools</code></td><td>Tools the skill may use without per-call prompt.</td></tr>
+  <tr><td><code>disable-model-invocation</code></td><td><code>true</code> = manual-only (slash command).</td></tr>
+  <tr><td><code>user-invocable</code></td><td><code>false</code> = hidden from <code>/</code> menu.</td></tr>
+  <tr><td><code>paths</code></td><td>Glob patterns that auto-trigger the skill when matching files are open.</td></tr>
+  <tr><td><code>model</code>, <code>effort</code></td><td>Per-skill overrides.</td></tr>
+</table>
+
+<h3>Recommended plugin layout for agent-media</h3>
+<pre>github.com/yuvalsuede/agent-media/
+├── .claude-plugin/
+│   └── plugin.json
+├── .mcp.json                      ← optional; pin our MCP server config
+├── skills/
+│   ├── make-portrait/SKILL.md
+│   ├── make-character-sheet/SKILL.md
+│   ├── make-simple-selfie/SKILL.md
+│   ├── make-subtitles/SKILL.md
+│   ├── make-ugc-video/SKILL.md
+│   └── agent-media-v2/             ← keep the legacy CLI skill alive
+│       ├── SKILL.md
+│       └── reference/...
+├── SKILL.md                        ← repo-root pointer that auto-selects v2 or vNext
+├── README.md                       ← updated install instructions
+└── LICENSE</pre>
+
+<h2>Our current state (audit)</h2>
+
+<div class="warn">
+<strong>What we have today:</strong>
+<ul>
+  <li>Root <code>SKILL.md</code> mixes legacy v2 CLI + a hand-written vNext section. No plugin manifest.</li>
+  <li><code>skills/agent-media-v2/SKILL.md</code> + <code>reference/</code> tree — correctly multi-file, documents the legacy CLI cleanly.</li>
+  <li>README has the install line <code>claude skills add github:gitroomhq/agent-media</code> — both the command (<code>skills add</code> deprecated) and the remote (<code>gitroomhq</code>) are wrong.</li>
+  <li>No <code>.claude-plugin/plugin.json</code>.</li>
+  <li>No <code>.mcp.json</code> at the plugin root.</li>
+  <li>The 5 vNext skills (<code>make_portrait</code>, etc.) live only in the api-v2 registry — NOT as individual <code>SKILL.md</code> files an external agent can install.</li>
+  <li><code>@agentmedia/mcp-server</code> on npm at v0.5.0 — predates the vNext skills.</li>
+</ul>
+</div>
+
+<h2>Migration plan</h2>
+
+<h3>Step 1 — Plugin manifest</h3>
+<pre>// .claude-plugin/plugin.json
+{
+  "name": "agent-media",
+  "description": "AI UGC video production — primitives + composed skills for portraits, character sheets, talking-head videos, and TikTok-style captions, all backed by Temporal + Seedance 2.0.",
+  "version": "1.0.0",
+  "author": { "name": "yuvalsuede" },
+  "homepage": "https://agent-media.ai",
+  "repository": "https://github.com/yuvalsuede/agent-media",
+  "license": "Apache-2.0"
+}</pre>
+
+<h3>Step 2 — One SKILL.md per vNext skill</h3>
+<p>Convert each registry entry into a dedicated <code>skills/&lt;slug&gt;/SKILL.md</code>. The skill body teaches Claude:</p>
+<ul>
+  <li>What the skill does + when to use it.</li>
+  <li>Required + optional inputs (with the exact JSON shape).</li>
+  <li>How to call it via the MCP tool or the REST endpoint.</li>
+  <li>How to poll the result.</li>
+  <li>Examples lifted from our verified test runs (so Claude has concrete prompts to imitate).</li>
+</ul>
+<p>5 skill markdowns: <code>make-portrait</code>, <code>make-character-sheet</code>, <code>make-simple-selfie</code>, <code>make-subtitles</code>, <code>make-ugc-video</code>.</p>
+
+<h3>Step 3 — MCP integration (<code>.mcp.json</code>)</h3>
+<pre>{
+  "mcpServers": {
+    "agent-media": {
+      "command": "npx",
+      "args": ["-y", "@agentmedia/mcp-server@latest"],
+      "env": { "AGENT_MEDIA_API_KEY": "${AGENT_MEDIA_API_KEY}" }
+    }
+  }
+}</pre>
+<p>So installing the plugin auto-wires the MCP server (which proxies to <code>https://api.agent-media.ai/mcp</code>).</p>
+
+<h3>Step 4 — Bump the MCP server</h3>
+<p>Cut <code>@agentmedia/mcp-server@0.6.0</code> with the vNext skills surfaced in its <code>tools/list</code>. Today the HTTP <code>/mcp</code> route lists them correctly; the stdio package just needs a rebuild + publish.</p>
+
+<h3>Step 5 — README install instructions</h3>
+<pre># NEW
+claude /plugin install github.com/yuvalsuede/agent-media
+
+# OR via community marketplace once approved
+claude /plugin install @claude-community/agent-media</pre>
+
+<h3>Step 6 — Repurpose the root <code>SKILL.md</code></h3>
+<p>Keep a small root SKILL.md as a routing pointer:</p>
+<ul>
+  <li>Lists what's inside the plugin (the 5 vNext skills + the legacy v2 skill).</li>
+  <li>Points users at <code>skills/make-ugc-video/SKILL.md</code> for the all-in-one flow.</li>
+  <li>Drops the legacy v2 CLI duplication — that already lives in <code>skills/agent-media-v2/SKILL.md</code>.</li>
+</ul>
+
+<h3>Step 7 — Submit to <code>@claude-community</code></h3>
+<p>At <code>claude.ai/settings/plugins/submit</code> — paste the github URL. Adds discoverability without changing the install path.</p>
+
+<h2>About "gitroom"</h2>
+
+<div class="gap">
+<p>I want to be honest: I don't see a separate "gitroom skill marketplace" anywhere in the repo or in the public docs. What I found:</p>
+<ul>
+  <li>The old README referenced <code>github:gitroomhq/agent-media</code> as an install path. <strong>That remote was removed</strong> from the repo (memory rule: pushing there leaked the private project public).</li>
+  <li>Gitroom (the company) ships <strong>Postiz</strong> — a social-media scheduler. We have a Postiz integration in this repo. Different product.</li>
+  <li>I don't see a Gitroom skill catalog / hub URL anywhere I can target.</li>
+</ul>
+<p>Possible interpretations of what you meant:</p>
+<ol>
+  <li>You want our skill <strong>discoverable on Postiz / gitroom.com</strong> as a public marketplace they run. Tell me the URL or where they accept submissions — I haven't found it.</li>
+  <li>You're describing the <em>concept</em> — "we want a public skill hub" — and the actual landing place is the Claude community marketplace (<code>@claude-community</code>). That's what I'd execute against unless you point me at a specific gitroom catalog.</li>
+  <li>You meant <code>gitroomhq/agent-media</code> the github org. We DO NOT push there (per the saved rule), but if gitroom is the brand-name of this project publicly, the canonical install URL would be <code>github.com/gitroomhq/agent-media</code> once that remote is mirrored. <strong>This needs your confirmation — I won't push to gitroomhq without an explicit go.</strong></li>
+</ol>
+</div>
+
+<h2>What I propose to ship</h2>
+
+<div class="ask">
+<ol>
+  <li>Refactor the plugin layout (steps 1–6 above) on this repo at <code>yuvalsuede/agent-media</code>. Time: ~45 min.</li>
+  <li>Cut <code>@agentmedia/mcp-server@0.6.0</code> with the vNext skills documented in its package README. Time: ~15 min.</li>
+  <li>Submit to <code>@claude-community</code> (you click the submit button — I prepare the listing copy).</li>
+  <li><strong>Stop and ask you</strong> before doing anything that touches gitroomhq — clarify what you want there.</li>
+</ol>
+<p>Approve and I ship 1–3.</p>
+</div>
+
+</body>
+</html>

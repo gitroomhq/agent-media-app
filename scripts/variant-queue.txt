@@ -1,0 +1,87 @@
+# Actor Variant Generation Queue
+# Generated 2026-04-09
+# Rule: ONE actor at a time. Submit 4 prompts, wait, download, VERIFY, upload.
+# Never submit prompts for actor N+1 before actor N is fully done.
+#
+# Format: slug | age | gender | nationality | portrait
+#
+bayo|28|male|African American|actor_123.png
+courtney|62|female|Caucasian|actor_193.png
+daiki|58|male|East Asian|actor_054.png
+darius|28|male|African American|actor_032.png
+dean|55|male|Mediterranean|actor_177.png
+dele|24|male|African American|actor_080.png
+derek|35|male|Caucasian|actor_142.png
+logan|28|male|Caucasian|actor_102.png
+madison|42|female|Caucasian|actor_004.png
+marcus-2|28|male|African American|actor_136.png
+mariana|32|female|Latina|actor_085.png
+mei|26|female|East Asian|actor_006.png
+melissa|62|female|Caucasian|actor_189.png
+miguel|42|male|Latino|actor_109.png
+min|28|female|Southeast Asian|actor_181.png
+min-jun|24|male|East Asian|actor_078.png
+na-rae|22|female|East Asian|actor_105.png
+naomi|24|female|Mixed ethnicity|actor_049.png
+natalia|24|female|Latina|actor_065.png
+nathan|45|male|Caucasian|actor_112.png
+ngozi|28|female|African|actor_168.png
+nia|28|female|African American|actor_047.png
+niklas|48|male|Northern European|actor_175.png
+nkechi|42|female|African American|actor_182.png
+noah|28|male|European|actor_134.png
+nour|28|female|Middle Eastern|actor_016.png
+olumide|28|male|African American|actor_040.png
+omar|26|male|Middle Eastern|actor_025.png
+precious|28|female|African American|actor_087.png
+priya|26|female|South Asian|actor_103.png
+raj|26|male|South Asian|actor_131.png
+ravi|42|male|Mediterranean|actor_070.png
+reed|42|male|Mediterranean|actor_137.png
+ren|58|male|East Asian|actor_165.png
+ricardo|32|male|Latin American|actor_145.png
+rohan|48|male|South Asian|actor_164.png
+rosa|32|female|Latina|actor_185.png
+rotimi|28|male|African American|actor_111.png
+ryan|55|male|Caucasian|actor_104.png
+ryu|35|male|Southeast Asian|actor_200.png
+sakura|25|female|Southeast Asian|actor_069.png
+sam|32|male|Mediterranean|actor_115.png
+samir|28|male|Middle Eastern|actor_128.png
+samuel|26|male|African American|actor_030.png
+sara|32|female|Middle Eastern|actor_081.png
+sarah|28|female|European|actor_035.png
+segun|65|male|African American|actor_094.png
+seun|35|male|African|actor_022.png
+shannon|28|female|Caucasian|actor_198.png
+simone|26|female|African American|actor_051.png
+sofia|32|female|Latina|actor_013.png
+soo-jin|24|female|East Asian|actor_101.png
+sophie|28|female|European|actor_007.png
+sung|22|male|East Asian|actor_117.png
+takeshi|45|male|East Asian|actor_050.png
+tao|26|male|East Asian|actor_130.png
+tariq|48|male|Middle Eastern|actor_072.png
+taylor|28|female|Caucasian|actor_079.png
+tiffany|68|female|Caucasian|actor_190.png
+tobias|28|male|African|actor_020.png
+travis|45|male|Caucasian|actor_149.png
+tunde|28|male|African American|actor_092.png
+tyler|32|male|Caucasian|actor_042.png
+uche|35|male|African American|actor_133.png
+valentina|26|female|Latina|actor_073.png
+valeria|38|female|Latin American|actor_029.png
+vikram|32|male|South Asian|actor_151.png
+walid|45|male|Middle Eastern|actor_118.png
+wanjiku|26|female|Asian|actor_095.png
+wei|35|male|Southeast Asian|actor_003.png
+wei-2|72|female|East Asian|actor_196.png
+xiao|28|female|East Asian|actor_108.png
+xue|32|female|East Asian|actor_180.png
+yewande|62|female|African American|actor_195.png
+ying|24|female|East Asian|actor_143.png
+youssef|28|male|Middle Eastern|actor_082.png
+yuki|22|female|East Asian|actor_055.png
+yuna|24|female|East Asian|actor_083.png
+zack|48|male|Mediterranean|actor_088.png
+zeynep|28|female|Middle Eastern|actor_097.png

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Why I asked for the user_id (and what to do instead)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 880px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 20px; margin-top: 28px; color: #1a3a5c; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 18px 22px; margin: 16px 0; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+  td, th { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>You're right — let's go through the proper api-v2 auth flow</h1>
+
+<div class="ok">
+The agent-media login already issues a Bearer token. The clean test is: <code>curl … with $TOKEN</code> → api-v2 verifies the token → extracts your user_id → starts the workflow. That's what production users will do.
+</div>
+
+<h2>Why I asked for the user_id anyway</h2>
+<p>It was a shortcut. The api-v2 route I built (<code>POST /v1/primitives/portrait_gpt2</code>) only exists on the <code>vnext/primitive-foundation</code> branch — and Railway's <code>api-v2</code> service deploys from a different branch (your main / sprint-8). So the route isn't live on <code>api.agent-media.ai</code> yet.</p>
+<p>To skip that mismatch I was about to trigger the workflow directly through the Temporal CLI on my machine — but that bypasses the agent-media auth flow, so it needed a raw user_id as input. Hence the question.</p>
+
+<h2>To do it the right way, three things need to happen on api-v2</h2>
+
+<table>
+<tr><th>#</th><th>Step</th><th>Risk</th></tr>
+<tr><td>1</td><td>Get my new code (the <code>/v1/primitives/portrait_gpt2</code> route + the small server.ts wiring) onto the branch that api-v2 deploys from.</td><td>Touches the public API service. Needs the existing "1 Change" pending edit to be resolved first.</td></tr>
+<tr><td>2</td><td>Set <code>VNEXT_PRIMITIVES_ENABLED=true</code> on api-v2 in Railway.</td><td>Trivial — without this, the route doesn't mount even if the code is deployed.</td></tr>
+<tr><td>3</td><td>api-v2 redeploys.</td><td>Standard prod deploy. Needs your approval.</td></tr>
+</table>
+
+<h2>So before we can go through the proper flow, the api-v2 "1 Change" pending blocker is back</h2>
+
+<div class="warn">
+You said earlier to ignore it. That worked when we were only deploying the new worker. But to redeploy api-v2 (step 3 above), Railway will apply that pending change too — whatever it is. We need to know what it is before clicking Deploy on api-v2.
+</div>
+
+<div class="ask">
+<strong>Two options:</strong>
+<ol>
+  <li><strong>(A)</strong> Tell me what the api-v2 "1 Change" / "Details" says. Then I'll prep a clean merge of the new primitives route into your api-v2 branch, you set <code>VNEXT_PRIMITIVES_ENABLED=true</code>, deploy, and we test the proper way with your Bearer token.</li>
+  <li><strong>(B)</strong> Today, for the smoke test only: give me your user UUID and I'll trigger the workflow via Temporal CLI. This skips the api-v2 path entirely. We'd still need (A) later to expose the route to real users.</li>
+</ol>
+<p>Recommendation: <strong>(A)</strong>. It's the right end-state and unblocks the "agent-media login → primitive" flow you described. (B) is a temp shortcut.</p>
+</div>
+
+</body>
+</html>

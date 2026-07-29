@@ -1,0 +1,28 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+    "stripe": "https://esm.sh/stripe@17?target=deno",
+    "_shared/supabase.ts": "./_shared/supabase.ts",
+    "_shared/sentry.ts": "./_shared/sentry.ts",
+    "_shared/cors.ts": "./_shared/cors.ts",
+    "_shared/auth.ts": "./_shared/auth.ts",
+    "_shared/idempotency.ts": "./_shared/idempotency.ts",
+    "_shared/moderation.ts": "./_shared/moderation.ts",
+    "_shared/rate-limit.ts": "./_shared/rate-limit.ts",
+    "_shared/security-headers.ts": "./_shared/security-headers.ts",
+    "_shared/validation.ts": "./_shared/validation.ts",
+    "generate/models.ts": "./generate/models.ts",
+    "upload-url/index.ts": "./upload-url/index.ts",
+    "webhook-provider/index.ts": "./webhook-provider/index.ts",
+    "auto-topup/index.ts": "./auto-topup/index.ts",
+    "pricing/index.ts": "./pricing/index.ts",
+    "gallery-delete/index.ts": "./gallery-delete/index.ts",
+    "presigned-url/index.ts": "./presigned-url/index.ts",
+    "stripe-portal/index.ts": "./stripe-portal/index.ts",
+    "apikey-manage/index.ts": "./apikey-manage/index.ts",
+    "usage-stats/index.ts": "./usage-stats/index.ts",
+    "health-status/index.ts": "./health-status/index.ts",
+    "invite-redeem/index.ts": "./invite-redeem/index.ts",
+    "feedback/index.ts": "./feedback/index.ts"
+  }
+}

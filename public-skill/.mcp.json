@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "agent-media": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "-p",
+        "@agentmedia/mcp-server@latest",
+        "agent-media-mcp"
+      ],
+      "env": {
+        "AGENT_MEDIA_API_KEY": "${AGENT_MEDIA_API_KEY}"
+      }
+    }
+  }
+}

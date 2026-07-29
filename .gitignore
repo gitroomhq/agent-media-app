@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-tests/
+test-out/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.vnext.local
+.env.*.local
+!.env.example
+
+# Supabase
+.supabase/
+
+# Turbo
+.turbo/
+
+# Test coverage
+coverage/
+
+# Next.js
+.next/
+
+# TypeScript
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.vercel
+__pycache__/
+supabase/.temp/
+
+# Local engineering vault (Obsidian) — never tracked, lives on disk only
+agent-media-vault/
+
+# Secrets — never commit env backups or provider tokens
+.env
+.env.*
+!.env.example
+*.env.local.bak
+.env*.bak
+.mcpregistry_github_token
+.mcpregistry_*
+
+# Internal agent-automation scratch (contained a hardcoded service_role key)
+.a5c/

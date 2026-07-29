@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Micro-skills — design</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 920px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; margin-top: 28px; color: #1a3a5c; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin: 16px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>Micro-skills — design</h1>
+
+<h2>What a "micro-skill" is here</h2>
+<p>A micro-skill is the smallest user-facing unit in the Skill Center. It's a named, versioned wrapper around exactly one primitive. Same Temporal workflow, but it gets a public name, slug, default inputs, and shows up in <code>GET /v1/skills</code>.</p>
+<p>Future composed skills (e.g. "make UGC video") will chain multiple primitives. Micro-skills are the 1:1 building blocks.</p>
+
+<h2>Two micro-skills to ship</h2>
+
+<table>
+<tr><th>Skill slug</th><th>Primitive</th><th>User-facing input</th></tr>
+<tr><td><code>make_portrait</code></td><td><code>portrait_gpt2</code></td><td><code>description</code> (required), <code>setting?</code>, <code>aspect_ratio?</code>, <code>realism_target?</code>, <code>reference_photo_url?</code> (R2)</td></tr>
+<tr><td><code>make_character_sheet</code></td><td><code>character_sheet_gpt2</code></td><td><code>portrait_url</code> (required, R2), <code>description?</code> (≤10 words), <code>aspect_ratio?</code></td></tr>
+</table>
+
+<h2>How it's wired (minimal, no premature abstraction)</h2>
+<ul>
+  <li><strong>Skill registry</strong> — in-code map for V1, not a DB table. <code>services/api-v2/src/skills/registry.ts</code> exports a <code>SKILLS</code> object keyed by slug. Each entry has: name, version, description, primitive id, Zod input schema (re-uses the primitive contract), Temporal workflow type, output shape. Same shape we'd later persist to a <code>skills</code> table when the marketplace lands.</li>
+  <li><strong>Two API routes</strong> in api-v2 (both feature-flagged behind <code>VNEXT_PRIMITIVES_ENABLED</code>):
+    <ul>
+      <li><code>GET /v1/skills</code> — lists registered skills (slug, name, version, description, JSON-schema'd input).</li>
+      <li><code>POST /v1/skills/:slug/run</code> — validates input against the registry's schema, mints a <code>primitive_run_id</code>, starts the underlying primitive workflow on the <code>primitive-vnext-v1</code> queue, returns <code>{run_id, workflow_id, skill: slug, status: "submitted"}</code>. Same Idempotency-Key handling as the primitive routes.</li>
+    </ul>
+  </li>
+  <li><strong>No new DB tables.</strong> Skill runs map 1:1 to primitive_runs for now. A <code>skill_runs</code> table lands when composed skills (multi-step graphs) appear.</li>
+  <li><strong>No new worker code.</strong> Skill workflow == primitive workflow for micro-skills.</li>
+</ul>
+
+<h2>Skill registry shape</h2>
+<pre>{
+  "make_portrait": {
+    "slug": "make_portrait",
+    "name": "Make Portrait",
+    "version": "1.0.0",
+    "description": "Generate one photoreal portrait with optional reference photo.",
+    "primitive": "portrait_gpt2",
+    "workflowType": "portraitGpt2Workflow",
+    "inputSchema": PortraitGpt2ToolInputSchema
+  },
+  "make_character_sheet": {
+    "slug": "make_character_sheet",
+    "name": "Make Character Sheet",
+    "version": "1.0.0",
+    "description": "Generate a magazine-style character sheet from a portrait.",
+    "primitive": "character_sheet_gpt2",
+    "workflowType": "characterSheetGpt2Workflow",
+    "inputSchema": CharacterSheetGpt2ToolInputSchema
+  }
+}</pre>
+
+<h2>Sample call</h2>
+<pre>curl -X POST https://api.agent-media.ai/v1/skills/make_character_sheet/run \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: sara-cs-1" \
+  -d '{
+    "portrait_url": "https://pub-...r2.dev/vnext/primitive-runs/.../portrait.png",
+    "description": "Sara, 28 years old"
+  }'
+
+→ 202 { run_id, workflow_id, skill: "make_character_sheet", status: "submitted" }</pre>
+
+<div class="ask">
+<strong>Confirm and I:</strong>
+<ol>
+  <li>Build the registry + the two API routes.</li>
+  <li>Reuse the existing primitive workflows + DB. No new tables.</li>
+  <li>Build, commit, push.</li>
+  <li>Fire one test against <code>POST /v1/skills/make_portrait/run</code> via Temporal CLI (since api-v2 prod hasn't been redeployed yet) to prove the registry resolves correctly.</li>
+</ol>
+<p>Cost: same as before — one Haiku ($0.001) + one gpt-image-2 ($0.20) per test fire.</p>
+</div>
+
+</body>
+</html>

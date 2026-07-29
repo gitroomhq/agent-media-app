@@ -1,0 +1,42 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SITE_URL",
+    "POSTIZ_CLIENT_SECRET",
+    "POSTIZ_CLIENT_ID",
+    "DUB_API_KEY",
+    "ADMIN_EMAILS",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "lint": {
+      "dependsOn": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["build"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "generate:edge-schema": {
+      "dependsOn": ["@agent-media/schema#build"],
+      "outputs": ["supabase/functions/_shared/schema.generated.ts"]
+    },
+    "generate:openapi": {
+      "dependsOn": ["@agent-media/schema#build"],
+      "outputs": ["generated/openapi.json"]
+    }
+  }
+}

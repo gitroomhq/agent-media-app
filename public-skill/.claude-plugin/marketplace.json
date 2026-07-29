@@ -1,0 +1,18 @@
+{
+  "name": "agent-media",
+  "owner": {
+    "name": "gitroomhq",
+    "url": "https://github.com/gitroomhq"
+  },
+  "metadata": {
+    "description": "Agent-Media UGC Video for Claude Code — one tool: give a script + a person/image/character, get a finished captioned vertical UGC video.",
+    "version": "1.3.0"
+  },
+  "plugins": [
+    {
+      "name": "agent-media",
+      "source": "./",
+      "description": "Agent-Media UGC Video — one tool. Give a script + a person/image/character; get a finished captioned vertical UGC video (short clip, multi-take monologue, or narrated b-roll). Via one MCP server."
+    }
+  ]
+}

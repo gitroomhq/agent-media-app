@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.a5c
+.playwright-mcp
+.memory
+*.png
+*.jpg
+*.jpeg
+apps/
+/workflows/
+/scripts/
+services/subtitle-worker/
+supabase/

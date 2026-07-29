@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build plan — ElevenLabs voice → talking video (vNext)</title>
+<style>
+:root{color-scheme:dark}body{background:#0d0e14;color:#e7e7ef;font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:44px 24px}
+.wrap{max-width:940px;margin:0 auto}h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid #23252f}h3{font-size:15px;margin:14px 0 6px;color:#cdd}
+code{background:#1a1c25;padding:1px 6px;border-radius:5px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#c9d4ff}
+pre{background:#14161f;border:1px solid #23252f;border-radius:10px;padding:14px;overflow:auto;font-size:12.5px;line-height:1.5}
+.box{background:#14161f;border:1px solid #23252f;border-radius:12px;padding:14px 18px;margin:12px 0}
+.need{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);border-radius:10px;padding:12px 16px;margin:12px 0}
+.rec{border-left:3px solid #34d399;padding-left:14px}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}th,td{border-bottom:1px solid #23252f;padding:7px 9px;text-align:left;vertical-align:top}th{color:#9aa}
+.tag{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.4);color:#c9b8ff}
+ul{padding-left:20px}li{margin:5px 0}
+</style></head><body><div class="wrap">
+<h1>Build plan — “photo + your voice → video of you, in your voice”</h1>
+<p style="color:#9aa">This is a <b>port of proven code</b> from <code>media-worker-v2</code> into the vNext primitive runtime. Audio-first architecture (Approach B), as designed.</p>
+
+<h2>What already exists to port (legacy <code>media-worker-v2</code>)</h2>
+<table>
+<tr><th>Legacy file</th><th>Gives us</th></tr>
+<tr><td><code>elevenlabs-tts.js</code> → <code>cloneVoice()</code></td><td>Voice cloning — <code>POST /voices/add</code> (Instant Voice Cloning) → returns <code>voice_id</code></td></tr>
+<tr><td><code>elevenlabs-tts.js</code> → <code>generateElevenLabsTTS()</code></td><td>TTS in the cloned voice, tone presets, prosody continuity</td></tr>
+<tr><td><code>talking-head.js</code> (kling provider)</td><td>Audio-driven lip-sync: <code>image2video</code> → <code>lip-sync</code> (mouth follows the TTS audio)</td></tr>
+<tr><td><code>evolink-client.js</code></td><td>Kling models via EvoLink (~55% cheaper) — we already use this key for Seedance</td></tr>
+</table>
+<div class="box rec">Net: no new R&D. We re-implement these as two TypeScript primitives in the vNext worker.</div>
+
+<h2>The build — 2 primitives + 1 composed extension</h2>
+
+<h3>1. <code>clone_voice</code> <span class="tag">new</span></h3>
+<pre>in:  { voice_sample_url (R2), consent: true, name? }
+do:  port cloneVoice() → ElevenLabs POST /voices/add
+out: { voice_id }  → persist in new `voices` table (user_id, voice_id, name, created_at)</pre>
+
+<h3>2. <code>voiced_selfie</code> <span class="tag">new</span></h3>
+<pre>in:  { character_sheet_url, script, voice_id, duration }
+do:  1. ElevenLabs TTS(script, voice_id)         → audio.mp3 → R2
+     2. Kling lip-sync(character image + audio)  → talking.mp4   (mouth follows real voice)
+        └ auto-split >10s into ≤10s segments + stitch (Kling lip-sync degrades past ~10s)
+out: { video_url }</pre>
+
+<h3>3. extend <code>make_ugc_video</code> <span class="tag">composed</span></h3>
+<pre>photo + voice_sample + script
+  → portrait/character_sheet   (identity, have it)
+  → clone_voice → voice_id     (new)
+  → voiced_selfie              (new; replaces the generic-voice selfie when a voice is supplied)
+  → subtitles                  (have it)
+  = video that looks AND sounds like the user</pre>
+<p>When no <code>voice_sample</code>/<code>voice_id</code> is supplied, it falls back to today's Seedance generic-voice selfie — fully backward compatible.</p>
+
+<h2>Wiring (same patterns, no new infra)</h2>
+<ul>
+<li>New clients: <code>client/elevenlabs.ts</code>, <code>client/kling.ts</code> (port).</li>
+<li>New schema contracts → register in skill registry → auto-flows to REST + MCP + CLI + public plugin via existing codegen.</li>
+<li>New migration: <code>voices</code> table. Credits: deduct at activity start (idempotent), refund on terminal failure — same as every primitive.</li>
+<li>R2 + SSRF allowlist applies to <code>voice_sample_url</code>.</li>
+</ul>
+
+<div class="need">
+<b>What I need from you before I can build + test (gating):</b>
+<ul>
+<li><b>Secrets in the <code>primitive-worker-vnext</code> Railway env:</b> <code>ELEVENLABS_API_KEY</code>, and Kling lip-sync creds — either <code>KLING_ACCESS_KEY</code>/<code>KLING_SECRET_KEY</code> (official) or confirm the existing <code>EVOLINK_API_KEY</code> covers Kling lip-sync (it already covers Seedance). I can't test without these.</li>
+<li><b>Scope confirm:</b> v1 = cloned voice from an uploaded sample (your stated vision). OK to go straight to cloning, or do you want a preset-voice version first?</li>
+<li><b>Consent:</b> ElevenLabs requires consent to clone a real voice — confirm we add a consent flag/checkbox in the flow.</li>
+</ul>
+</div>
+
+<h2>Deploy discipline (lesson from the incident)</h2>
+<ul>
+<li><b>No <code>railway up</code>.</b> Deploy the worker via the GitHub path only (full checkout → builds <code>dist/workflows</code> correctly).</li>
+<li>Confirm the new env secrets are present on the service <b>before</b> testing, and verify the worker boots clean (the "listening … queue=primitive-vnext-v1" log) after deploy.</li>
+<li>Build incrementally: TTS client + <code>clone_voice</code> first (cheap to test) → then <code>voiced_selfie</code> lip-sync → then compose.</li>
+</ul>
+
+<h2>Suggested sprint order</h2>
+<ol>
+<li>Port <code>client/elevenlabs.ts</code> + <code>clone_voice</code> primitive + <code>voices</code> table. Test: clone a sample → get voice_id.</li>
+<li>Port <code>client/kling.ts</code> + <code>voiced_selfie</code> primitive. Test: voice_id + character sheet + script → talking video, verify lip-sync.</li>
+<li>Extend <code>make_ugc_video</code> to use voice when supplied. Test end-to-end: photo + voice sample → final video.</li>
+<li>Register in registry → regenerate public skill → surfaces on REST/MCP/CLI/plugin.</li>
+</ol>
+</div></body></html>

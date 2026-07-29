@@ -1,0 +1,188 @@
+name: Generate UGC Video
+
+on:
+  workflow_call:
+    inputs:
+      script:
+        description: "The video script text"
+        required: true
+        type: string
+      actor_slug:
+        description: "Actor slug to use (or 'random' for a random actor)"
+        required: false
+        default: "random"
+        type: string
+      duration:
+        description: "Video duration in seconds"
+        required: false
+        default: 10
+        type: number
+      style:
+        description: "Subtitle style (hormozi, karaoke, bold, tiktok, minimal)"
+        required: false
+        default: "hormozi"
+        type: string
+      sync:
+        description: "Wait for video generation to complete"
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      AGENT_MEDIA_API_KEY:
+        required: true
+    outputs:
+      video_url:
+        description: "URL of the generated video"
+        value: ${{ jobs.generate.outputs.video_url }}
+      job_id:
+        description: "The generation job ID"
+        value: ${{ jobs.generate.outputs.job_id }}
+
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "The video script text"
+        required: true
+        type: string
+      actor_slug:
+        description: "Actor slug to use (or 'random' for a random actor)"
+        required: false
+        default: "random"
+        type: string
+      duration:
+        description: "Video duration in seconds"
+        required: false
+        default: "10"
+        type: string
+      style:
+        description: "Subtitle style (hormozi, karaoke, bold, tiktok, minimal)"
+        required: false
+        default: "hormozi"
+        type: string
+      sync:
+        description: "Wait for video generation to complete"
+        required: false
+        default: "true"
+        type: string
+
+jobs:
+  generate:
+    name: Generate Video
+    runs-on: ubuntu-latest
+    outputs:
+      video_url: ${{ steps.result.outputs.video_url }}
+      job_id: ${{ steps.submit.outputs.job_id }}
+    steps:
+      - name: Submit generation job
+        id: submit
+        env:
+          API_KEY: ${{ secrets.AGENT_MEDIA_API_KEY }}
+          SCRIPT: ${{ inputs.script }}
+          ACTOR_SLUG: ${{ inputs.actor_slug }}
+          DURATION: ${{ inputs.duration }}
+          STYLE: ${{ inputs.style }}
+        run: |
+          RESPONSE=$(curl -sf -X POST \
+            "https://api-v2-production-2f24.up.railway.app/v1/generate/ugc_video" \
+            -H "Authorization: Bearer ${API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg script "$SCRIPT" \
+              --arg actor "$ACTOR_SLUG" \
+              --arg duration "$DURATION" \
+              --arg style "$STYLE" \
+              '{
+                script: $script,
+                actor_slug: $actor,
+                duration: ($duration | tonumber),
+                subtitle_style: $style
+              }')")
+
+          echo "API response: ${RESPONSE}"
+
+          JOB_ID=$(echo "$RESPONSE" | jq -r '.data.job_id // .job_id // empty')
+          if [ -z "$JOB_ID" ]; then
+            echo "::error::Failed to get job_id from API response"
+            exit 1
+          fi
+
+          echo "job_id=${JOB_ID}" >> "$GITHUB_OUTPUT"
+          echo "Job submitted: ${JOB_ID}"
+
+      - name: Poll for completion
+        id: poll
+        if: ${{ inputs.sync == true || inputs.sync == 'true' }}
+        env:
+          API_KEY: ${{ secrets.AGENT_MEDIA_API_KEY }}
+          JOB_ID: ${{ steps.submit.outputs.job_id }}
+        run: |
+          MAX_ATTEMPTS=60
+          INTERVAL=10
+          ATTEMPT=0
+
+          echo "Polling job ${JOB_ID} (max ${MAX_ATTEMPTS} attempts, ${INTERVAL}s interval)..."
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+
+            STATUS_RESPONSE=$(curl -sf \
+              "https://api-v2-production-2f24.up.railway.app/v1/jobs/${JOB_ID}" \
+              -H "Authorization: Bearer ${API_KEY}")
+
+            STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.data.status // .status // "unknown"')
+            echo "Attempt ${ATTEMPT}/${MAX_ATTEMPTS}: status=${STATUS}"
+
+            case "$STATUS" in
+              completed|done|finished)
+                VIDEO_URL=$(echo "$STATUS_RESPONSE" | jq -r '.data.video_url // .data.output_url // .video_url // .output_url // empty')
+                if [ -n "$VIDEO_URL" ]; then
+                  echo "video_url=${VIDEO_URL}" >> "$GITHUB_OUTPUT"
+                  echo "Video ready: ${VIDEO_URL}"
+                  exit 0
+                else
+                  echo "::error::Job completed but no video URL found in response"
+                  echo "$STATUS_RESPONSE" | jq .
+                  exit 1
+                fi
+                ;;
+              failed|error)
+                ERROR=$(echo "$STATUS_RESPONSE" | jq -r '.data.error // .error // "Unknown error"')
+                echo "::error::Video generation failed: ${ERROR}"
+                exit 1
+                ;;
+              *)
+                sleep $INTERVAL
+                ;;
+            esac
+          done
+
+          echo "::error::Timed out waiting for video generation after $((MAX_ATTEMPTS * INTERVAL))s"
+          exit 1
+
+      - name: Set outputs
+        id: result
+        run: |
+          VIDEO_URL="${{ steps.poll.outputs.video_url }}"
+          if [ -n "$VIDEO_URL" ]; then
+            echo "video_url=${VIDEO_URL}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summary
+        run: |
+          JOB_ID="${{ steps.submit.outputs.job_id }}"
+          VIDEO_URL="${{ steps.result.outputs.video_url }}"
+
+          echo "## Video Generation Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job ID | \`${JOB_ID}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Actor | ${{ inputs.actor_slug }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Duration | ${{ inputs.duration }}s |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Style | ${{ inputs.style }} |" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$VIDEO_URL" ]; then
+            echo "| Video URL | [Download](${VIDEO_URL}) |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Status | Submitted (async) |" >> "$GITHUB_STEP_SUMMARY"
+          fi

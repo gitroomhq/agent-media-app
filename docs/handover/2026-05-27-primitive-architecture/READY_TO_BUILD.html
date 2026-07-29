@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>vNext — Ready to Build (Credentials Needed)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 860px; margin: 40px auto; padding: 0 24px; line-height: 1.55; color: #222; background: #fafafa; }
+  h1 { font-size: 28px; border-bottom: 2px solid #333; padding-bottom: 8px; }
+  h2 { font-size: 22px; margin-top: 36px; color: #1a3a5c; }
+  h3 { font-size: 16px; margin-top: 20px; color: #444; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 18px 22px; margin: 16px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  ul, ol { padding-left: 22px; } li { margin: 4px 0; }
+  pre { background: #f5f5f5; padding: 12px; border-radius: 6px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  td, th { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; font-size: 14px; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>vNext — Ready to Build</h1>
+<p><em>Date: 2026-05-27</em></p>
+
+<div class="box ok">
+<strong>Decisions locked:</strong>
+<ul>
+  <li>Temporal from day 1 (full override of prev engineer's bespoke-first plan)</li>
+  <li>portrait_gpt2 first, end-to-end, then clone for the other 4</li>
+  <li>Temporal Cloud (managed)</li>
+  <li>Real <code>gpt-image-2</code> — confirmed via OpenAI docs</li>
+</ul>
+</div>
+
+<h2>gpt-image-2 — confirmed</h2>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Model id</td><td><code>gpt-image-2</code> (snapshot <code>gpt-image-2-2026-04-21</code>)</td></tr>
+  <tr><td>Generations endpoint</td><td><code>POST /v1/images/generations</code></td></tr>
+  <tr><td>Edits endpoint (for reference_photo_url)</td><td><code>POST /v1/images/edits</code></td></tr>
+  <tr><td>Inputs</td><td>text, image</td></tr>
+  <tr><td>Rate limit (assume Tier 1 until told otherwise)</td><td>5 images/min</td></tr>
+</table>
+
+<h2>Final 2 blockers before I write a single line of code</h2>
+
+<div class="box ask">
+<h3>1. Temporal Cloud credentials</h3>
+<p>I need these env vars to wire the worker:</p>
+<pre>TEMPORAL_ADDRESS=&lt;your-namespace&gt;.tmprl.cloud:7233
+TEMPORAL_NAMESPACE=&lt;your-namespace&gt;
+TEMPORAL_API_KEY=&lt;api-key&gt;     # if using API key auth
+# OR mTLS cert pair:
+# TEMPORAL_TLS_CERT=...
+# TEMPORAL_TLS_KEY=...</pre>
+<p><strong>If you don't have a namespace yet:</strong> sign in at <a href="https://cloud.temporal.io" target="_blank">cloud.temporal.io</a>, create a namespace called <code>agent-media-vnext-dev</code>, generate an API key, paste the values above.</p>
+</div>
+
+<div class="box ask">
+<h3>2. OpenAI API key</h3>
+<p>Either:</p>
+<ul>
+  <li>Paste <code>OPENAI_API_KEY=sk-...</code> here, OR</li>
+  <li>Tell me which Railway service env it lives in — I'll pull from there.</li>
+</ul>
+<p>Note: gpt-image-2 requires <strong>Tier 1+</strong> — confirm the account is at least Tier 1.</p>
+</div>
+
+<h2>What I will do the moment those land</h2>
+
+<ol>
+  <li>Update <code>sprints/vnext-primitive-foundation.taskml</code> — swap bespoke runtime for Temporal worker/Workflow design. Rename tasks accordingly.</li>
+  <li>Cut branch <code>vnext/primitive-foundation</code> off <code>origin/main</code>.</li>
+  <li>Commit the existing handover folder + portrait_gpt2 contract changes in two clean commits.</li>
+  <li>Scaffold <code>services/primitive-worker-vnext/</code> as a Node/TS Temporal worker.</li>
+  <li>Write migrations under <code>supabase/migrations/</code>:
+    <ul>
+      <li><code>primitive_runs</code></li>
+      <li><code>primitive_artifacts</code></li>
+      <li><code>primitive_events</code></li>
+      <li><code>provider_tasks</code></li>
+    </ul>
+  </li>
+  <li>Implement <code>portraitGpt2Activity</code> (Temporal Activity):
+    <ul>
+      <li>validate input + SSRF check on <code>reference_photo_url</code></li>
+      <li>insert <code>primitive_runs</code> row (status=submitted)</li>
+      <li>fixed credit debit at submit</li>
+      <li>call <code>POST /v1/images/generations</code> (or <code>/edits</code> if reference photo provided)</li>
+      <li>upload result to R2 under <code>vnext/primitive-runs/&lt;run_id&gt;/portrait.png</code></li>
+      <li>insert <code>primitive_artifacts</code> row</li>
+      <li>reconcile credits</li>
+      <li>return <code>{portrait_url, provider_task_id, credits_actual}</code></li>
+    </ul>
+    Temporal handles retries, timeouts, idempotency, heartbeats — no bespoke code.
+  </li>
+  <li>Write thin <code>portraitGpt2Workflow</code> that runs the single Activity. (Skills will compose multiple Activities later.)</li>
+  <li>Wire API endpoint <code>POST /v1/primitives/portrait_gpt2</code> to start the Workflow via Temporal client + return <code>{run_id, workflow_id, status: "submitted"}</code>.</li>
+  <li>Local end-to-end test. Evidence I will paste in chat:
+    <ul>
+      <li>curl request + 202 response</li>
+      <li>Temporal UI screenshot showing Workflow + Activity completing</li>
+      <li>psql dump of the resulting <code>primitive_runs</code> + <code>primitive_artifacts</code> rows</li>
+      <li>The generated portrait URL (you'll open it)</li>
+    </ul>
+  </li>
+  <li><strong>No prod deploy. No staging deploy. No env flips on api-v2 / media-worker-v2. No live spend on user accounts.</strong> Only my local + the Temporal dev namespace.</li>
+</ol>
+
+<h2>Cost guardrail (built in from step 1)</h2>
+<p>Before the first OpenAI call lands, the Activity will check three caps:</p>
+<ul>
+  <li><strong>per-primitive cap</strong> (e.g. $0.50)</li>
+  <li><strong>per-run cap</strong> (e.g. $5)</li>
+  <li><strong>per-day cap</strong> (e.g. $20 during dev)</li>
+</ul>
+<p>Reject with structured error if breached. Override knob lives in env. Tell me the dev caps you want, or I'll use those defaults.</p>
+
+<div class="box warn">
+<strong>One thing I will NOT do without explicit approval:</strong> the very first live OpenAI call. Even with dev caps in place, I'll show you the exact curl-equivalent and wait for "go" before letting the Activity run against a real key. That is the 6-step approval gate from <code>OPERATING_RULES.md</code>.
+</div>
+
+<h2>Reply format</h2>
+<pre>1. Temporal: address=... namespace=... key=...  (or "I'll create the namespace now")
+2. OpenAI key: sk-...   (or "pull from railway media-worker-v2")
+3. Dev caps: $0.50 / $5 / $20   (or your numbers)
+</pre>
+
+</body>
+</html>

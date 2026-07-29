@@ -1,0 +1,271 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #ffffff;
+  --color-card: #ffffff;
+  --color-card-hover: #f8f8f8;
+  --color-border: #e5e7eb;
+  --color-border-bright: #121212;
+  --color-text: #121212;
+  --color-text-muted: #6b6b76;
+  --color-accent: #121212;
+  --color-accent-dim: rgba(18, 18, 18, 0.08);
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-cyan: #0ea5e9;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace;
+}
+
+/* ── SoftAurora container ─────────────────────────────────────────────────
+ * react-bits SoftAurora expects this class on its root div. The
+ * inner <canvas> stretches via JS-set width/height; the parent just
+ * gives it space to render into. */
+.soft-aurora-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* react-bits Aurora container - the OGL canvas attaches inside this. */
+.aurora-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Huly hero-CTA halo ───────────────────────────────────────────────────
+ * Two classes consumed by the outer halo wrapper on the primary CTA.
+ * - .border-button-light-blur is the blurred frame, sized
+ *   calc(100% + 9px) on the pill so the glow bleeds 4.5px past every
+ *   edge.
+ * - .border-button-light paints the glow itself. Anchored to the
+ *   right side so the orange comet trails off the pill's right edge,
+ *   matching the reference button on huly.io. */
+.border-button-light-blur {
+  overflow: visible;
+  filter: blur(6px);
+}
+.border-button-light {
+  background:
+    radial-gradient(
+      40% 65% at 85% 50%,
+      #FFFFF5 3.5%,
+      #FFAA81 26.5%,
+      #FFDA9F 37.5%,
+      rgba(255, 170, 129, 0.55) 49%,
+      rgba(210, 106, 58, 0) 92.5%
+    );
+}
+.border-button-dark {
+  /* Same right-anchored radial shape as the light halo, but in cool
+   * purple-charcoal tones so the dark pill gets a subtle dark-tinted
+   * glow instead of an orange comet. */
+  background:
+    radial-gradient(
+      40% 65% at 85% 50%,
+      #3a2c66 3.5%,
+      #271c4a 26.5%,
+      #1a1230 37.5%,
+      rgba(26, 18, 48, 0.55) 49%,
+      rgba(0, 0, 0, 0) 92.5%
+    );
+}
+
+/* ── LiquidEther fog backdrop ─────────────────────────────────────────────
+ * Vendored from reactbits.dev/backgrounds/liquid-ether. The component
+ * looks for this class so the inner <canvas> stretches and ignores
+ * pointer events. */
+.liquid-ether-container {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* ── Cryptix theme tokens ─────────────────────────────────────────────────
+ * Scoped to .theme-cryptix so the dark agentic-product surface lives
+ * alongside the existing light marketing site without leaking. Values are
+ * EXACT computed colors lifted from https://cryptix.framer.website/. Do
+ * not invent fallbacks — if a value is missing, ask before guessing.
+ * No border token: Cryptix has zero rendered borders site-wide; surfaces
+ * separate via mint glow + surface-2 elevation only. */
+.theme-cryptix {
+  --cryptix-bg:          #08070E;
+  --cryptix-surface:     #17171D;
+  --cryptix-surface-2:   #202026;
+  --cryptix-text:        #F5F5F5;
+  --cryptix-text-muted:  #B0B0B0;
+
+  /* Primary accent — Huly-style violet. The token name `cryptix-mint`
+   * is kept as a back-compat alias so existing components don't need
+   * a sweeping rename; the VALUE is what shifted the brand. */
+  --cryptix-mint:        #A78BFA;
+  --cryptix-mint-glow:   rgba(167, 139, 250, 0.28);
+  --cryptix-purple:      #A78BFA;
+  --cryptix-purple-glow: rgba(167, 139, 250, 0.28);
+
+  /* Secondary accent — warm orange for high-energy CTAs. */
+  --cryptix-orange:      #FF8A4C;
+  --cryptix-orange-glow: rgba(255, 138, 76, 0.35);
+
+  /* Huly-style CTA pill: near-white background with a small warm
+   * orange-cream radial glow inside and deep-orange-brown text. The
+   * radial sits at 30%/50% (left-of-center) and fades to transparent
+   * around 40% radius so the white base reads as the dominant colour
+   * and the orange is just an accent, not a flood. */
+  --cryptix-cta-bg:      #EDEDED;
+  --cryptix-cta-text:    #5A250A;
+  /* Inner-pill glow on the RIGHT (orange-cream comet) */
+  --cryptix-cta-glow:    radial-gradient(40% 90% at 85% 50%, rgba(255,196,140,0.95) 0%, rgba(255,225,180,0.55) 45%, rgba(237,237,237,0) 100%);
+  /* Outer halo bleeding off the right edge of the pill */
+  --cryptix-cta-halo:    0 0 0 1px rgba(255,255,255,0.55) inset, 24px 0 50px -2px rgba(255,150,90,0.55), 48px 0 90px -8px rgba(255,170,110,0.35), -4px 0 18px -6px rgba(255,200,150,0.18);
+
+  --cryptix-amber:       #F5B300;
+  --cryptix-blue:        #008DE4;
+  --cryptix-pink:        #FF0066;
+
+  background-color: var(--cryptix-bg);
+  color: var(--cryptix-text);
+  font-family: "Inter Display", "Inter", system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 40s linear infinite;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* /home2 flow — traveling mint comet that races L→R along each rail. */
+@keyframes home2FlowComet {
+  0%   { left: 0%;   opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  10%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  90%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { left: 100%; opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+}
+.home2-flow-comet {
+  animation: home2FlowComet 2.1s linear infinite;
+  left: 0%;
+}
+
+/* /home2 flow — fade-in for swapping agent brand mark. */
+@keyframes home2FlowFade {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.home2-flow-fade {
+  animation: home2FlowFade 0.35s ease-out;
+}
+
+/* /home2 flow — white pulse that races left→right along the mint laser
+ * line at the top of the flow card. The pulse is a fixed-width glowing
+ * streak; we animate `left` from -20% to 100% so it enters from the left
+ * gutter, traverses the full line, and exits past the right edge before
+ * looping. Container has overflow:hidden so the pulse never bleeds. */
+@keyframes home2FlowPulse {
+  from { left: -20%; }
+  to   { left: 100%; }
+}
+.home2-flow-pulse {
+  animation: home2FlowPulse 2.6s linear infinite;
+}
+
+/* /home2 flow card — mobile scale-to-fit. The linear chain inside
+ * the card is naturally ~640px wide; on phones we keep the resolution
+ * but scale the whole stage down and clip the empty vertical space
+ * that scale() leaves below. */
+.home2-flow-scale-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.home2-flow-scale {
+  transform-origin: top left;
+  transform: scale(1);
+  width: 100%;
+}
+@media (max-width: 639px) {
+  .home2-flow-scale-wrap {
+    /* Mobile inner stage is ~352px tall (video card); 0.55 scale
+     * shrinks visible height to ~195px. Cap container height there
+     * so the parent's box matches what the user actually sees. */
+    height: 200px;
+  }
+  .home2-flow-scale {
+    transform: scale(0.55);
+    width: calc(100% / 0.55);
+  }
+}
+
+/* /home2 spotlight pulse - a single bright pulse that travels around
+ * the rounded rectangular perimeter of the spotlight video frame.
+ * Implemented by animating stroke-dashoffset on an SVG <rect>: the
+ * dash-array carves a short visible segment + long gap, and offsetting
+ * shifts that segment around the path. pathLength="100" normalizes the
+ * perimeter so the keyframe can be a clean 0 -> -100. */
+@keyframes home2SpotlightPulse {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -100; }
+}
+.home2-spotlight-pulse {
+  animation: home2SpotlightPulse 4s linear infinite;
+}
+
+/* /home2 agents grid — infinite horizontal marquees. The pill row is
+ * rendered twice so translating its container by -50% lands the second
+ * copy where the first started, giving a seamless infinite scroll. */
+@keyframes home2Marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes home2MarqueeReverse {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+
+/* /home2 flow — JS-orchestrated cascade.
+ *
+ * Hidden state has no transition rules → when an element flips from
+ * visible to hidden it SNAPS instantly with no animation. Visible state
+ * runs a one-shot pop-in keyframe (scale 0.3 → 1.15 overshoot → 1) so
+ * the entrance feels poppy.
+ *
+ * The orchestrator (in home2-flow.tsx) staggers when each element
+ * becomes visible, then sets ALL of them hidden at the same instant to
+ * close one flow cycle before kicking off the next one. */
+@keyframes home2FlowPopIn {
+  0%   { opacity: 0; transform: scale(0.3); }
+  55%  { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.home2-flow-step-hidden {
+  opacity: 0;
+  transform: scale(0.3);
+}
+.home2-flow-step-visible {
+  opacity: 1;
+  transform: scale(1);
+  animation: home2FlowPopIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>simple_selfie provider pivot</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 880px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; margin-top: 26px; color: #1a3a5c; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 14px 18px; margin: 14px 0; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>simple_selfie — provider pivot needed</h1>
+
+<div class="warn">
+<strong>BytePlus Seedance 2.0 fast rejected the request:</strong>
+<pre>InputImageSensitiveContentDetected.PrivacyInformation
+"The request failed because the input image may contain real person."</pre>
+<p>The character sheet (gpt-image-2 generated, but photo-realistic) trips BytePlus ModelArk's hard privacy filter. This is documented in memory <code>no-byteplus-for-photoreal</code> from a prior incident.</p>
+</div>
+
+<h2>How prod selfie works today</h2>
+<p>Production <code>media-worker-v2</code> routes talking-head selfies through <strong>EvoLink Kling-o3 image-to-video</strong> with lip-sync, not Seedance. BytePlus Seedance is only used for non-face B-roll (laptop UGC, product show-app) where there's no human reference.</p>
+
+<h2>Pivot for simple_selfie V1</h2>
+<table style="border-collapse:collapse;width:100%;font-size:14px;">
+<tr><th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Field</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">Old (Seedance)</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:6px;">New (EvoLink Kling)</th></tr>
+<tr><td>provider</td><td><code>seedance-2-0-fast</code></td><td><code>kling-o3</code></td></tr>
+<tr><td>endpoint</td><td>BytePlus ARK</td><td>EvoLink <code>/v1/videos/generations</code></td></tr>
+<tr><td>auth</td><td><code>ARK_API_KEY</code></td><td><code>EVOLINK_API_KEY</code> (already set on Railway)</td></tr>
+<tr><td>max duration</td><td>15s</td><td>10s — Kling-o3 lip-sync degrades past ~10s per memory</td></tr>
+<tr><td>aspect</td><td>9:16</td><td>9:16</td></tr>
+<tr><td>audio</td><td>generate_audio:true (Seedance native)</td><td>Kling-o3 has native lip-sync from script</td></tr>
+<tr><td>privacy filter on refs</td><td>blocks real-person photos</td><td>no filter — works with gpt-image-2 character sheets</td></tr>
+</table>
+
+<h2>Code changes</h2>
+<ul>
+  <li>Drop <code>character_sheet_url</code> duration choice <code>15</code> from the schema enum (only <code>5</code> and <code>10</code>).</li>
+  <li>Replace <code>generateSimpleSelfieVideo</code> in <code>byteplus.ts</code> with an <code>evolink.ts</code> port of the existing <code>media-worker-v2/evolink-client.js</code>.</li>
+  <li>Activity provider field updated to <code>kling-o3</code>.</li>
+  <li>Schema's <code>SimpleSelfieToolOutputSchema.provider</code> updated to <code>kling-o3</code>.</li>
+  <li>Per-duration USD estimate updated (Kling-o3 ≈ $0.40/5s, $0.80/10s — approx).</li>
+  <li>Add <code>EVOLINK_API_KEY</code> env to <code>primitive-worker-vnext</code> (copy from <code>media-worker-v2</code>).</li>
+</ul>
+
+<h2>What is NOT changing</h2>
+<ul>
+  <li>The skill (<code>make_simple_selfie</code>) keeps its slug, name, schema shape (minus the 15s duration).</li>
+  <li>The Haiku prompt instruction stays the same.</li>
+  <li>The R2 upload path stays the same.</li>
+  <li>The retry/idempotency/budget logic stays the same.</li>
+</ul>
+
+<div class="ask">
+<strong>Confirm:</strong>
+<ol>
+  <li>Switch to EvoLink Kling-o3. Drop 15s duration option for V1. <strong>OK?</strong></li>
+  <li>Or: explore Volcengine Pro / a Seedance proxy that doesn't have the filter. (slower path — would need provider research)</li>
+</ol>
+<p>Recommended: <strong>(1)</strong> — fastest path to a working selfie video, matches prod, no new provider research.</p>
+</div>
+
+</body>
+</html>

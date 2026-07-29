@@ -1,0 +1,63 @@
+{
+  "name": "@agentmedia/sdk",
+  "version": "0.5.3",
+  "description": "TypeScript SDK for agent-media — generate AI UGC videos with talking heads, B-roll, and subtitles programmatically.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "homepage": "https://agent-media.ai/docs/api-reference",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gitroomhq/agent-media.git",
+    "directory": "packages/sdk-ts"
+  },
+  "keywords": [
+    "ugc",
+    "video-generation",
+    "ai",
+    "sdk",
+    "typescript",
+    "api-client",
+    "text-to-video",
+    "talking-head",
+    "b-roll",
+    "subtitles",
+    "product-video",
+    "product-ugc",
+    "developer-tools",
+    "ai-video",
+    "agent-media"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./v2": {
+      "types": "./dist/v2/index.d.ts",
+      "import": "./dist/v2/index.js",
+      "require": "./dist/v2/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/v2/index.ts --format esm,cjs --dts --clean"
+  },
+  "dependencies": {
+    "@agentmedia/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.3"
+  }
+}

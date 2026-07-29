@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Publish agent-media-cli@1.16.0</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 24px; line-height: 1.65; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  .step { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 18px 22px; margin: 16px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; padding: 12px 16px; border-radius: 6px; margin: 10px 0; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; padding: 12px 16px; border-radius: 6px; margin: 10px 0; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Publish <code>agent-media-cli@1.16.0</code> to npm</h1>
+
+<div class="ok">
+1.16.0 bumped + built locally. Adds <code>agent-media skills {list,run,status}</code> for the vNext skill registry.
+</div>
+
+<div class="warn">
+Public npm publish under your <code>yuvalsuede</code> account → every user who runs <code>npm i -g agent-media-cli</code> upgrades. Not running it automatically per the operating rules.
+</div>
+
+<div class="step">
+<h3>Publish</h3>
+<pre>cd /Users/suede/Projects/agent-media
+pnpm --filter agent-media-cli publish --access public --no-git-checks</pre>
+<p>Or vanilla npm:</p>
+<pre>cd /Users/suede/Projects/agent-media/apps/cli
+npm publish --access public</pre>
+</div>
+
+<div class="step">
+<h3>Verify</h3>
+<pre>npm view agent-media-cli version
+# → 1.16.0
+
+npm i -g agent-media-cli@1.16.0
+agent-media skills list
+# → prints 6 vNext skills (make_portrait, make_character_sheet, make_wireframe, make_simple_selfie, make_subtitles, make_ugc_video)</pre>
+</div>
+
+<div class="step">
+<h3>What's also live from this batch</h3>
+<ul>
+  <li><strong>Item #2 (wireframe_gpt2)</strong> — primitive + skill <code>make_wireframe</code> shipped, codegen + public-skill mirrored to <code>gitroomhq/agent-media</code> on the next push (which already triggered).</li>
+  <li><strong>Item #5 (marketplace metadata)</strong> — plugin.json now has <code>keywords</code>, <code>categories</code>, and an <code>api</code> block exposing REST/MCP/OpenAPI URLs. README has badges for npm versions + Claude plugin install + license.</li>
+</ul>
+</div>
+
+</body>
+</html>

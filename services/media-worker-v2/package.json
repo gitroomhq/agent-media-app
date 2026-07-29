@@ -1,0 +1,21 @@
+{
+  "name": "media-worker-v2",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1004.0",
+    "@aws-sdk/s3-request-presigner": "^3.1004.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.3",
+    "openai": "^4.70.0",
+    "sharp": "^0.34.5"
+  }
+}

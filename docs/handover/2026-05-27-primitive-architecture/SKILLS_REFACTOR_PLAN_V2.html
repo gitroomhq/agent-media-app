@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Skills refactor v2 — reviewed plan</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 980px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 22px; margin-top: 30px; color: #1a3a5c; }
+  h3 { font-size: 17px; margin-top: 22px; color: #444; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  .crit { background: #fef2f2; border-left: 4px solid #dc2626; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>Skills refactor — reviewed plan (v2)</h1>
+
+<p>Reviewed by an LLM architect + checked against claudemarketplaces.com + the latest Anthropic plugin docs. Material changes from v1 below.</p>
+
+<h2>Ecosystem reality check</h2>
+
+<div class="warn">
+There are TWO active skill ecosystems and they have different install commands. We need to support both:
+<table>
+<tr><th>Ecosystem</th><th>Install command</th><th>Layout expectation</th></tr>
+<tr><td><strong>Anthropic Claude Code plugins</strong></td><td><code>claude /plugin install github.com/owner/repo</code></td><td><code>.claude-plugin/plugin.json</code> + <code>skills/&lt;name&gt;/SKILL.md</code></td></tr>
+<tr><td><strong>claudemarketplaces.com</strong> (community)</td><td><code>npx skills add &lt;repo-url&gt; --skill &lt;slug&gt;</code></td><td><code>skills/&lt;slug&gt;/SKILL.md</code> — they pick one skill at a time by directory name</td></tr>
+</table>
+<p>Same on-disk layout satisfies both, which is convenient. Good news: <code>skills/&lt;slug&gt;/SKILL.md</code> is the universal shape.</p>
+</div>
+
+<h2>Architecture, locked</h2>
+
+<p>Public repo <code>github.com/gitroomhq/agent-media</code> contains <strong>only the curated public skill</strong>. It is NOT a mirror of the private monorepo. The mother-company brand sits there; submission to claudemarketplaces.com and any Claude marketplace points at it.</p>
+
+<pre>github.com/gitroomhq/agent-media/         ← public-skill-only repo (PUBLIC)
+├── .claude-plugin/
+│   └── plugin.json
+├── .mcp.json
+├── skills/
+│   ├── make-portrait/SKILL.md
+│   ├── make-character-sheet/SKILL.md
+│   ├── make-simple-selfie/SKILL.md
+│   ├── make-subtitles/SKILL.md
+│   ├── make-ugc-video/SKILL.md
+│   └── agent-media-ugc/SKILL.md          ← NEW composite playbook (added per review)
+├── reference/
+│   ├── auth.md                           ← first-time install + agent-media login
+│   ├── pacing.md                         ← 2-4 wps script rule
+│   ├── realism-rubric.md                 ← 9 realism props doctrine
+│   └── examples/
+├── README.md
+└── LICENSE
+
+github.com/yuvalsuede/agent-media/        ← private monorepo (PRIVATE, our origin)
+├── apps/web, services/api-v2, services/primitive-worker-vnext, ...
+└── public-skill/                         ← generated artifact, source of CI mirror
+    └── (same shape as the public repo above)</pre>
+
+<h2>Changes from v1 plan (architect review)</h2>
+
+<table>
+<tr><th>#</th><th>v1 said</th><th>v2 says (why)</th></tr>
+<tr>
+  <td>1</td>
+  <td>Hand-write 5 SKILL.md files</td>
+  <td><strong>Codegen them from <code>services/api-v2/src/skills/registry.ts</code></strong>. The legacy <code>skills/agent-media-v2/SKILL.md</code> already uses this pattern via <code>packages/schema/src/v2/generators.ts</code>. Eliminates drift permanently. CI guard: <code>pnpm gen:skills</code> + <code>git diff --exit-code</code>.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>5 SKILL.md files, done</td>
+  <td><strong>5 atomic skills + 1 composite</strong>: add <code>skills/agent-media-ugc/SKILL.md</code> that documents the full pipeline (make_portrait → make_character_sheet → make_simple_selfie → make_subtitles) for agents that want one-shot orchestration. The 5 primitives stay separate for agents that want fine control.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>SKILL.md embeds the full JSON schema</td>
+  <td><strong>SKILL.md = "when + why" only.</strong> The schema lives in the MCP <code>tools/list</code> response (auto-published from the registry). SKILL.md tells the agent: "call MCP tool <code>mcp__agent-media__make_portrait</code> — see auto-published schema; here's a real example."</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Plugin version + skill versions, both bumped manually</td>
+  <td><strong>Single source: registry.ts.</strong> Plugin.json version = max(skill versions). Per-skill version stays in SKILL.md frontmatter (<code>x-skill-version</code>). Both bumped by the same codegen step.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>npx <code>@agentmedia/mcp-server</code> + AGENT_MEDIA_API_KEY env</td>
+  <td><strong>Add device-flow OAuth to the MCP server.</strong> On first run with no token, opens <code>agent-media.ai/cli-auth</code>; writes the token to <code>~/.config/agent-media/credentials.json</code>. Env var stays as fallback. Until that ships, README step 1 is <code>npm i -g agent-media-cli && agent-media login</code>.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>Just "push to gitroomhq"</td>
+  <td><strong>CI subtree mirror.</strong> A GitHub Action on push to the private monorepo runs <code>git subtree split --prefix=public-skill</code>, force-pushes the result to <code>gitroomhq/agent-media</code> using a bot token. No human ever pushes to gitroomhq. Removes the leak-risk that triggered the prior memory rule.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>(missing)</td>
+  <td>Every generated SKILL.md declares <code>allowed-tools: mcp__agent-media__&lt;tool&gt;</code> so the skill can call its MCP tool without per-call approval, but nothing else. Security default tightens, not loosens.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>(missing)</td>
+  <td>Frontmatter adds <code>x-cost-credits</code> and <code>x-expected-seconds</code> per skill from the registry. Agents can budget before calling.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td>(missing)</td>
+  <td>Deprecation policy: slug is append-only. Breaking change = new slug (<code>make_simple_selfie_v2</code>). Old slug stays for 90 days with frontmatter <code>x-deprecated: true</code>.</td>
+</tr>
+</table>
+
+<h2>What gets shipped</h2>
+
+<h3>Phase A — In the private monorepo (yuvalsuede/agent-media)</h3>
+<ol>
+  <li><strong>Codegen script</strong> at <code>packages/schema/scripts/generate-skill-plugin.ts</code>. Reads <code>services/api-v2/src/skills/registry.ts</code> + Zod schemas. Emits <code>public-skill/.claude-plugin/plugin.json</code>, <code>public-skill/skills/&lt;slug&gt;/SKILL.md</code> × 5, the composite <code>agent-media-ugc/SKILL.md</code>, and the shared <code>reference/</code> tree (auth.md, pacing.md, realism-rubric.md).</li>
+  <li><strong>CI guard</strong>: <code>pnpm gen:skills && git diff --exit-code public-skill/</code> blocks PR merges when registry changes aren't reflected.</li>
+  <li><strong>GitHub Action</strong> at <code>.github/workflows/mirror-public-skill.yml</code> that runs on push to <code>main</code>: <code>git subtree split --prefix=public-skill -b _public_skill_HEAD && git push -f gitroomhq main</code>. Bot token only.</li>
+</ol>
+
+<h3>Phase B — In the MCP server (@agentmedia/mcp-server)</h3>
+<ol>
+  <li>Bump to <strong>v0.6.0</strong>: surface the 5 vNext skills + the composite in <code>tools/list</code>.</li>
+  <li>Add the <strong>device-flow OAuth</strong> first-run handler. Token cached at <code>~/.config/agent-media/credentials.json</code>.</li>
+  <li>Publish to npm. <code>.mcp.json</code> references <code>npx -y @agentmedia/mcp-server@^0.6</code>.</li>
+</ol>
+
+<h3>Phase C — Submission</h3>
+<ol>
+  <li><strong>claudemarketplaces.com</strong>: submit <code>github.com/gitroomhq/agent-media</code>. Their install command becomes <code>npx skills add github.com/gitroomhq/agent-media --skill make-ugc-video</code> (etc., one per skill).</li>
+  <li><strong>Claude community marketplace</strong> at <code>claude.ai/settings/plugins/submit</code>: same repo. Their install command becomes <code>claude /plugin install github.com/gitroomhq/agent-media</code>.</li>
+  <li>README badges + GitHub topics: <code>claude-plugin</code>, <code>claude-skill</code>, <code>ugc-video</code>, <code>ai-video</code>.</li>
+</ol>
+
+<h2>What I would NOT ship in this round</h2>
+<ul>
+  <li>Postiz integration on gitroom — confirmed separate, partnership lands later.</li>
+  <li>Anthropic-official marketplace listing — they don't accept submissions yet.</li>
+  <li>Manual SKILL.md edits — all generated. No drift, no surprises.</li>
+</ul>
+
+<h2>Honest gaps in this plan</h2>
+<div class="crit">
+<ul>
+  <li>I have NOT verified the exact current frontmatter spec — Anthropic's plugin docs are evolving. The architect agent and the docs-lookup agent both flagged uncertainty here. <strong>I will dogfood-test by installing our plugin locally via <code>claude /plugin install</code> before submitting to any marketplace.</strong></li>
+  <li>The device-flow OAuth in the MCP server is real work (~2-3 hrs). If you want to ship the skill repo this week, I can defer device flow and keep the README "agent-media login first" path as v1, then add device flow in v2.</li>
+  <li>The subtree mirror needs a bot account + a deploy key on the gitroomhq side. You'll need to provision that before the CI workflow can push.</li>
+</ul>
+</div>
+
+<h2>Decision tree</h2>
+
+<div class="ask">
+<strong>Pick one path:</strong>
+<ol>
+  <li><strong>Full v2</strong> (everything above): ~1 day of work. Best architecture, deferred OAuth = manual <code>agent-media login</code> for first-run.</li>
+  <li><strong>Lean v2</strong>: skip the device-flow OAuth + the composite skill; ship the 5 primitives + codegen + CI mirror. ~3-4 hrs. Composite + OAuth land in a follow-up.</li>
+  <li><strong>Walking-skeleton</strong>: hand-write the 5 SKILL.md once (no codegen), copy by hand to gitroomhq, submit to claudemarketplaces.com today. Re-do properly next week. ~1 hr.</li>
+</ol>
+<p>I recommend <strong>Lean v2</strong>. Buys us architecture + drift protection without burning a day on OAuth before we've seen install-side bugs.</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Publish @agentmedia/mcp-server@0.6.0</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 24px; line-height: 1.65; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  .step { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 18px 22px; margin: 16px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; padding: 12px 16px; border-radius: 6px; margin: 10px 0; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; padding: 12px 16px; border-radius: 6px; margin: 10px 0; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Publish <code>@agentmedia/mcp-server@0.6.0</code> to npm</h1>
+
+<div class="ok">
+v0.6.0 built locally + smoke-tested. <code>tools/list</code> returns 19 tools — 14 legacy + 5 vNext (<code>make_portrait</code>, <code>make_character_sheet</code>, <code>make_simple_selfie</code>, <code>make_subtitles</code>, <code>make_ugc_video</code>). The vNext skills are pulled live from <code>https://api.agent-media.ai/v1/skills</code> on startup — no hardcoding, no drift.
+</div>
+
+<div class="warn">
+This is a public npm publish under your <code>yuvalsuede</code> account → world-wide install affects every user running <code>npx -y @agentmedia/mcp-server@latest</code> (which our public Claude Skill plugin does). I'm not running <code>npm publish</code> automatically — per the operating rules production-affecting changes need your explicit approval.
+</div>
+
+<div class="step">
+<h3>Run this to publish</h3>
+<pre>cd /Users/suede/Projects/agent-media
+pnpm --filter @agentmedia/mcp-server publish --access public --no-git-checks</pre>
+<p>Or with vanilla npm:</p>
+<pre>cd /Users/suede/Projects/agent-media/packages/mcp-server
+npm publish --access public</pre>
+</div>
+
+<div class="step">
+<h3>Verify after publish</h3>
+<pre># Confirm the new version is on the registry
+npm view @agentmedia/mcp-server version
+# → should print 0.6.0
+
+# Smoke-test from a clean cache as a fresh user would
+AGENT_MEDIA_API_KEY=ma_... npx -y @agentmedia/mcp-server@0.6.0 &lt;&lt; 'EOF'
+{"jsonrpc":"2.0","id":1,"method":"tools/list"}
+EOF
+# → should list 19 tools including the 5 make_* skills</pre>
+</div>
+
+<div class="step">
+<h3>What I'll do once you confirm published</h3>
+<ol>
+  <li>Commit the version bump on the repo and push.</li>
+  <li>Run <code>claude /plugin install github.com/gitroomhq/agent-media</code> end-to-end as a real install smoke test (item #1 from the roadmap), then proceed to <strong>#4 composite playbook skill</strong>.</li>
+</ol>
+</div>
+
+</body>
+</html>

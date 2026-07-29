@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fix — Temporal auth failing</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  .err { background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 18px; border-radius: 6px; margin: 12px 0; }
+  .step { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 18px 22px; margin: 18px 0; }
+  .step h2 { margin-top: 0; font-size: 19px; color: #1a3a5c; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>The worker can't connect to Temporal</h1>
+
+<div class="err">
+<strong>Error:</strong> <code>Jwt is not in the form of Header.Payload.Signature with two dots and 3 sections</code>
+</div>
+
+<p>That means the Temporal Cloud gateway received a value for the API key, but it wasn't a valid JWT. The token I have on file IS a valid JWT (3 sections separated by 2 dots), so something got mangled between Railway's env vars and the worker.</p>
+
+<h2>Most likely cause: quotes around the value in Railway</h2>
+<p>If you pasted the token wrapped in quotes (<code>"eyJ..."</code>), Railway stores the quotes as part of the value and Temporal rejects it.</p>
+
+<div class="step">
+<h2>1. Open Railway → primitive-worker-vnext → Variables</h2>
+<p>Find <code>TEMPORAL_API_KEY</code>.</p>
+</div>
+
+<div class="step">
+<h2>2. Check three things</h2>
+<ol>
+  <li><strong>No surrounding quotes</strong> — the value should start with <code>eyJ</code>, not <code>"eyJ</code>.</li>
+  <li><strong>No line breaks</strong> — the whole token must be on a single line. JWTs are long; if Railway wrapped it visually, that's fine, but make sure no actual newline was pasted in.</li>
+  <li><strong>No trailing whitespace</strong> — Railway sometimes hides trailing spaces. Click into the value, hit End, make sure the cursor is right after the last character.</li>
+</ol>
+</div>
+
+<div class="step">
+<h2>3. Also confirm the value matches this shape</h2>
+<p>Three sections separated by exactly two dots:</p>
+<pre>eyJ………FoifQ.eyJ………NSJ9.L9v………Y0Q</pre>
+<p>Counting dots from your token: should be exactly 2.</p>
+</div>
+
+<div class="step">
+<h2>4. Save the variable + redeploy</h2>
+<p>Railway will auto-redeploy when you save the variable. Watch the logs.</p>
+<p>Success line:</p>
+<pre>[primitive-worker-vnext] listening namespace=quickstart-agent-media.v5v8r queue=primitive-vnext-v1 simulate=true</pre>
+</div>
+
+<h2>If the error persists with the same JWT message</h2>
+<p>Generate a fresh API key in Temporal Cloud and paste that one instead. Sometimes the original copy-paste lost a character at the end.</p>
+
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>subtitles primitive — design</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 940px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; margin-top: 26px; color: #1a3a5c; }
+  h3 { font-size: 16px; margin-top: 18px; color: #444; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>Primitive #4 — <code>subtitles</code></h1>
+
+<p>Takes any vNext video URL, burns TikTok-style captions onto it, returns a new R2 URL. Auto-transcribes via Whisper when no transcript is given; otherwise uses the provided text (the script we already have for <code>simple_selfie</code> / <code>make_ugc_video</code>).</p>
+
+<h2>Contract</h2>
+<table>
+  <tr><th>Input</th><th>Type</th><th>Notes</th></tr>
+  <tr><td><code>video_url</code></td><td>string (R2 prefix only)</td><td>Required.</td></tr>
+  <tr><td><code>transcript</code></td><td>string ≤ 5000 chars</td><td>Optional. If supplied, we still run Whisper to get word-level timings, but force the words to match the transcript.</td></tr>
+  <tr><td><code>style</code></td><td><code>hormozi</code> \| <code>tiktok</code> \| <code>minimal</code></td><td>Default <code>hormozi</code>. Maps to an ASS preset.</td></tr>
+  <tr><td><code>language</code></td><td>2-char ISO (e.g. <code>en</code>)</td><td>Optional Whisper hint.</td></tr>
+  <tr><td colspan=3 style="background:#fafafa"><strong>Output</strong></td></tr>
+  <tr><td><code>video_url</code></td><td>string</td><td>R2 MP4 at <code>vnext/primitive-runs/&lt;run_id&gt;/subtitled.mp4</code></td></tr>
+  <tr><td><code>provider</code></td><td><code>whisper-ffmpeg</code></td><td></td></tr>
+</table>
+
+<h2>Activity flow</h2>
+<ol>
+  <li>Validate input. SSRF guard on <code>video_url</code> (R2 prefix).</li>
+  <li>Retry-safety + budget caps. Estimated $0.05 (Whisper) + minimal ffmpeg time.</li>
+  <li>Upsert <code>primitive_runs</code>; deduct credits (15 credits ≈ $0.09 margin).</li>
+  <li>Download the source MP4 to a temp dir.</li>
+  <li>Extract audio with <code>ffmpeg -vn -ac 1 -ar 16000 -f wav</code>.</li>
+  <li>Call OpenAI Whisper (<code>whisper-1</code>) with <code>response_format: verbose_json</code> + <code>timestamp_granularities: ['word']</code>. If user passed a transcript, post-align to it.</li>
+  <li>Build an ASS subtitle file using the chosen style preset (lifted from <code>media-worker-v2/src/ass-generator.js</code>).</li>
+  <li>FFmpeg burn: <code>ffmpeg -i input.mp4 -vf "ass=subs.ass" -c:a copy output.mp4</code>.</li>
+  <li>Upload to R2 under <code>vnext/primitive-runs/&lt;run_id&gt;/subtitled.mp4</code>.</li>
+  <li>Insert <code>primitive_artifacts</code> (kind = <code>subtitled_video</code>) and finalize.</li>
+</ol>
+
+<h2>What needs to change in the worker container</h2>
+<div class="box warn">
+<p>Current <code>primitive-worker-vnext</code> ships with no FFmpeg binary. Two options:</p>
+<ol>
+  <li><strong>Add a Dockerfile</strong> that installs <code>ffmpeg</code> + the Node runtime. ~5 min change, larger image (~200 MB extra).</li>
+  <li><strong>Use the Nixpacks "apt" hook</strong> — append <code>{"packages":["ffmpeg"]}</code> via nixpacks config. No Dockerfile churn.</li>
+</ol>
+<p>Recommendation: <strong>(1) Dockerfile</strong> — explicit + matches how <code>media-worker-v2</code> ships ffmpeg.</p>
+</div>
+
+<h2>Style presets (initial)</h2>
+<table>
+  <tr><th>Style</th><th>Look</th></tr>
+  <tr><td><code>hormozi</code></td><td>Big bold yellow word-by-word pops, black outline, centered lower-third. Default.</td></tr>
+  <tr><td><code>tiktok</code></td><td>White on black box, sentence-by-sentence, centered.</td></tr>
+  <tr><td><code>minimal</code></td><td>Plain white serif, low opacity background, bottom safe zone.</td></tr>
+</table>
+
+<h2>Files to add / change</h2>
+<ul>
+  <li>Schema: <code>SubtitlesToolInputSchema</code> + <code>SubtitlesToolOutputSchema</code> in <code>packages/schema/src/tooling/contracts.ts</code> (replace the legacy minimal one with the vNext shape).</li>
+  <li>Worker: <code>services/primitive-worker-vnext/Dockerfile</code> (Node 22 + ffmpeg).</li>
+  <li>Worker: <code>src/client/whisper.ts</code> (Whisper wrapper).</li>
+  <li>Worker: <code>src/lib/ass.ts</code> (port of <code>media-worker-v2/ass-generator.js</code> — Hormozi/TikTok/minimal presets).</li>
+  <li>Worker: <code>src/activities/subtitles.ts</code>.</li>
+  <li>Worker: <code>src/workflows/subtitles.ts</code> (10-min startToClose).</li>
+  <li>Register in activities/index.ts and workflows/index.ts.</li>
+  <li>Skill registry: <code>make_subtitles</code> in <code>services/api-v2/src/skills/registry.ts</code>.</li>
+  <li>Credits: <code>subtitles</code> at 15 credits in <code>credits.ts</code>.</li>
+  <li>SKILL.md row + OpenAPI entries.</li>
+</ul>
+
+<h2>Test plan</h2>
+<ol>
+  <li>Build + push + Railway redeploys the worker (auto from <code>vnext/primitive-foundation</code> branch).</li>
+  <li>Fire <code>POST /v1/skills/make_subtitles/run</code> with the existing <code>simple-selfie.mp4</code> (Maya 5s clip) and no transcript (Whisper does the work).</li>
+  <li>Poll status, open the resulting MP4 — captions should be burned in Hormozi style.</li>
+</ol>
+
+<h2>Cost &amp; time</h2>
+<table>
+<tr><th>Step</th><th>USD</th><th>Wall time</th></tr>
+<tr><td>Whisper transcribe (5s audio)</td><td>~$0.003</td><td>~3s</td></tr>
+<tr><td>FFmpeg burn</td><td>$0 (compute)</td><td>~5–10s</td></tr>
+<tr><td>R2 upload</td><td>$0</td><td>~2s</td></tr>
+<tr><td><strong>Total</strong></td><td>~$0.005</td><td>~20s</td></tr>
+</table>
+<p>15 credits is generous margin; we can drop to 5 credits later once verified.</p>
+
+<div class="ask">
+<strong>Confirm and I ship:</strong>
+<ol>
+  <li>Primitive id <code>subtitles</code>, skill slug <code>make_subtitles</code>. OK?</li>
+  <li>Add a Dockerfile that includes ffmpeg + the worker binary. OK?</li>
+  <li>Auto-transcribe via OpenAI Whisper when no transcript is provided. OK?</li>
+  <li>Three style presets initially (<code>hormozi</code> default, <code>tiktok</code>, <code>minimal</code>). OK?</li>
+</ol>
+</div>
+
+</body>
+</html>

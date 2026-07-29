@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/indexnow/pseo",
+      "schedule": "30 6 * * *"
+    }
+  ]
+}

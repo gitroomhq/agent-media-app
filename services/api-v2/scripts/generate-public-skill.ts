@@ -1,0 +1,746 @@
+#!/usr/bin/env tsx
+// Copyright 2026 agent-media contributors. Apache-2.0 license.
+
+/**
+ * Generate the public Claude Skills plugin from the api-v2 skill
+ * registry. Source of truth: services/api-v2/src/skills/registry.ts.
+ * Output: public-skill/ at the repo root, structured as a Claude Code
+ * plugin (.claude-plugin/plugin.json + skills/<slug>/SKILL.md + .mcp.json).
+ *
+ * Runs via `pnpm gen:skills`. CI guards drift with
+ * `git diff --exit-code public-skill/`.
+ *
+ * Plugin is mirrored to github.com/gitroomhq/agent-media on push via the
+ * .github/workflows/mirror-public-skill.yml workflow (subtree split).
+ */
+
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { SKILLS, type SkillEntry } from '../src/skills/registry.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, '..', '..', '..');
+const OUT = resolve(REPO_ROOT, 'public-skill');
+
+// ── Per-skill metadata that does NOT live in the registry (yet) ──
+// Cost (in agent-media credits) and rough wall-clock estimates so
+// agents can budget before calling.
+const COSTS: Record<string, { credits: number | string; seconds: number | string }> = {
+  make_portrait: { credits: 35, seconds: 60 },
+  make_character_sheet: { credits: 35, seconds: 90 },
+  make_wireframe: { credits: 35, seconds: 90 },
+  make_simple_selfie: { credits: '140/280/420 (5s/10s/15s)', seconds: '240–420' },
+  make_subtitles: { credits: 15, seconds: 20 },
+  make_lip_sync: { credits: '140/280/420 (5s/10s/15s)', seconds: '420–480' },
+  make_ugc_video: { credits: '~225/~365/~505 (5s/10s/15s)', seconds: '360–600' },
+  make_ugc: {
+    credits: 'route-dependent: ~190–505 for a short clip; priced per-take for a long monologue or b-roll review',
+    seconds: '360–1400',
+  },
+  make_podcast: {
+    credits: 'per-take: 140/280/420 per 5s/10s/15s take, summed across every A/B turn (+15 if subtitles); the master scene + both close-ups are free',
+    seconds: '360–1400',
+  },
+};
+
+const EXAMPLE_INPUTS: Record<string, unknown> = {
+  make_portrait: {
+    description: 'a friendly young woman smiling at the camera, soft natural daylight, candid framing',
+    realism_target: 'natural',
+    aspect_ratio: '1:1',
+  },
+  make_character_sheet: {
+    portrait_url: 'https://pub-16e2ed8f6be84691845e91436920ce0a.r2.dev/vnext/primitive-runs/<id>/portrait.png',
+    description: 'Sara, 28 years old',
+  },
+  make_simple_selfie: {
+    character_sheet_url: 'https://pub-...r2.dev/vnext/primitive-runs/<id>/character-sheet.png',
+    duration: 5,
+    script: 'Honestly, this app changed my whole morning routine, you have to try it.',
+  },
+  make_subtitles: {
+    video_url: 'https://pub-...r2.dev/vnext/primitive-runs/<id>/simple-selfie.mp4',
+    style: 'hormozi',
+  },
+  make_wireframe: {
+    character_sheet_url: 'https://pub-...r2.dev/vnext/primitive-runs/<id>/character-sheet.png',
+    script: 'walks into bedroom, picks up phone, smiles, hits record, talks to camera',
+    n_panels: 6,
+    aspect_ratio: '9:16',
+  },
+  make_lip_sync: {
+    image_url: 'https://pub-...r2.dev/vnext/primitive-runs/<id>/character-sheet.png',
+    audio_url: 'https://pub-...r2.dev/vnext/<your-uploaded-audio>.mp3',
+    duration: 10,
+    aspect_ratio: '9:16',
+  },
+  make_ugc_video: {
+    description: 'a friendly young woman, soft daylight, candid framing',
+    character_description: 'Maya, 27 years old',
+    script: 'Okay this is wild, I tried the new flow and it actually works.',
+    duration: 5,
+    subtitles: true,
+    subtitles_style: 'hormozi',
+  },
+  make_ugc: {
+    script:
+      'Okay I have to be honest, this completely changed how I work — I plan my whole week in ten minutes now, and I actually log off at five.',
+    character: 'char_… (from list_characters) OR a character_sheet_url — or pass `image`/`person` instead',
+  },
+  make_podcast: {
+    character_a: 'char_… (a saved character_id from list_characters, or a character_sheet_url)',
+    character_b: 'char_… (a DIFFERENT saved character)',
+    script: [
+      { speaker: 'A', line: 'Welcome back to the show — today we are talking AI video.' },
+      { speaker: 'B', line: 'Honestly I have been waiting all week for this one.' },
+    ],
+    room: 'a cozy wood-panelled podcast studio with warm lamps',
+  },
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────
+
+function writeFile(rel: string, body: string): void {
+  const path = join(OUT, rel);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, body, 'utf-8');
+}
+
+function frontmatter(o: Record<string, unknown>): string {
+  const lines = ['---'];
+  for (const [k, v] of Object.entries(o)) {
+    if (v == null) continue;
+    if (typeof v === 'string') {
+      // Escape single quotes by doubling them for YAML safety, then quote.
+      const safe = v.replace(/'/g, "''");
+      lines.push(`${k}: '${safe}'`);
+    } else if (Array.isArray(v)) {
+      lines.push(`${k}: [${v.map((x) => `'${String(x).replace(/'/g, "''")}'`).join(', ')}]`);
+    } else {
+      lines.push(`${k}: ${String(v)}`);
+    }
+  }
+  lines.push('---', '');
+  return lines.join('\n');
+}
+
+function slugToKebab(slug: string): string {
+  return slug.replace(/_/g, '-');
+}
+
+function pluginVersion(): string {
+  // Pin to the max(skill versions). All five are 1.0.0 today, so 1.0.0.
+  const versions = Object.values(SKILLS).map((s) => s.version);
+  return versions.sort().at(-1) ?? '1.0.0';
+}
+
+/**
+ * make_ugc is the ONE skill in the pack, so it gets a hand-crafted manual
+ * (every prop + worked examples) instead of the generic template — an agent
+ * reading this should be able to call it correctly without a tools/list probe.
+ */
+function makeUgcSkillBody(cost: { credits: number | string; seconds: number | string }): string {
+  return `# Agent-Media UGC Video
+
+**One tool. One call. A finished, captioned, vertical UGC video.**
+
+You give a \`script\` and (optionally) who says it — agent-media picks the pipeline, the take count, and the duration for you. You NEVER pick a sub-tool:
+
+- **Short line** → one clean talking-head clip.
+- **Full monologue** (any length) → a seamless multi-take video, **never trimmed to fit a clip**.
+- **\`broll_url\`** → the person narrates over your b-roll / gameplay / product footage.
+
+## Inputs
+
+**What they say** — exactly one of:
+- \`script\` — the spoken line, **any length**. A sentence becomes one clip; a paragraph becomes the full multi-take video. Never trimmed.
+- \`scene_action\` — a silent clip instead (dancing, b-roll, vibes). Requires a \`character\`.
+
+**Who says it** — optional, pass at most one (omit → a default person is generated):
+- \`person\` — describe them in words, e.g. \`"a 25-year-old woman with curly red hair"\`.
+- \`image\` — a photo of the person: a public \`https\` URL **or** base64. The face is locked to it.
+- \`character\` — reuse a saved character: its \`char_…\` id (from \`list_characters\`) **or** its \`character_sheet_url\`.
+- \`name\` — optional name/age/vibe hint, e.g. \`"Sophia, 28"\`.
+
+> A **long monologue** or a **\`broll_url\`** review needs a real face — pass \`image\` or \`character\`, not just \`person\`.
+
+**Captions are OPT-IN — do NOT add them on your own.** First ASK the user whether they want captions and which \`caption_style\` (\`hormozi\` | \`tiktok\` | \`minimal\`); set \`captions:true\` only if they say yes, otherwise leave it off.
+
+**Look & format** — all optional:
+- \`captions\` — off unless set true (ask first, above); \`caption_style\` (\`hormozi\` | \`tiktok\` | \`minimal\`)
+- \`look\` (\`natural\` | \`commercial\` | \`raw_iphone\`), \`aspect_ratio\` (\`9:16\` | \`1:1\`)
+- \`broll_url\` — an \`https\` video overlaid on the lower half while they narrate.
+- \`duration\` — leave blank; length is inferred from the script. Set only to force a short clip.
+
+## Examples
+
+A quick clip from a text description:
+\`\`\`json
+{ "script": "Honestly? This app saved my whole morning routine.", "person": "a friendly young woman, soft daylight" }
+\`\`\`
+
+A full monologue from a saved character — multi-take, never trimmed:
+\`\`\`json
+{ "script": "Okay I have to be honest with you for a second. Three months ago I was completely overwhelmed … (the entire monologue, as long as you like) … and that is your sign.", "character": "char_8f3ac210" }
+\`\`\`
+
+From a photo of a real person:
+\`\`\`json
+{ "script": "Wait — you have to see what this actually does.", "image": "https://example.com/face.jpg", "name": "Maya, 27" }
+\`\`\`
+
+A narrated b-roll / gameplay review:
+\`\`\`json
+{ "script": "Watch this play — this is where the whole match turns around.", "broll_url": "https://example.com/clip.mp4", "character": "char_8f3ac210" }
+\`\`\`
+
+## Reuse the same person across a session
+
+After a video finishes, the character is **saved** — \`GET /v1/characters\` lists it with a \`character_id\` (\`char_…\`) and a \`character_sheet_url\`. For the NEXT video in the same task, pass that as \`character\` instead of a new \`person\`: it keeps the exact same face, and it's faster + cheaper because it reuses the existing portrait + character sheet rather than re-making them (the character sheet is never skipped — it's reused). Only generate a NEW person when the user asks for a different one. **If you're not sure whether they want the same person or a new one, ASK the user before generating.**
+
+## How to call it
+
+Preferred path: MCP tool \`mcp__agent-media__make_ugc\`. The full schema is auto-published via \`tools/list\`; the fields above are the manual.
+
+Fallback path: REST.
+\`\`\`http
+POST https://api.agent-media.ai/v1/skills/make_ugc/run
+Authorization: Bearer $AGENT_MEDIA_API_KEY
+Content-Type: application/json
+Idempotency-Key: <any unique string per intent>
+
+{ "script": "Okay this completely changed how I work — I plan my whole week in ten minutes now.", "character": "char_8f3ac210" }
+\`\`\`
+
+## Cost & timing
+
+- Credits: \`${cost.credits}\`
+- Wall time (typical): \`${cost.seconds}s\`
+- Deducted as each take runs.
+
+## Polling the result
+
+\`\`\`http
+GET https://api.agent-media.ai/v1/skills/runs/<skill_run_id>
+Authorization: Bearer $AGENT_MEDIA_API_KEY
+\`\`\`
+
+Returns per-step \`status\` + \`current_step\`; \`final_output.video_url\` is your finished MP4 when \`status\` is \`succeeded\`.
+
+**Keep the user posted — don't go silent.** A video takes a few minutes: a new person runs portrait → character sheet → the video (→ captions if asked); reusing a saved person skips straight to the video. When you submit, tell the user the plan + a rough ETA, then poll and report each \`current_step\` as it changes (e.g. "building the character sheet…", "rendering the video…", "adding captions…") so they always know what's happening.
+
+## House rules
+
+- See [reference/realism-rubric.md](../../reference/realism-rubric.md) for the realism doctrine baked into every prompt.
+- See [reference/pacing.md](../../reference/pacing.md) — you don't manage pacing; make_ugc sizes every take to the words.
+- See [reference/auth.md](../../reference/auth.md) for first-time install and \`agent-media login\`.
+
+## Source of truth
+
+Auto-generated by \`scripts/generate-public-skill.ts\` from \`services/api-v2/src/skills/registry.ts\`. Do not hand-edit; CI rejects drift.
+`;
+}
+
+function skillBody(skill: SkillEntry): string {
+  const cost = COSTS[skill.slug] ?? { credits: '?', seconds: '?' };
+  if (skill.slug === 'make_ugc') return makeUgcSkillBody(cost);
+  const example = EXAMPLE_INPUTS[skill.slug];
+  const toolName = `mcp__agent-media__${skill.slug}`;
+  return [
+    `# ${skill.name}`,
+    '',
+    skill.description,
+    '',
+    '## When to use this',
+    '',
+    `Call this skill when the user asks for the outcome described above. ` +
+      `It runs on the agent-media vNext primitive runtime via the \`${toolName}\` MCP tool. ` +
+      `Authentication is the user's existing agent-media Bearer token (issued by \`agent-media login\`).`,
+    '',
+    '## How to call it',
+    '',
+    `Preferred path: MCP tool \`${toolName}\`. Schema is auto-published via \`tools/list\` ` +
+      `against the same MCP server, so don\'t restate the schema here — trust the server\'s response.`,
+    '',
+    'Fallback path: REST.',
+    '',
+    '```http',
+    `POST https://api.agent-media.ai/v1/skills/${skill.slug}/run`,
+    'Authorization: Bearer $AGENT_MEDIA_API_KEY',
+    'Content-Type: application/json',
+    'Idempotency-Key: <any unique string per intent>',
+    '',
+    JSON.stringify(example, null, 2),
+    '```',
+    '',
+    '## What it costs and how long it takes',
+    '',
+    `- Credits: \`${cost.credits}\``,
+    `- Wall time (typical): \`${cost.seconds}s\``,
+    '- Deducted at submit.',
+    '',
+    '## Polling the result',
+    '',
+    skill.primitive.startsWith('composed:')
+      ? '```http\nGET https://api.agent-media.ai/v1/skills/runs/<skill_run_id>\nAuthorization: Bearer $AGENT_MEDIA_API_KEY\n```\n\nReturns per-step status with intermediate artifact URLs as each primitive completes.'
+      : '```http\nGET https://api.agent-media.ai/v1/primitives/runs/<run_id>\nAuthorization: Bearer $AGENT_MEDIA_API_KEY\n```',
+    '',
+    '## House rules baked into this skill',
+    '',
+    '- See [reference/realism-rubric.md](../../reference/realism-rubric.md) for the realism doctrine baked into every prompt.',
+    skill.slug === 'make_simple_selfie' || skill.slug === 'make_ugc_video'
+      ? '- See [reference/pacing.md](../../reference/pacing.md) for the 2–4 words-per-second script rule.'
+      : null,
+    '- See [reference/auth.md](../../reference/auth.md) for first-time install and `agent-media login`.',
+    '',
+    '## Source of truth',
+    '',
+    `This file is auto-generated by \`scripts/generate-public-skill.ts\` from the registry at ` +
+      `\`services/api-v2/src/skills/registry.ts\`. Do not hand-edit; CI rejects drift.`,
+    '',
+  ].filter((line) => line !== null).join('\n');
+}
+
+function pluginJson(): string {
+  return JSON.stringify(
+    {
+      name: 'agent-media',
+      description:
+        'Agent-Media UGC Video — one tool. Give a script + a person (description, photo, or saved character) and get a finished, captioned, lip-synced vertical UGC video. Short line → one clip; full monologue → seamless multi-take; b-roll URL → narrated overlay. One Bearer token, one MCP server.',
+      version: pluginVersion(),
+      author: { name: 'gitroomhq', url: 'https://github.com/gitroomhq' },
+      homepage: 'https://agent-media.ai',
+      repository: 'https://github.com/gitroomhq/agent-media',
+      license: 'Apache-2.0',
+      keywords: [
+        'claude-plugin',
+        'claude-skill',
+        'claude-code',
+        'mcp',
+        'model-context-protocol',
+        'ugc-video',
+        'ai-video',
+        'ai-actors',
+        'tiktok',
+        'hormozi-subtitles',
+        'gpt-image-2',
+        'seedance',
+        'video-generation',
+        'agent-media',
+      ],
+      categories: ['video', 'media', 'ai-creative'],
+      api: {
+        rest: 'https://api.agent-media.ai',
+        openapi: 'https://api.agent-media.ai/openapi.json',
+        mcp: 'https://api.agent-media.ai/mcp',
+      },
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+/**
+ * Marketplace manifest — REQUIRED for `/plugin marketplace add gitroomhq/agent-media`
+ * to find the plugin. The plugin itself lives at the repo root (its
+ * .claude-plugin/plugin.json), so the single plugin's source is "." (root).
+ */
+function marketplaceJson(): string {
+  return JSON.stringify(
+    {
+      name: 'agent-media',
+      owner: { name: 'gitroomhq', url: 'https://github.com/gitroomhq' },
+      metadata: {
+        description: 'Agent-Media UGC Video for Claude Code — one tool: give a script + a person/image/character, get a finished captioned vertical UGC video.',
+        version: pluginVersion(),
+      },
+      plugins: [
+        {
+          name: 'agent-media',
+          source: './',
+          description:
+            'Agent-Media UGC Video — one tool. Give a script + a person/image/character; get a finished captioned vertical UGC video (short clip, multi-take monologue, or narrated b-roll). Via one MCP server.',
+        },
+      ],
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+function mcpJson(): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        'agent-media': {
+          command: 'npx',
+          // Explicit `-p` + bin name avoids npx ambiguity (the package
+          // declares two bins: `mcp-server` and `agent-media-mcp`).
+          args: ['-y', '-p', '@agentmedia/mcp-server@latest', 'agent-media-mcp'],
+          env: { AGENT_MEDIA_API_KEY: '${AGENT_MEDIA_API_KEY}' },
+        },
+      },
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+function readme(): string {
+  return [
+    '# agent-media — Claude Skill plugin',
+    '',
+    '[![npm — mcp-server](https://img.shields.io/npm/v/%40agentmedia%2Fmcp-server?label=%40agentmedia%2Fmcp-server)](https://www.npmjs.com/package/@agentmedia/mcp-server)',
+    '[![npm — CLI](https://img.shields.io/npm/v/agent-media-cli?label=agent-media-cli)](https://www.npmjs.com/package/agent-media-cli)',
+    '[![Claude plugin](https://img.shields.io/badge/claude-%2Fplugin%20install-A78BFA)](https://github.com/gitroomhq/agent-media)',
+    '[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)',
+    '',
+    '**Agents: read this whole page. It is everything you need to create UGC videos with agent-media — no other docs required.**',
+    '',
+    'agent-media turns a short description (or a photo) + a script into a finished, captioned, lip-synced vertical UGC video. Works in Claude Code, Cursor, or any MCP / HTTP agent. One Bearer token authenticates everything.',
+    '',
+    '## 1. Connect (pick one)',
+    '',
+    '- **One-liner (recommended):** `npx skills add gitroomhq/agent-media` — installs all of agent-media\'s skills into your agent (Claude Code, Cursor, etc.).',
+    '- **Claude Code plugin (skills + MCP tools):** inside a Claude Code session run `/plugin marketplace add gitroomhq/agent-media` then `/plugin install agent-media@agent-media`.',
+    '- **Any MCP agent:** run the MCP server `npx -y -p @agentmedia/mcp-server@latest agent-media-mcp` with env `AGENT_MEDIA_API_KEY=ma_...`. All skills self-describe via `tools/list`.',
+    '- **Plain HTTP:** call the REST API directly (below).',
+    '',
+    '## 2. Auth',
+    '',
+    'Get a Bearer token: `npm i -g agent-media-cli && agent-media login` (stores it at `~/.agent-media/credentials.json`), or grab the `ma_*` token from the dashboard. Every call uses `Authorization: Bearer ma_...`. You need credits on the account (buy at agent-media.ai).',
+    '',
+    '## 3. Make a video — `make_ugc` (the one tool)',
+    '',
+    '`make_ugc` is the only generation tool: give it a `script` + a person/image/character and it returns the finished captioned video. Short script → one clip; long monologue → seamless multi-take (never trimmed); add `broll_url` → narrated overlay.',
+    '',
+    '```bash',
+    'curl -X POST https://api.agent-media.ai/v1/skills/make_ugc/run \\',
+    '  -H "Authorization: Bearer ma_..." -H "Content-Type: application/json" \\',
+    '  -d \'{ "script": "Okay, this changed my whole morning routine — you have to try it.",',
+    '        "person": "a friendly 28-year-old woman, soft daylight" }\'',
+    '#   (captions are opt-in — add "captions": true only if the user asked for them)',
+    '# -> 202 { "skill_run_id": "..." }   then poll:',
+    'curl https://api.agent-media.ai/v1/skills/runs/<skill_run_id> -H "Authorization: Bearer ma_..."',
+    '# when status == "succeeded", final_output.video_url is your MP4.',
+    '```',
+    '',
+    'In Claude/Cursor you just say it in words: *"Make a UGC video of a friendly woman saying \'…\' with TikTok captions."* — the agent calls the one tool, `make_ugc`.',
+    '',
+    '## 4. Calling it (REST / MCP / CLI)',
+    '',
+    '- **REST:** `POST https://api.agent-media.ai/v1/skills/make_ugc/run` (Bearer auth, JSON body) → `202` with a `skill_run_id`.',
+    '- **Poll:** `GET /v1/skills/runs/<skill_run_id>` → `final_output.video_url` when `status` is `succeeded`.',
+    '- **MCP:** call the `make_ugc` tool; arguments = its input fields.',
+    '- **Exact input schema (always current):** `GET https://api.agent-media.ai/v1/public/skills` or MCP `tools/list`. Trust that over any hand-written list.',
+    '',
+    '## Skills',
+    '',
+    Object.values(SKILLS)
+      .filter((s) => s.agentFacing)
+      .map((s) => `- \`${s.slug}\` (v${s.version}) — ${s.description}`)
+      .join('\n'),
+    '',
+    'Rules: give `make_ugc` the full `script` (any length — it is never trimmed) or a `scene_action` for a silent clip; pass `person`, `image` (https or base64), or `character` (a `char_…` id / sheet URL) for identity, or none for a default person; captions are OFF unless you set them — ASK the user if they want captions and which style first, never add them unprompted. Each run costs credits (see the cost in the skill). Reuse a saved character by passing its `character` on the next call — no re-generation. The other primitives (portrait, character sheet, lip-sync from your own audio, captioning an external video, etc.) stay available over REST/MCP for advanced use.',
+    '',
+    '## Publish to social',
+    '',
+    'Post a generated video to the user\'s TikTok / Instagram / X — via REST, the CLI, or MCP tools:',
+    '- `POST /v1/social/connect { provider }` → returns an OAuth `url` the user opens to authorize (agents can\'t OAuth for them). CLI: `agent-media social connect x`. MCP: `social_connect`.',
+    '- `GET /v1/social/channels` → the user\'s connected channels `[{ id, name, provider, profile }]`. CLI: `agent-media social channels`. MCP: `social_channels`.',
+    '- `POST /v1/social/publish { video_url, channel_ids, caption, type:"now"|"schedule", date? }` → re-hosts the R2 video on the network and posts/schedules it; returns `{ success, media_id, post_ids }`. CLI: `agent-media social publish`. MCP: `social_publish`.',
+    '',
+    'See `skills/publish-to-social/SKILL.md` for the full flow.',
+    '',
+    '## Reference docs',
+    '',
+    '- [reference/auth.md](reference/auth.md) — first-time setup',
+    '- [reference/pacing.md](reference/pacing.md) — the 2–4 words-per-second script rule',
+    '- [reference/realism-rubric.md](reference/realism-rubric.md) — realism props baked into every prompt',
+    '',
+    '## How this repo is built',
+    '',
+    'This repo is generated. The source of truth is the agent-media private monorepo. A GitHub Action mirrors the `public-skill/` subtree here on every push. Do not commit hand-edits — they will be overwritten.',
+    '',
+    'License: Apache-2.0.',
+    '',
+  ].join('\n');
+}
+
+function refAuth(): string {
+  return [
+    '# Auth — first-time setup',
+    '',
+    'agent-media uses a `ma_*` Bearer API key. Get one via the CLI:',
+    '',
+    '```bash',
+    'npm install -g agent-media-cli',
+    'agent-media login',
+    '```',
+    '',
+    'This stores the key at `~/.agent-media/credentials.json`. The bundled MCP server reads it via the `AGENT_MEDIA_API_KEY` environment variable; the plugin\'s `.mcp.json` does `${AGENT_MEDIA_API_KEY}` interpolation.',
+    '',
+    '## Without the CLI',
+    '',
+    'You can paste the `ma_*` token directly:',
+    '',
+    '```bash',
+    'export AGENT_MEDIA_API_KEY="ma_..."',
+    '```',
+    '',
+    '## How the key is used',
+    '',
+    '- MCP server forwards it as `Authorization: Bearer ma_...` to `api.agent-media.ai`.',
+    '- Server resolves it to a `user_id` and runs every primitive against that account.',
+    '- Credits debit from the same account.',
+    '',
+    '## Rotation',
+    '',
+    '`agent-media logout && agent-media login` rotates the key. The old key keeps working for ~30 days unless explicitly revoked.',
+    '',
+  ].join('\n');
+}
+
+function refPacing(): string {
+  return [
+    '# Script pacing — 2 to 4 words per second',
+    '',
+    'Agent-Media UGC Video (`make_ugc`) enforces a word-count window per take, based on the duration it infers from your script:',
+    '',
+    '| Duration | Words (min) | Words (max) |',
+    '| -------- | ----------- | ----------- |',
+    '| 5s       | 10          | 20          |',
+    '| 10s      | 20          | 40          |',
+    '| 15s      | 30          | 60          |',
+    '',
+    'Scripts outside this window get rejected at submit with HTTP 400 — no spend.',
+    '',
+    'Why: too few words = silence dead-air the model fills with filler ums; too many words = the model races and the lip-sync breaks. 2–4 wps is the natural TikTok talking-head cadence.',
+    '',
+    '## Examples',
+    '',
+    '- 5s clip: *"Honestly, this app changed my whole morning routine, you have to try it."* (13 words)',
+    '- 10s clip: *"Okay so I\'ve been using this for two weeks and it genuinely saves me thirty minutes every single morning, no joke, my coffee is still hot by the time I\'m done."* (32 words)',
+    '',
+  ].join('\n');
+}
+
+// Outcome-level ONLY. The internal rubric (specific prompt clauses, provider-behavior
+// discoveries, lighting recipes) lives at docs/internal/realism-rubric.md and is NOT
+// mirrored — publishing it would hand a competitor our prompt engineering for free
+// (publication rule / invariant 7). This describes WHAT you get, not HOW it's made.
+function refRealism(): string {
+  return [
+    '# Realism',
+    '',
+    'Every image and video is automatically enhanced so people look real, not AI-perfect — natural skin and lighting, candid UGC framing, believable imperfection. This happens server-side on every render; there is nothing to configure and no way (or need) to hand-write it.',
+    '',
+    '## Choosing the look',
+    '',
+    'Use `realism_target` to pick the overall look:',
+    '',
+    '- `natural` — soft, natural daylight look.',
+    '- `commercial` — clean, brand-ready look.',
+    '- `raw_iphone` — unpolished, shot-on-phone look.',
+    '',
+    'Just describe the person and scene in plain language in `description`; the realism enhancement is applied for you.',
+    '',
+  ].join('\n');
+}
+
+// ── Generate ──────────────────────────────────────────────────────────
+
+if (existsSync(OUT)) {
+  rmSync(OUT, { recursive: true, force: true });
+}
+mkdirSync(OUT, { recursive: true });
+
+writeFile('.claude-plugin/plugin.json', pluginJson());
+writeFile('.claude-plugin/marketplace.json', marketplaceJson());
+writeFile('.mcp.json', mcpJson());
+writeFile('README.md', readme());
+writeFile('LICENSE', readFromRepo('LICENSE'));
+writeFile('reference/auth.md', refAuth());
+writeFile('reference/pacing.md', refPacing());
+writeFile('reference/realism-rubric.md', refRealism());
+
+// Only the curated agent-facing skill (make_ugc) ships a per-skill SKILL.md, so
+// the pack presents ONE entry point instead of a dozen. The other skills stay
+// REST/CLI-reachable; agents discover their full schema via tools/list when they
+// genuinely need an advanced primitive.
+for (const skill of Object.values(SKILLS).filter((s) => s.agentFacing)) {
+  const kebab = slugToKebab(skill.slug);
+  const fm = frontmatter({
+    name: skill.name,
+    description: skill.description,
+    'allowed-tools': [`mcp__agent-media__${skill.slug}`],
+    'x-skill-slug': skill.slug,
+    'x-skill-version': skill.version,
+    'x-primitive': skill.primitive,
+    'x-mcp-tool': `mcp__agent-media__${skill.slug}`,
+  });
+  writeFile(`skills/${kebab}/SKILL.md`, fm + skillBody(skill));
+}
+
+// Composite "playbook" skill — not a registry entry; a hand-curated
+// orchestration guide for agents that want the bigger picture before
+// picking which primitive(s) to call. The 4 hand-written sections
+// (one-shot, step-by-step, image-first, troubleshooting) reference
+// the codegen-controlled per-skill markdowns above.
+writeFile(
+  'skills/agent-media-ugc/SKILL.md',
+  frontmatter({
+    name: 'Agent-Media UGC Playbook',
+    description:
+      'Playbook for Agent-Media UGC Video — the one tool for UGC video on agent-media. Always call the single make_ugc skill: give it a `script` (any length) and optionally a person/image/character; it returns the finished captioned vertical video. Short script → one clip, long monologue → full multi-take (never trimmed), `broll_url` → narrated overlay. You never pick a sub-skill.',
+    'allowed-tools': Object.values(SKILLS)
+      .filter((s) => s.agentFacing)
+      .map((s) => `mcp__agent-media__${s.slug}`),
+    'x-skill-slug': 'agent-media-ugc',
+    // Bundle version anchor (the CLI update-check compares against this).
+    // 1.1.0 = added the publish-to-social skill (TikTok / Instagram / X).
+    'x-skill-version': '1.1.0',
+  }) + playbookBody(),
+);
+
+// Social-publishing skill — not a registry primitive; a guide for posting a
+// generated video to the user's connected TikTok/Instagram/X via the
+// /v1/social/* REST endpoints (Postiz Enterprise under the hood).
+writeFile(
+  'skills/publish-to-social/SKILL.md',
+  frontmatter({
+    name: 'Publish to Social',
+    description:
+      'Publish a generated Agent-Media UGC Video to the user\'s connected TikTok, Instagram, or X. Connect channels (OAuth) and post or schedule via the REST API. Use after producing a video with make_ugc.',
+    'x-skill-slug': 'publish-to-social',
+    'x-skill-version': '1.0.0',
+  }) + socialBody(),
+);
+
+console.log(`generated ${OUT} for ${Object.keys(SKILLS).length} skills`);
+
+function socialBody(): string {
+  return [
+    '# Publish to Social',
+    '',
+    'Post a finished agent-media video (an R2 `video_url` from any of the video skills) to the user\'s connected social channels — **TikTok, Instagram, or X**. Works from three surfaces: REST, the CLI (`agent-media social ...`), and MCP tools (`social_channels` / `social_connect` / `social_publish`). All calls use the user\'s `Authorization: Bearer ma_...` token against `https://api.agent-media.ai`.',
+    '',
+    '## 1. Connect a channel (one-time, requires the human)',
+    '',
+    '```',
+    'GET    /v1/social/providers             -> connectable networks: tiktok, instagram, instagram-standalone, x',
+    'POST   /v1/social/connect { provider }  -> { url }   # the user opens this OAuth url and authorizes',
+    'GET    /v1/social/channels              -> { channels: [{ id, name, provider, profile, picture }] }',
+    'DELETE /v1/social/channels/:channelId   -> disconnect',
+    '```',
+    '',
+    'The connect step returns an OAuth URL the **human** must open and authorize — an agent cannot complete OAuth itself. Once authorized, the channel appears in `/v1/social/channels` with an `id` you pass to publish.',
+    '',
+    'CLI: `agent-media social providers` · `agent-media social connect x` · `agent-media social channels`.',
+    'MCP: `social_connect { provider }` (returns the URL for the user) · `social_channels`.',
+    '',
+    '## 2. Publish a video',
+    '',
+    '```bash',
+    'curl -X POST https://api.agent-media.ai/v1/social/publish \\',
+    '  -H "Authorization: Bearer ma_..." -H "Content-Type: application/json" \\',
+    '  -d \'{ "video_url": "https://pub-...r2.dev/generation-outputs/<user>/<job>/...mp4",',
+    '        "channel_ids": ["<channel-id-from-/channels>"],',
+    '        "caption": "made with agent-media",',
+    '        "type": "now" }\'    # or "type":"schedule" + "date":"2026-06-01T10:00:00.000Z"',
+    '```',
+    '',
+    'CLI: `agent-media social publish --video <url> --channels <id,id> --caption "..."` (add `--at <iso>` to schedule).',
+    'MCP: `social_publish { video_url, channel_ids, caption, type }`.',
+    '',
+    '`video_url` must be an agent-media R2 URL (the output of a video skill) — agent-media re-hosts it on the publishing provider for you. `channel_ids` come from `/v1/social/channels`. Per-network requirements (e.g. X reply settings) are filled in server-side; you don\'t send them.',
+    '',
+    '**Returns** `{ success: true, media_id, post_ids: ["..."] }`. A real post was created only when `post_ids` is non-empty — treat an empty `post_ids` as a failure, not a success.',
+    '',
+    '## Typical flow',
+    '',
+    '1. Produce a video → `make_ugc` → `final_output.video_url`.',
+    '2. If the user has no connected channel, send them to connect (step 1) — you can\'t OAuth for them.',
+    '3. Publish that `video_url` to the chosen `channel_ids`; confirm `post_ids` came back.',
+    '',
+    'Note: social operations run on a shared rate budget — don\'t poll; connect once and publish on demand.',
+    '',
+  ].join('\n');
+}
+
+function playbookBody(): string {
+  return [
+    '# Agent-Media UGC Playbook',
+    '',
+    'You\'re an agent (Claude, Cursor, custom) that needs to produce a finished UGC video on agent-media. There is exactly ONE tool — `make_ugc` (Agent-Media UGC Video). You never pick a sub-skill; make_ugc resolves identity and runs the whole pipeline internally.',
+    '',
+    '## One tool, three shapes',
+    '',
+    '| You want | Give make_ugc | Result |',
+    '| --- | --- | --- |',
+    '| A short clip | a one-line `script` (+ optional person/image/character) | one clean talking-head clip |',
+    '| A full monologue | a long `script` (+ a real face via `image` or `character`) | a seamless multi-take video, never trimmed |',
+    '| A narrated b-roll review | `script` + `broll_url` + a `character`/`image` | the person narrates over your footage |',
+    '',
+    '## How to call it',
+    '',
+    'A single call. The server picks the pipeline, the take count and the duration, runs it in one Temporal workflow, and returns a `skill_run_id` you poll.',
+    '',
+    '```http',
+    'POST https://api.agent-media.ai/v1/skills/make_ugc/run',
+    'Authorization: Bearer $AGENT_MEDIA_API_KEY',
+    '',
+    '{',
+    '  "script": "Okay this is wild, I tried the new flow and it actually works.",',
+    '  "person": "a friendly young woman, soft daylight, candid framing",',
+    '  "name": "Maya, 27"',
+    '}',
+    '```',
+    '',
+    'Poll with `GET /v1/skills/runs/<skill_run_id>` until `status` is `succeeded`; `final_output.video_url` is your finished MP4.',
+    '',
+    'See [skills/make-ugc/SKILL.md](../make-ugc/SKILL.md) for the full field manual.',
+    '',
+    '## Step D — publish it (optional)',
+    '',
+    'Once you have a `video_url`, you can post it straight to the user\'s TikTok / Instagram / X with the **publish-to-social** skill — `POST /v1/social/publish` (CLI `agent-media social publish`, MCP `social_publish`). The user connects each network once via OAuth (`/v1/social/connect`). See [skills/publish-to-social/SKILL.md](../publish-to-social/SKILL.md).',
+    '',
+    '## Identity',
+    '',
+    '- `person` — describe them in words; `image` — a photo (https URL or base64); `character` — a saved `char_…` id or `character_sheet_url` from list_characters; omit all three for a default person.',
+    '- A full monologue or a b-roll review needs a real face — pass `image` or `character`, not just `person`.',
+    '- Reuse a saved character: pass the same `character` on the next call — no re-generation.',
+    '',
+    '## Rules',
+    '',
+    '- make_ugc paces and chunks the script for you — pass the FULL line or monologue and do NOT trim it. Length is inferred from the script.',
+    '- Any image/video URL you pass must be a public https URL (make_ugc re-hosts it onto R2 for you) — or a `character_sheet_url` / `char_…` for a saved character.',
+    '- Credits are deducted as each take runs. Portrait + character-sheet prep inside a video are FREE — you only pay for the video itself.',
+    '- Don\'t put "selfie" or "phone" in a description — say "talking to camera" instead. make_ugc already handles this internally.',
+    '',
+    '## Troubleshooting',
+    '',
+    '- **`INSUFFICIENT_CREDITS`** — user is out. Surface the agent-media.ai billing page link.',
+    '- **`make_ugc_needs_face`** — a full monologue or a b-roll review needs `image` or `character` (a real face), not just `person`.',
+    '- **Video has subject holding a phone** — they used a pose hint mentioning "selfie" or "phone". Strip it or set `pose: ""`.',
+    '- **Step stuck in `submitted`** — Temporal worker may be restarting. Wait 30s and re-poll; if still stuck after 5 min, the workflow is hung — contact agent-media support with the `workflow_id`.',
+    '',
+    '## See also',
+    '',
+    '- [reference/auth.md](../../reference/auth.md) — first-time setup',
+    '- [reference/pacing.md](../../reference/pacing.md) — 2–4 words/sec rule with examples',
+    '- [reference/realism-rubric.md](../../reference/realism-rubric.md) — the 9 realism props baked into every prompt',
+    '',
+  ].join('\n');
+}
+
+function readFromRepo(file: string): string {
+  const path = resolve(REPO_ROOT, file);
+  try {
+    return readFileSync(path, 'utf-8');
+  } catch {
+    return `Apache License 2.0 — see ${file} in the source repository.\n`;
+  }
+}

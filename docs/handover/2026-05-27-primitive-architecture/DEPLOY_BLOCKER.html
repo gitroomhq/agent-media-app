@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Deploy blocker — branch divergence</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 880px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; margin-top: 28px; color: #1a3a5c; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 14px 18px; margin: 14px 0; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  ul { padding-left: 20px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>Deploy blocker — vnext branch can't auto-merge into sprint-8</h1>
+
+<div class="warn">
+<p>Steps 1–4 of the plan (MCP, status polling, OpenAPI, code changes) are <strong>done and pushed</strong> on <code>vnext/primitive-foundation</code>. PR #46 is now targeted at <code>sprint-8</code> and marked ready.</p>
+<p>But: <code>sprint-8</code> has moved well past where vNext branched off (paywall changes, CLI edits, README updates, dep bumps). GitHub shows the PR as <code>CONFLICTING / DIRTY</code>. 30+ files have conflicts.</p>
+</div>
+
+<h2>What conflicts (the legacy churn, not our new code)</h2>
+<ul>
+  <li><code>.env.example</code>, <code>.gitignore</code>, <code>CLAUDE.md</code>, <code>README.md</code>, <code>SKILL.md</code> — both branches edited.</li>
+  <li><code>apps/cli/**</code> — sprint-8 has heavy CLI changes; vNext doesn't touch CLI code.</li>
+  <li><code>pnpm-lock.yaml</code>, multiple <code>package.json</code> — dep drift.</li>
+</ul>
+
+<p>Our new files (<code>services/primitive-worker-vnext/**</code>, <code>services/api-v2/src/skills/**</code>, <code>services/api-v2/src/routes/v1/{primitives,skills}.ts</code>, <code>services/api-v2/src/lib/r2-upload.ts</code>, the two migrations) do <em>not</em> conflict — they're additive.</p>
+
+<h2>Three ways out</h2>
+
+<div class="box">
+<h3>(A) Rebase vnext/primitive-foundation onto sprint-8</h3>
+<ul>
+  <li>Keep history clean. Re-apply each vNext commit on top of sprint-8 and resolve the conflicts as they arise.</li>
+  <li>Risk: 30+ conflict points. Some are doc-only (CLAUDE/README/SKILL.md) — low risk. Some touch server.ts / package.json — need care.</li>
+  <li>Time: 20–40 minutes if no surprises.</li>
+</ul>
+</div>
+
+<div class="box ok">
+<h3>(B) Recommended — surgical replay onto a fresh branch off sprint-8</h3>
+<ul>
+  <li>Cut <code>vnext/primitive-foundation-v2</code> from <code>origin/sprint-8</code>.</li>
+  <li>Cherry-pick only the vNext-additive files: <code>services/primitive-worker-vnext/**</code>, <code>services/api-v2/src/skills/**</code>, <code>services/api-v2/src/lib/r2-upload.ts</code>, <code>services/api-v2/src/routes/v1/primitives.ts</code>, <code>services/api-v2/src/routes/v1/skills.ts</code>, the two migrations, the schema additions, and the <code>docs/handover/2026-05-27-primitive-architecture/</code> folder.</li>
+  <li>Reapply the small additive edits to <code>services/api-v2/src/server.ts</code> (route registration + OpenAPI block) and <code>services/api-v2/src/routes/mcp.ts</code> (skill tool exposure) on top of the sprint-8 versions.</li>
+  <li>Skip the conflicting docs (CLAUDE.md, README.md, SKILL.md, .env.example) for this PR — handle in a follow-up.</li>
+  <li>Risk: lower. Touches only the api-v2 surfaces that need to ship.</li>
+  <li>Time: 15 min.</li>
+</ul>
+</div>
+
+<div class="box">
+<h3>(C) Defer the api-v2 deploy</h3>
+<ul>
+  <li>Keep using Temporal CLI for triggers today.</li>
+  <li>Land the branch-reconciliation work in a separate session when you have time to review carefully.</li>
+  <li>MCP and REST stay dark on prod until then.</li>
+</ul>
+</div>
+
+<div class="ask">
+<p><strong>Pick A, B, or C.</strong> Recommended: <strong>B</strong>.</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production Verification Plan — vNext Skills (2026-05-28)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { background:#0d0e14; color:#e7e7ef; font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; padding:48px 24px; }
+  .wrap { max-width:960px; margin:0 auto; }
+  h1 { font-size:30px; letter-spacing:-.02em; margin:0 0 4px; }
+  h2 { font-size:20px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid #23252f; }
+  h3 { font-size:15.5px; margin:18px 0 6px; color:#cdd; }
+  .sub { color:#9aa; margin:0 0 8px; }
+  code { background:#1a1c25; padding:1px 6px; border-radius:5px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:#c9d4ff; }
+  .box { background:#14161f; border:1px solid #23252f; border-radius:12px; padding:16px 18px; margin:14px 0; }
+  .danger { border-left:3px solid #f87171; padding-left:14px; }
+  .principle { border-left:3px solid #A78BFA; padding-left:14px; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; margin:12px 0; font-size:13px; }
+  th,td { text-align:left; padding:7px 9px; border-bottom:1px solid #23252f; vertical-align:top; }
+  th { color:#9aa; font-weight:600; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:700; background:rgba(167,139,250,.12); border:1px solid rgba(167,139,250,.4); color:#c9b8ff; }
+  .tag.spend { background:rgba(251,191,36,.12); border-color:rgba(251,191,36,.45); color:#fbd667; }
+  .tag.nospend { background:rgba(52,211,153,.12); border-color:rgba(52,211,153,.4); color:#34d399; }
+  .src { color:#7c8; font-family:ui-monospace,monospace; font-size:12px; }
+  ul { margin:6px 0; padding-left:22px; } li { margin:5px 0; }
+  .gate { color:#34d399; font-weight:700; }
+  .stop { color:#f87171; font-weight:700; }
+  .phase-h { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#9aa; }
+  .need { background:rgba(248,113,113,.08); border:1px solid rgba(248,113,113,.35); border-radius:10px; padding:12px 16px; margin:10px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Production Verification Plan — vNext Skills</h1>
+  <p class="sub">Prove the 6 production skills actually work end-to-end with real generation, across all 4 distribution surfaces, then lock the handover to verified facts. <strong>Live system, 3000+ paying customers, no staging.</strong> 2026-05-28.</p>
+
+  <div class="box danger">
+    <strong>Production safety contract (applies to every phase):</strong>
+    <ul>
+      <li><strong>No code deploys during verification.</strong> If a skill fails, I diagnose + report root cause. I do NOT push a fix without your explicit "go" — prod change needs approval.</li>
+      <li><strong>Bounded spend.</strong> One real run per skill first. I report exact credit cost after each before doing anything more. Hard stop if anything looks off.</li>
+      <li><strong>Real calls only.</strong> No SIMULATE/mocks — real OpenAI + Seedance, real R2, real credits.</li>
+      <li><strong>Evidence in-line.</strong> Every "it works" carries run_id + HTTP code + the opened asset. No "looks right".</li>
+      <li><strong>Customer balances untouched.</strong> All runs go through your admin account only.</li>
+    </ul>
+  </div>
+
+  <div class="box">
+    <strong>Confirmed scope (your answers):</strong>
+    <table>
+      <tr><th>Surfaces</th><td>Claude plugin (gitroomhq) · MCP (npm) · CLI (npm) · REST direct — all four</td></tr>
+      <tr><th>Account</th><td>Your admin account; bounded runs; report spend before scaling</td></tr>
+      <tr><th>Quality bar</th><td>Your eyeball sign-off — I render + open each asset, you approve/reject each</td></tr>
+      <tr><th>Scope</th><td>All 6 skills individually</td></tr>
+    </table>
+  </div>
+
+  <div class="need">
+    <strong>What I need from you to start (Phase 0 blockers):</strong>
+    <ul>
+      <li>A <strong>fresh admin Bearer token</strong> (<code>ma_*</code>) for the account to test against — the one in the old transcript should be rotated, so issue a new one.</li>
+      <li>A <strong>spend ceiling</strong> you're comfortable with for the first pass (my default proposal: 6 single runs + ~4 surface-parity runs ≈ 10 generations total before I check in).</li>
+      <li>Confirm the test account has enough credits for one <code>make_ugc_video</code> (the composite is the most expensive single run).</li>
+    </ul>
+  </div>
+
+  <h2>Phase 0 — Pre-flight &amp; safety <span class="tag nospend">zero spend</span></h2>
+  <p class="phase-h">Establish exact prod state + confirm all 4 surfaces reach the API, before spending a credit.</p>
+  <ul>
+    <li><strong>0.1 Prod state snapshot.</strong> Record live Vercel deploy id, Railway worker revision, and which of the 4 vNext migrations are applied (so the test is pinned to a known build).</li>
+    <li><strong>0.2 Worker liveness.</strong> Confirm <code>primitive-worker-vnext</code> is up and consuming Temporal task queue <code>primitive-vnext-v1</code> — otherwise runs queue forever. (Railway logs + a no-op health check.)</li>
+    <li><strong>0.3 Credit baseline.</strong> Read the admin account balance before any run; this is the denominator for "cost per skill".</li>
+    <li><strong>0.4 Surface reachability (no generation):</strong>
+      <ul>
+        <li>REST: <code>GET api.agent-media.ai/v1/skills</code> with token → 200 + 6 skills.</li>
+        <li>MCP: spawn <code>@agentmedia/mcp-server</code> over stdio, JSON-RPC <code>tools/list</code> → 6 vNext tools present.</li>
+        <li>CLI: <code>agent-media skills list</code> → 6 rows.</li>
+        <li>Plugin: validate gitroomhq <code>.claude-plugin/plugin.json</code> + <code>.mcp.json</code> resolve; install in a clean Claude Code session and confirm the MCP connects + tools enumerate.</li>
+      </ul>
+    </li>
+  </ul>
+  <p class="gate">Gate 0: all 4 surfaces list the skills, worker is consuming the queue, balance recorded. <span class="stop">If the worker isn't consuming → STOP, fix infra first (with your go), do not start generating.</span></p>
+
+  <h2>Phase 1 — Doc accuracy (parallel, zero spend) <span class="tag nospend">zero spend</span></h2>
+  <p class="phase-h">The earlier fix-plan, run while Phase 0 token is arranged — keeps the doc honest independent of the live test.</p>
+  <ul>
+    <li>Read the 4 unread files (run route + credit pre-flight, anthropic.ts, openai.ts, worker.ts/config.ts) and close every "could not verify".</li>
+    <li>Rewrite the 7 hard errors (DB columns, status enum, API host, MCP stdio-vs-HTTP, run-status path, workflow camelCase, credits columns) — each grounded in <code>file:line</code>.</li>
+    <li>Cross-check pass: grep every identifier in the doc against the repo; diff the doc's skill table against live <code>/api/v1/public/skills</code>.</li>
+  </ul>
+
+  <h2>Phase 2 — One real run per skill <span class="tag spend">real credits</span></h2>
+  <p class="phase-h">Ground truth via REST. Chained so each output feeds the next — tests identity-lock and minimizes spend.</p>
+  <table>
+    <tr><th>#</th><th>Skill</th><th>Input</th><th>Reuses</th><th>Eyeball checks</th></tr>
+    <tr><td>2.1</td><td><code>make_portrait</code></td><td>text description (male + realism preset)</td><td>—</td><td>photoreal, front-facing eye contact, 9 realism props, no AI-perfection</td></tr>
+    <tr><td>2.2</td><td><code>make_character_sheet</code></td><td>portrait_url from 2.1</td><td>2.1 output</td><td>same identity as 2.1, magazine-style, multi-angle consistency</td></tr>
+    <tr><td>2.3</td><td><code>make_wireframe</code></td><td>char_sheet_url from 2.2 + script</td><td>2.2 output</td><td>same person across panels, action progression reads</td></tr>
+    <tr><td>2.4</td><td><code>make_simple_selfie</code></td><td>char_sheet_url from 2.2 + script (10s)</td><td>2.2 output</td><td>no phone in hand, front-facing, lip-sync tight, identity holds, 9:16</td></tr>
+    <tr><td>2.5</td><td><code>make_subtitles</code></td><td>video_url from 2.4</td><td>2.4 output</td><td>caption timing + accuracy, Hormozi style, no A/V drift</td></tr>
+    <tr><td>2.6</td><td><code>make_ugc_video</code></td><td>text description only (full auto chain)</td><td>—</td><td>the whole pipeline in one call: portrait→sheet→selfie→subs, identity consistent, captioned</td></tr>
+  </table>
+  <p>Per run: submit → record run_id + HTTP → poll to terminal → record latency + credit delta → open the R2 asset → <strong>you approve/reject</strong>. Reject ⇒ I capture the exact prompt/params that produced it and we decide whether it's a quality tune or a bug.</p>
+  <p class="gate">Gate 2: 6/6 skills reach a terminal state and you've signed off (or flagged) each asset. Report cumulative credit spend.</p>
+  <p class="stop">Check-in point: I pause here and report total spend + pass/fail before Phase 3.</p>
+
+  <h2>Phase 3 — Surface parity <span class="tag spend">real credits (bounded)</span></h2>
+  <p class="phase-h">REST is proven in Phase 2. Now prove the other 3 surfaces dispatch + return correctly — without re-paying for all 6 skills on each.</p>
+  <ul>
+    <li><strong>3.1 MCP (stdio):</strong> call the cheapest skill (<code>make_portrait</code>) end-to-end through the MCP server; confirm run_id + asset.</li>
+    <li><strong>3.2 CLI:</strong> <code>agent-media skills run make_portrait</code> + <code>skills status</code>; confirm same.</li>
+    <li><strong>3.3 Plugin (the real-customer path):</strong> in a clean Claude Code session with the gitroomhq plugin installed, drive <code>make_ugc_video</code> from a natural-language prompt — this is the headline "real agent uses our skill" test, and it exercises the full chain through the published distribution.</li>
+  </ul>
+  <p><em>Default = ~4 extra runs. If you want the full 6×4 matrix (24 runs, ~all skills on all surfaces) say so — I'll cost it first.</em></p>
+  <p class="gate">Gate 3: each surface produced a valid run + asset; plugin path worked from a cold install.</p>
+
+  <h2>Phase 4 — Quality &amp; results report <span class="tag nospend">zero spend</span></h2>
+  <ul>
+    <li>HTML matrix: skill × surface → run_id, status, latency, credit cost, asset URL, your verdict.</li>
+    <li>Aggregate: total credits spent, pass/fail count, any quality gaps vs realism rules (phone-in-hand, eye contact, lip-sync, identity drift, subtitle accuracy).</li>
+    <li>Risk register: anything that worked-but-barely, or that would fail under load / different inputs.</li>
+  </ul>
+
+  <h2>Phase 5 — Lock the handover <span class="tag nospend">zero spend</span></h2>
+  <ul>
+    <li>Fold Phase 1 corrections + Phase 2–4 live results (real run_ids as evidence, "as-of 2026-05-28" snapshot) into the handover.</li>
+    <li>Add the "how to re-verify in 60s" appendix (the exact grep + curl + run commands).</li>
+    <li>Sync canonical repo copy ↔ vault mirror; confirm identical.</li>
+  </ul>
+
+  <h2>Phase 6 — Follow-ups (only with explicit go) <span class="tag">prod changes</span></h2>
+  <ul>
+    <li>Any quality bug found in Phase 2/3 → root-cause + fix proposal, deployed only on your approval.</li>
+    <li>Delete dead <code>client/byteplus.ts</code>.</li>
+    <li>Em-dash sweep on gitroomhq <code>plugin.json</code>.</li>
+    <li>Credential rotation (Temporal, OpenAI, <code>ma_*</code>).</li>
+  </ul>
+
+  <div class="box">
+    <strong>Sequencing:</strong> Phase 0 + 1 run immediately and cost nothing. The credit-spending work (Phase 2–3) only starts once you've handed me the token + spend ceiling and Gate 0 is green. I check in with total spend after Phase 2 before going wider.
+  </div>
+</div>
+</body>
+</html>

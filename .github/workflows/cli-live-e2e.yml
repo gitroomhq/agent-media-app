@@ -1,0 +1,27 @@
+name: CLI Live E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: Optional API base URL override
+        required: false
+        type: string
+
+jobs:
+  cli-live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      AGENT_MEDIA_E2E_LIVE: "1"
+      AGENT_MEDIA_E2E_CONFIRM_COST: "1"
+      AGENT_MEDIA_API_KEY: ${{ secrets.AGENT_MEDIA_E2E_API_KEY }}
+      AGENT_MEDIA_API_BASE_URL: ${{ inputs.api_base_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm e2e:cli:live

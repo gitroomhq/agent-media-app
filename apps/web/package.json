@@ -1,0 +1,48 @@
+{
+  "name": "@agent-media/web",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agent-media/types": "workspace:*",
+    "@agent-media/ui": "workspace:*",
+    "@dub/analytics": "^0.0.32",
+    "@sentry/nextjs": "^10.56.0",
+    "@stripe/react-stripe-js": "^5.6.1",
+    "@stripe/stripe-js": "^8.9.0",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.49.1",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/three": "^0.184.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dub": "^0.71.5",
+    "lucide-react": "^0.474.0",
+    "next": "^15.1.7",
+    "ogl": "^1.0.11",
+    "postcss": "^8.5.0",
+    "posthog-js": "^1.350.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "resend": "^6.12.3",
+    "simple-icons": "^16.20.0",
+    "tailwind-merge": "^3.0.0",
+    "tailwindcss": "^4.0.0",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "eslint": "^9",
+    "eslint-config-next": "^15.1.7",
+    "typescript": "^5.7.3"
+  }
+}

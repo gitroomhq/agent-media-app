@@ -1,0 +1,22 @@
+{
+  "name": "agent-media",
+  "owner": {
+    "name": "Nevo David",
+    "email": "nevo@postiz.com"
+  },
+  "metadata": {
+    "description": "AI UGC video production — generate complete videos with talking heads, B-roll, subtitles, and SaaS review videos from the terminal",
+    "version": "2.0.0"
+  },
+  "plugins": [
+    {
+      "name": "agent-media",
+      "description": "Produce complete UGC videos with AI talking heads, B-roll, voiceover, and animated subtitles. Generate SaaS review videos, manage personas, and add subtitles — all from the terminal via the agent-media CLI.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./"
+      ]
+    }
+  ]
+}

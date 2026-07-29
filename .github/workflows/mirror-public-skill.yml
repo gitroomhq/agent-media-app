@@ -1,0 +1,73 @@
+name: Mirror public skill to gitroomhq/agent-media
+
+# Mirrors the public-skill/ subtree of this private monorepo to the
+# public-facing skill repo at github.com/gitroomhq/agent-media.
+#
+# IMPORTANT — this workflow runs ONLY when the GITROOM_DEPLOY_KEY
+# secret is set. Until provisioned it's a no-op so it can't push
+# anything by accident. The memory rule "never push the private
+# monorepo to gitroomhq" is enforced by the subtree split — only
+# files under public-skill/ are mirrored.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public-skill/**'
+      - '.github/workflows/mirror-public-skill.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-public-skill
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    # A subtree split + force-push should take well under a minute; cap the job
+    # so a wedged git/ssh step fails fast instead of hanging ~15 min then being
+    # cancelled with no logs (the 2026-07-09 incident) and silently going stale.
+    timeout-minutes: 8
+    if: ${{ vars.MIRROR_PUBLIC_SKILL_ENABLED == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure ssh for gitroomhq push
+        env:
+          DEPLOY_KEY: ${{ secrets.GITROOM_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_KEY:-}" ]; then
+            echo "GITROOM_DEPLOY_KEY not set — aborting safely."
+            exit 78
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Pin github.com's ed25519 host key so verification can't fall back to
+          # an interactive yes/no prompt (a blocked prompt = the silent hang).
+          ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> ~/.ssh/known_hosts
+
+      - name: Configure git identity
+        run: |
+          git config user.name "agent-media-bot"
+          git config user.email "bot@agent-media.ai"
+
+      - name: Split + force-push public-skill subtree
+        env:
+          # Force a fully non-interactive ssh: only the deploy key, no agent, no
+          # password/host-key prompt — so a push can never block waiting on stdin.
+          GIT_SSH_COMMAND: >-
+            ssh -i ~/.ssh/id_ed25519
+            -o IdentitiesOnly=yes
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o ConnectTimeout=20
+        run: |
+          set -euo pipefail
+          git subtree split --prefix=public-skill -b _public_skill_HEAD
+          git push -f git@github.com:gitroomhq/agent-media.git _public_skill_HEAD:main

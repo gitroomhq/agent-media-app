@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>simple_selfie — design</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 940px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; margin-top: 28px; color: #1a3a5c; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>Primitive #3 — <code>simple_selfie</code></h1>
+
+<p>Generates a short vertical UGC selfie video of the SAME person from a character sheet, with native lip-synced audio of a given script. No product, no object held, framed waist-up.</p>
+
+<h2>Contract</h2>
+<table>
+  <tr><th>Input</th><th>Type</th><th>Notes</th></tr>
+  <tr><td><code>character_sheet_url</code></td><td>string (R2 prefix only)</td><td>Required. Identity reference.</td></tr>
+  <tr><td><code>duration</code></td><td><code>5</code> | <code>10</code> | <code>15</code></td><td>Default <code>10</code> seconds.</td></tr>
+  <tr><td><code>script</code></td><td>string</td><td>Required. Spoken text. Word count enforced by duration (2–4 words/sec):<br>5s → 10–20 words, 10s → 20–40, 15s → 30–60.</td></tr>
+  <tr><td><code>location</code></td><td>string ≤120 chars</td><td>Optional scene hint. "bright kitchen window light", "neutral hallway", etc.</td></tr>
+  <tr><td><code>pose</code></td><td>string ≤120 chars</td><td>Optional framing hint. "leaning slightly on counter", "one hand near jaw", etc. Subject must NOT be holding anything.</td></tr>
+  <tr><td><code>aspect_ratio</code></td><td><code>9:16</code> | <code>1:1</code></td><td>Default <code>9:16</code> (TikTok).</td></tr>
+  <tr><td colspan=3 style="background:#fafafa"><strong>Output</strong></td></tr>
+  <tr><td><code>video_url</code></td><td>string</td><td>R2 MP4 at <code>vnext/primitive-runs/&lt;run_id&gt;/simple-selfie.mp4</code></td></tr>
+  <tr><td><code>provider</code></td><td><code>seedance-2-0-fast</code></td><td></td></tr>
+</table>
+
+<h2>Activity flow</h2>
+<ol>
+  <li>Validate input (incl. duration ↔ word-count refine). SSRF on character_sheet_url.</li>
+  <li>Retry-safety (existing succeeded run → return artifact).</li>
+  <li>Budget caps. Per-primitive USD estimate ~ $0.50–$1.20 depending on duration (TBD on first real call).</li>
+  <li>Upsert <code>primitive_runs</code> row.</li>
+  <li><strong>Haiku</strong> builds a single-sentence Seedance prompt with: simple selfie framing, waist-up, no object held, lip-sync the exact script verbatim, location + pose hints, vertical TikTok aesthetic, realism props inherited from the reference sheet.</li>
+  <li><strong>Seedance 2.0 fast</strong> (BytePlus ARK <code>dreamina-seedance-2-0-fast-260128</code>) called with:
+    <pre>{
+  model: "dreamina-seedance-2-0-fast-260128",
+  content: [
+    { type: "text", text: "&lt;Haiku prompt&gt;" },
+    { type: "image_url", image_url: { url: character_sheet_url }, role: "reference_image" }
+  ],
+  generate_audio: true,
+  ratio: "9:16",
+  duration: &lt;5|10|15&gt;,
+  watermark: false
+}</pre>
+  </li>
+  <li>Poll BytePlus task until video URL is returned (BytePlus task → URL pattern from existing <code>media-worker-v2/byteplus-client.js</code>).</li>
+  <li>Download bytes from BytePlus URL → upload to R2 at <code>vnext/primitive-runs/&lt;run_id&gt;/simple-selfie.mp4</code>.</li>
+  <li>Insert <code>primitive_artifacts</code> (kind = <code>selfie_video</code>), finalize run.</li>
+  <li>Generated prompt persisted in <code>primitive_runs.input.generated_prompt</code> for audit.</li>
+</ol>
+
+<h2>Haiku instruction (system prompt)</h2>
+<div class="box ok">
+<pre>You build the prompt sent to Seedance 2.0 (BytePlus ARK) for a SIMPLE VERTICAL SELFIE VIDEO of the person in the reference image (a character sheet).
+
+Hard rules:
+- Output ONE single sentence. Comma-separated clauses. Final period.
+- No paragraphs, no markdown, no quotes, no preamble. Output ONLY the prompt.
+- Identity locks to the reference image — same person.
+
+Mandatory clauses (paraphrase, do not omit):
+- Framing: vertical 9:16 TikTok-style selfie, framed waist-up (full top half visible), hands free, NOT holding anything, NOT holding a phone, looking directly at the camera.
+- Camera feel: handheld iPhone front-camera vibe, subtle breathing motion, micro head tilts, candid not staged.
+- Subject says the script VERBATIM with natural lip-sync, natural pauses, breathing, micro filler beats where appropriate. Do not paraphrase the script.
+- Realism: same skin texture, visible pores, subtle asymmetries, micro-expressions as the reference.
+- Setting: use the user's location hint if provided; otherwise neutral bright daylight indoor space.
+- Pose: use the user's pose hint if provided; ALWAYS no object held.
+- Constraints: no text overlay, no captions, no watermark, no logo.
+
+Embed the user's script as the spoken line. Embed location and pose hints faithfully when provided.</pre>
+</div>
+
+<h2>Schema-level pacing enforcement</h2>
+<div class="box">
+<p>Zod refine on the input ensures script word count fits 2–4 words per second of duration:</p>
+<pre>const wc = s.trim().split(/\s+/).filter(Boolean).length;
+const minWords = duration * 2;
+const maxWords = duration * 4;
+// wc must be in [minWords, maxWords]</pre>
+</div>
+
+<h2>What is NOT in this primitive</h2>
+<ul>
+  <li><strong>Subtitles burn-in.</strong> That's a separate primitive (next on the roadmap: <code>subtitles</code>, TikTok font style). For V1 the video has spoken audio only.</li>
+  <li><strong>Product/object holding.</strong> Explicitly forbidden here. A future <code>product_selfie</code> primitive will accept a product image and orchestrate the holding interaction (per the agent-media product UGC workflow).</li>
+  <li><strong>Multi-scene cuts.</strong> One continuous shot only.</li>
+</ul>
+
+<h2>Provider risk to flag</h2>
+<div class="box warn">
+<p>Saved memory <code>no-byteplus-for-photoreal</code> says BytePlus ModelArk privacy filter has rejected real-person reference images. But the existing prod <code>media-worker-v2/v2/selfie-pipeline.js</code> already uses BytePlus successfully with gpt-image-2 reference outputs. Theory: BytePlus accepts AI-generated portraits (our case) but blocks raw human photos. Will verify on the first live run.</p>
+<p>If BytePlus rejects: fall back to EvoLink Seedance or other Seedance provider — existing media-worker-v2 has alternate dispatch paths to reuse.</p>
+</div>
+
+<h2>What gets built</h2>
+<ul>
+  <li>Schema contract <code>SimpleSelfieToolInputSchema</code> + Output schema in <code>packages/schema/src/tooling/contracts.ts</code>; register in <code>V1_MANDATORY_TOOL_CONTRACTS</code>.</li>
+  <li>BytePlus ARK client in <code>services/primitive-worker-vnext/src/client/byteplus.ts</code> — submit + poll + download, lifted from <code>media-worker-v2/byteplus-client.js</code>.</li>
+  <li><code>buildSimpleSelfiePrompt</code> in <code>src/client/anthropic.ts</code>.</li>
+  <li>Activity <code>src/activities/simple-selfie.ts</code>.</li>
+  <li>Workflow <code>src/workflows/simple-selfie.ts</code> (5-minute startToClose bumped to 10 minutes because video gen is slower).</li>
+  <li>Register on the same <code>primitive-vnext-v1</code> task queue.</li>
+  <li>Add micro-skill <code>make_simple_selfie</code> in <code>services/api-v2/src/skills/registry.ts</code>.</li>
+  <li>OpenAPI entry, MCP exposure (auto via registry), SKILL.md row.</li>
+  <li>New env on the worker: <code>ARK_API_KEY</code> (reuse from media-worker-v2).</li>
+</ul>
+
+<h2>Test plan</h2>
+<ol>
+  <li>Build + push.</li>
+  <li>Railway redeploys primitive-worker-vnext.</li>
+  <li>Pick a duration (recommend <code>5</code> first to keep cost low).</li>
+  <li>Fire <code>POST /v1/skills/make_simple_selfie/run</code> with: the existing character_sheet_url (Sara or him), a 10–20-word script, and no location/pose.</li>
+  <li>Poll status until succeeded.</li>
+  <li>Open the MP4.</li>
+</ol>
+
+<div class="ask">
+<strong>Confirm + I ship it.</strong>
+<ul>
+  <li>Primitive id: <code>simple_selfie</code> (no provider suffix — internal metadata carries provider). OK?</li>
+  <li>Skill slug: <code>make_simple_selfie</code>. OK?</li>
+  <li>V1 has no burned subtitles (handled by future <code>subtitles</code> primitive). OK?</li>
+  <li>Default <code>aspect_ratio</code> <code>9:16</code>. OK?</li>
+</ul>
+</div>
+
+</body>
+</html>

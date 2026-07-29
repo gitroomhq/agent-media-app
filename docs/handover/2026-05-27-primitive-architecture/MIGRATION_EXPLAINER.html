@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>vNext Migration — Explained</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 920px; margin: 40px auto; padding: 0 24px; line-height: 1.55; color: #222; background: #fafafa; }
+  h1 { font-size: 28px; border-bottom: 2px solid #333; padding-bottom: 8px; }
+  h2 { font-size: 22px; margin-top: 36px; color: #1a3a5c; }
+  h3 { font-size: 16px; margin-top: 20px; color: #444; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 18px 22px; margin: 16px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .warn { background: #fff7e6; border-left: 4px solid #d97706; }
+  .info { background: #eff6ff; border-left: 4px solid #2563eb; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  td, th { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  .path { background: #fff8e1; padding: 8px 12px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>vNext Primitive Migration — What &amp; Why</h1>
+
+<div class="path">
+File: <code>supabase/migrations/20260527150000_vnext_primitive_runs.sql</code>
+</div>
+
+<h2>What kind of migration is this?</h2>
+
+<div class="box ok">
+<strong>Forward-only, additive Postgres DDL migration.</strong> Standard Supabase migration. It only <em>creates new tables, indexes, triggers, and a helper function</em> — it does <strong>not</strong> alter, drop, or rename anything that already exists. Safe to run on any database that doesn't already have these tables; idempotent thanks to <code>IF NOT EXISTS</code> on every <code>CREATE</code>.
+</div>
+
+<h3>"Additive" means…</h3>
+<ul>
+  <li>Existing tables (<code>generation_jobs</code>, <code>user_characters</code>, <code>auth.users</code>, etc.) are untouched.</li>
+  <li>No data is moved, copied, or rewritten.</li>
+  <li>Rolling back = drop the 4 new tables + the trigger function. Nothing else to undo.</li>
+  <li>It is the kind of migration you can apply during a regular deploy with zero downtime — no locks on hot tables.</li>
+</ul>
+
+<h3>How it gets applied</h3>
+<ul>
+  <li><strong>Local dev:</strong> <code>supabase db reset</code> (needs Docker / OrbStack running). Replays every migration in <code>supabase/migrations/</code> in timestamp order against the local Postgres at <code>localhost:54322</code>.</li>
+  <li><strong>Staging / Prod:</strong> applied via your normal Supabase deploy flow (<code>supabase db push</code> or whatever your CI runs). Per the operating rules, this needs Yuval's explicit approval — not run by me.</li>
+</ul>
+
+<h2>What it creates</h2>
+
+<table>
+  <tr><th>Object</th><th>Purpose</th></tr>
+  <tr>
+    <td><code>primitive_runs</code></td>
+    <td>One row per primitive invocation. The vNext equivalent of the old <code>generation_jobs</code> table — but deliberately separate so we don't reuse the legacy ledger. Holds: user_id, primitive_id (e.g. <code>portrait_gpt2</code>), status, input JSON, idempotency key, credit estimates &amp; actuals, error code/message, timestamps.</td>
+  </tr>
+  <tr>
+    <td><code>primitive_artifacts</code></td>
+    <td>One row per file produced (PNG, MP4, SRT…). Points at R2 via <code>url</code>, has <code>kind</code> + MIME + size + metadata. A run can have many artifacts.</td>
+  </tr>
+  <tr>
+    <td><code>primitive_events</code></td>
+    <td>Time-ordered event log per run (info / warn / error). Useful for diagnostics + later SSE stream.</td>
+  </tr>
+  <tr>
+    <td><code>provider_tasks</code></td>
+    <td>External provider task ledger (OpenAI request ids, Seedance task ids, etc.) joined back to <code>primitive_runs</code>. Lets us audit cost/usage per provider.</td>
+  </tr>
+  <tr>
+    <td><code>touch_primitive_updated_at()</code> trigger</td>
+    <td>Auto-updates <code>updated_at</code> on <code>UPDATE</code>. Cosmetic but useful.</td>
+  </tr>
+  <tr>
+    <td>Indexes</td>
+    <td><code>(user_id, created_at DESC)</code> for listing, <code>(primitive_id, status)</code> for ops dashboards, <code>(skill_run_id) WHERE NOT NULL</code> for skill-run grouping, partial unique on <code>(user_id, primitive_id, idempotency_key)</code> for idempotency.</td>
+  </tr>
+  <tr>
+    <td>RLS</td>
+    <td><code>ENABLE ROW LEVEL SECURITY</code> on every table but no per-user policies yet. That means: only the <code>service_role</code> key (worker + api-v2) can read/write today. User-facing reads will land in a follow-up once GET endpoints exist.</td>
+  </tr>
+</table>
+
+<h2>The full SQL</h2>
+
+<p>Copy of the file content (also at <code>supabase/migrations/20260527150000_vnext_primitive_runs.sql</code>):</p>
+
+<pre>-- vNext primitive runtime tables.
+--
+-- Fresh data plane for the primitive architecture (see
+-- docs/handover/2026-05-27-primitive-architecture/). The legacy
+-- generation_jobs table is deliberately NOT reused — that was the
+-- biggest trap called out by the previous engineer.
+
+CREATE TABLE IF NOT EXISTS public.primitive_runs (
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  skill_run_id uuid,
+  primitive_id text NOT NULL,
+  status text NOT NULL CHECK (status IN ('submitted', 'running', 'succeeded', 'failed', 'canceled')),
+  input jsonb NOT NULL,
+  idempotency_key text,
+  provider_task_id text,
+  estimated_credits_usd numeric(10, 4),
+  actual_credits_usd numeric(10, 4),
+  error_code text,
+  error_message text,
+  started_at timestamptz,
+  finished_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_primitive_runs_user_created
+  ON public.primitive_runs (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_primitive_runs_primitive_status
+  ON public.primitive_runs (primitive_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_primitive_runs_skill_run
+  ON public.primitive_runs (skill_run_id)
+  WHERE skill_run_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_primitive_runs_idempotency
+  ON public.primitive_runs (user_id, primitive_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
+ALTER TABLE public.primitive_runs ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.primitive_artifacts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  primitive_run_id uuid NOT NULL REFERENCES public.primitive_runs(id) ON DELETE CASCADE,
+  kind text NOT NULL,
+  url text NOT NULL,
+  bytes bigint,
+  mime text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_primitive_artifacts_run
+  ON public.primitive_artifacts (primitive_run_id);
+
+ALTER TABLE public.primitive_artifacts ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.primitive_events (
+  id bigserial PRIMARY KEY,
+  primitive_run_id uuid NOT NULL REFERENCES public.primitive_runs(id) ON DELETE CASCADE,
+  ts timestamptz NOT NULL DEFAULT now(),
+  level text NOT NULL CHECK (level IN ('debug', 'info', 'warn', 'error')),
+  code text NOT NULL,
+  message jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_primitive_events_run_ts
+  ON public.primitive_events (primitive_run_id, ts);
+
+ALTER TABLE public.primitive_events ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.provider_tasks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  primitive_run_id uuid NOT NULL REFERENCES public.primitive_runs(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  external_task_id text,
+  status text,
+  raw_response jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_provider_tasks_run
+  ON public.provider_tasks (primitive_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_provider_tasks_external
+  ON public.provider_tasks (provider, external_task_id)
+  WHERE external_task_id IS NOT NULL;
+
+ALTER TABLE public.provider_tasks ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.touch_primitive_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_primitive_runs_updated_at ON public.primitive_runs;
+CREATE TRIGGER trg_primitive_runs_updated_at
+  BEFORE UPDATE ON public.primitive_runs
+  FOR EACH ROW EXECUTE FUNCTION public.touch_primitive_updated_at();
+
+DROP TRIGGER IF EXISTS trg_provider_tasks_updated_at ON public.provider_tasks;
+CREATE TRIGGER trg_provider_tasks_updated_at
+  BEFORE UPDATE ON public.provider_tasks
+  FOR EACH ROW EXECUTE FUNCTION public.touch_primitive_updated_at();
+</pre>
+
+<h2>Rollback (if ever needed)</h2>
+<pre>DROP TABLE IF EXISTS public.provider_tasks;
+DROP TABLE IF EXISTS public.primitive_events;
+DROP TABLE IF EXISTS public.primitive_artifacts;
+DROP TABLE IF EXISTS public.primitive_runs;
+DROP FUNCTION IF EXISTS public.touch_primitive_updated_at();</pre>
+
+<div class="box warn">
+<strong>Not yet applied anywhere.</strong> The SQL file is on disk in the repo, but no database has run it yet. Local apply needs Docker/OrbStack running so <code>supabase start</code> + <code>supabase db reset</code> can replay the migrations. Prod apply requires your explicit approval per the operating rules.
+</div>
+
+<div class="box info">
+<strong>Key design choices flagged by the previous engineer:</strong>
+<ul>
+  <li>Fresh tables — not reusing <code>generation_jobs</code>. That table's reliability problems were the "biggest trap."</li>
+  <li>Storing credits in <code>numeric(10,4)</code> USD, not "credit units" — keeps the math honest and lets us reconcile against provider invoices directly.</li>
+  <li>Idempotency is a partial unique index (<code>WHERE idempotency_key IS NOT NULL</code>) so nullable keys don't collide.</li>
+  <li>RLS enabled but empty — defaults to deny-all from anon/authenticated. Service role only for now.</li>
+</ul>
+</div>
+
+</body>
+</html>

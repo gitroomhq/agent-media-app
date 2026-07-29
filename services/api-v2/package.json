@@ -1,0 +1,42 @@
+{
+  "name": "api-v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch --env-file=../../.env src/server.ts",
+    "temporal:worker": "tsx src/orchestrator/temporal/worker.ts",
+    "test": "vitest run",
+    "gen:public-skill": "tsx scripts/generate-public-skill.ts",
+    "gen:public-skill:check": "tsx scripts/generate-public-skill.ts && git diff --exit-code ../../public-skill || (echo 'public-skill is stale; run pnpm --filter api-v2 gen:public-skill and commit' && exit 1)"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@agentmedia/schema": "workspace:*",
+    "@aws-sdk/client-s3": "^3.1004.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@scalar/express-api-reference": "^0.9.7",
+    "@sentry/node": "^10.56.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "@temporalio/client": "^1.16.2",
+    "@temporalio/worker": "^1.16.2",
+    "@temporalio/workflow": "^1.16.2",
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.3.2",
+    "openai": "^4.70.0",
+    "pino": "^10.3.1",
+    "undici": "^8.5.0",
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.25.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.1.0"
+  }
+}

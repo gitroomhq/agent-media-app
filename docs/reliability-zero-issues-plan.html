@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>agent-media — Zero-Issues Reliability Plan</title>
+<style>
+  :root{
+    --bg:#0d0e12; --panel:#15161d; --panel2:#191a22; --line:rgba(255,255,255,.08);
+    --text:#e9e9f0; --muted:#9aa0ad; --violet:#a78bfa; --orange:#d97757;
+    --cyan:#7dd3fc; --green:#34d399; --red:#f87171; --amber:#e5c07b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 28px 96px}
+  h1{font-size:34px;letter-spacing:-.03em;margin:0 0 6px}
+  h2{font-size:22px;letter-spacing:-.02em;margin:44px 0 14px;padding-top:18px;border-top:1px solid var(--line)}
+  h3{font-size:16px;margin:22px 0 8px}
+  p,li{color:#d7d9e0}
+  .sub{color:var(--muted);margin:0 0 8px}
+  code{background:#08080b;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c9d1d9}
+  .pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;padding:3px 9px;border-radius:999px}
+  .p-crit{background:rgba(248,113,113,.14);color:var(--red);border:1px solid rgba(248,113,113,.4)}
+  .p-now{background:rgba(167,139,250,.14);color:var(--violet);border:1px solid rgba(167,139,250,.4)}
+  .p-soon{background:rgba(125,211,252,.12);color:var(--cyan);border:1px solid rgba(125,211,252,.35)}
+  .p-later{background:rgba(154,160,173,.12);color:var(--muted);border:1px solid var(--line)}
+  .grid{display:grid;gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .card.accent{border-color:rgba(167,139,250,.3);box-shadow:0 0 40px rgba(167,139,250,.08) inset}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  .ok{color:var(--green)} .bad{color:var(--red)} .warn{color:var(--amber)}
+  .phase{display:flex;gap:14px;align-items:flex-start;margin:0 0 6px}
+  .phase .n{flex:0 0 auto;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-weight:700;background:rgba(167,139,250,.14);color:var(--violet);border:1px solid rgba(167,139,250,.35)}
+  ul{margin:6px 0 0;padding-left:20px} li{margin:4px 0}
+  .kbd{color:var(--orange)}
+  .lead{font-size:17px;color:#e9e9f0;background:var(--panel2);border-left:3px solid var(--violet);padding:14px 18px;border-radius:0 10px 10px 0;margin:18px 0}
+  .small{font-size:13px;color:var(--muted)}
+  .tag{font:12px ui-monospace,monospace;color:var(--cyan)}
+  .surface{font-weight:600;color:var(--orange)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Zero-Issues Reliability Plan</h1>
+  <p class="sub">agent-media · production system (3,000+ paying users) · drafted 2026-06-02</p>
+
+  <div class="lead">
+    Goal: <b>nothing the user does ends in a silent stop or a dead-end</b>. Every error is (1) captured with full context, (2) routed to a human in realtime, (3) recoverable for the user (retry/refund/clear message), and (4) tracked to closure. "0 issues" is an operational discipline — capture → alert → recover → close — not a one-time fix.
+  </div>
+
+  <h2>1 · Current state (audited, not assumed)</h2>
+  <table>
+    <thead><tr><th>Capability</th><th>Today</th><th>Surface</th></tr></thead>
+    <tbody>
+      <tr><td>Error-tracking SDK (exceptions, stack traces, releases)</td><td class="bad">✗ none anywhere</td><td>web, api-v2, worker, edge fns</td></tr>
+      <tr><td>Global crash guards (<code>uncaughtException</code>, <code>unhandledRejection</code>, Express error mw)</td><td class="bad">✗ missing in api-v2</td><td>api-v2 (Express)</td></tr>
+      <tr><td>Realtime alerting (Slack / PagerDuty / Discord)</td><td class="bad">✗ no webhook wired</td><td>all</td></tr>
+      <tr><td>User-facing bug report / feedback</td><td class="bad">✗ none</td><td>web app</td></tr>
+      <tr><td>Structured logs + correlation IDs end-to-end</td><td class="warn">~ ad-hoc console logs</td><td>api-v2, worker</td></tr>
+      <tr><td>Stable error codes for failures</td><td class="ok">✓ <code>error-classifier.js</code></td><td>worker</td></tr>
+      <tr><td>Run/job status + error columns in DB</td><td class="ok">✓ primitive_runs / skill_runs / generation_jobs</td><td>api-v2 / DB</td></tr>
+      <tr><td>Health endpoints</td><td class="warn">~ <code>/health</code> exists; not monitored</td><td>api-v2, worker</td></tr>
+      <tr><td>React error boundary</td><td class="warn">~ one root <code>app/error.tsx</code> only</td><td>web</td></tr>
+      <tr><td>Product analytics</td><td class="ok">✓ posthog-js (pageviews)</td><td>web</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Stack: <span class="surface">web</span> Next.js on Vercel · <span class="surface">api-v2</span> Express on Railway · <span class="surface">worker</span> Temporal on Railway · <span class="surface">edge</span> Supabase Deno functions · DB Supabase Postgres.</p>
+
+  <h2>2 · The four things you asked to track</h2>
+  <div class="grid">
+    <div class="card"><b>① User errors</b> — every thrown exception &amp; failed run, with the user id, run_id, inputs (PII-scrubbed), and the existing <code>error_code</code> attached. → <b>Sentry</b> on all four surfaces + DB run-failure ingestion.</div>
+    <div class="card"><b>② Realtime issues</b> — crashes, error-rate spikes, queue stalls, provider outages, health-check failures. → <b>Sentry alert rules → Slack</b> + an uptime/synthetic monitor + a worker dead-man's-switch.</div>
+    <div class="card"><b>③ Open bugs</b> — a single triage board where every captured issue lands, gets owned, and is tracked to closed. → Sentry Issues as source of truth, mirrored to <b>Linear/GitHub</b> for the ones we fix; weekly triage ritual.</div>
+    <div class="card"><b>④ User reportings</b> — an in-app "Report a problem" widget that auto-attaches session, current run_id, and last error, writes to a <code>bug_reports</code> table, and pings Slack. Closes the loop the user can't otherwise see.</div>
+  </div>
+
+  <h2>3 · Phased rollout (sprint-able)</h2>
+
+  <div class="card accent" style="margin-bottom:14px">
+    <div class="phase"><div class="n">0</div><div>
+      <span class="pill p-crit">Critical · do first</span>
+      <h3 style="margin-top:8px">Baseline visibility — see every error</h3>
+      <ul>
+        <li><b>Sentry across all 4 surfaces:</b> <code>@sentry/nextjs</code> (web, incl. source maps + session replay on errors), <code>@sentry/node</code> (api-v2 + worker), Sentry Deno SDK / manual capture (edge fns).</li>
+        <li>Wire <b>releases</b> to the git SHA (we already deploy per-commit) so every error maps to a deploy + is source-mapped.</li>
+        <li>Attach <b>user context</b> (user id, plan, run_id) + <b>scrub PII</b> (emails, ma_ keys, prompts flagged sensitive) in <code>beforeSend</code>.</li>
+        <li>Ingest <b>DB run failures</b> (status='failed' + error_code) into Sentry so backend pipeline failures show up next to crashes.</li>
+      </ul>
+    </div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="phase"><div class="n">1</div><div>
+      <span class="pill p-crit">Critical</span>
+      <h3 style="margin-top:8px">Crash-proof the backends — no silent stops</h3>
+      <ul>
+        <li>api-v2: <b>global Express error handler</b> + <code>process.on('uncaughtException'/'unhandledRejection')</code> (capture → Sentry → graceful shutdown, never a half-dead process).</li>
+        <li><b>Correlation ID</b> (request_id) generated at the edge, threaded web → api-v2 → worker → logs, returned in error responses so a user report maps to exact traces.</li>
+        <li>Structured logging (<code>pino</code>) replacing ad-hoc console; one log shape across services.</li>
+        <li>Graceful Temporal worker shutdown + retry/heartbeat audit so a deploy never drops an in-flight render (we hit this before).</li>
+        <li>Per-segment React error boundaries + <code>global-error.tsx</code> (layout crashes) + client-side exception capture.</li>
+      </ul>
+    </div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="phase"><div class="n">2</div><div>
+      <span class="pill p-now">Realtime issues</span>
+      <h3 style="margin-top:8px">Alerting + on-call — a human hears about it instantly</h3>
+      <ul>
+        <li>Sentry <b>alert rules → Slack</b>: new issue, error-rate spike, regression after deploy.</li>
+        <li><b>Uptime/synthetic monitor</b> (Better Stack or Checkly) on <code>/health</code> (api-v2 + worker) + the public site.</li>
+        <li><b>Worker dead-man's-switch</b>: alert if the Temporal queue has 0 completions in N min while jobs are queued (catches the crash-loop class we've hit).</li>
+        <li><b>Provider-outage signal</b>: surface the worker's <code>PROVIDER_*</code> codes as a metric → alert when any provider error-rate crosses a threshold.</li>
+      </ul>
+    </div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="phase"><div class="n">3</div><div>
+      <span class="pill p-now">User reporting + recovery</span>
+      <h3 style="margin-top:8px">The user is never stuck</h3>
+      <ul>
+        <li><b>In-app "Report a problem" widget</b> → writes <code>bug_reports</code> (user, run_id, route, last error, console tail) + Slack ping + Sentry user-feedback link.</li>
+        <li><b>Auto-recovery by error_code</b>: <code>PROVIDER_BUSY/TIMEOUT/CIRCUIT_OPEN</code> → automatic retry; <code>CONTENT_POLICY_BLOCKED</code> → clear "edit your prompt" message; any credit-charged failure → <b>auto-refund</b> + visible note.</li>
+        <li><b>Clear failure UX</b>: every <code>error_code</code> maps to a friendly message + next action (retry / change input / contact) — no raw stack, no dead spinner. (Agent + skills + gallery.)</li>
+      </ul>
+    </div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="phase"><div class="n">4</div><div>
+      <span class="pill p-soon">Proactive zero-issues</span>
+      <h3 style="margin-top:8px">Catch it before the user does</h3>
+      <ul>
+        <li><b>Synthetic E2E monitor</b> running the real critical flow (login → generate short clip → deliver) every N min against prod; page on failure.</li>
+        <li><b>SLOs + error budget</b>: e.g. 99.5% run success, p95 render time, &lt;0.1% 5xx — tracked on one dashboard.</li>
+        <li><b>Single "Issues" dashboard</b> (Sentry + DB run-failure rate + queue depth + provider health) — the one screen that answers "is anything broken right now?".</li>
+        <li><b>Weekly triage ritual</b>: every open issue owned or closed; error budget reviewed.</li>
+      </ul>
+    </div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="phase"><div class="n">5</div><div>
+      <span class="pill p-later">Hardening</span>
+      <h3 style="margin-top:8px">Keep it at zero</h3>
+      <ul>
+        <li>Public/internal <b>status page</b> fed by the monitors.</li>
+        <li><b>CI regression guards</b>: the E2E journeys run on every deploy (block promote on red); type/lint already gate.</li>
+        <li>Load &amp; light chaos tests on the render pipeline; circuit-breaker tuning.</li>
+      </ul>
+    </div></div>
+  </div>
+
+  <h2>4 · Recommended stack (build vs buy)</h2>
+  <table>
+    <thead><tr><th>Need</th><th>Recommended</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Errors + traces + replay</td><td><b>Sentry</b> (full-stack)</td><td>One SDK per surface, release + source-map mapping, session replay on the exact error, built-in alerting. Fastest path to total visibility.</td></tr>
+      <tr><td>Uptime / synthetics</td><td><b>Better Stack</b> or <b>Checkly</b></td><td>Health + real user-journey checks, phone/Slack paging, status page included.</td></tr>
+      <tr><td>Bug reports</td><td><b>Build</b> (widget → <code>bug_reports</code> + Slack)</td><td>Auto-attaches run_id/session we already have; no new vendor, full control, links into Sentry.</td></tr>
+      <tr><td>Issue tracking</td><td>Sentry Issues → <b>Linear/GitHub</b></td><td>Sentry is the firehose; promote the real bugs to the dev board.</td></tr>
+      <tr><td>Logs</td><td><code>pino</code> + Railway/Vercel log drains (→ Better Stack/Axiom optional)</td><td>Structured, correlation-ID searchable.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5 · Decisions needed before I build Phase 0</h2>
+  <ul>
+    <li><b>Platform:</b> Sentry (recommended) vs. lean on PostHog (already installed; weaker for backend/traces) vs. another.</li>
+    <li><b>Scope to start:</b> Phase 0+1 first (visibility + crash-proofing — the highest-leverage, lowest-risk), then 2–3, or commit to the full sprint up front.</li>
+    <li><b>Alert destination + accounts:</b> Slack channel/webhook, and who holds the Sentry / uptime accounts + API keys (I can't create accounts or add secrets — you provision, I wire).</li>
+  </ul>
+  <p class="small">Note: this is production. Nothing here ships without your explicit go per task, and each phase is verified (browser/curl/log evidence) before I call it done. Account creation + secret provisioning is on you; wiring + code is on me.</p>
+
+</div>
+</body>
+</html>

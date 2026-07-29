@@ -1,0 +1,60 @@
+{
+  "name": "@agentmedia/mcp-server",
+  "version": "0.7.5",
+  "mcpName": "io.github.gitroomhq/agent-media",
+  "description": "MCP server for agent-media — generate AI UGC videos from Claude Code, Cursor, Windsurf, or any MCP-compatible client.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "homepage": "https://agent-media.ai/integrations",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gitroomhq/agent-media.git",
+    "directory": "packages/mcp-server"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "cursor",
+    "windsurf",
+    "ugc",
+    "video-generation",
+    "ai",
+    "developer-tools",
+    "ai-agent",
+    "product-video",
+    "product-ugc",
+    "talking-head",
+    "text-to-video",
+    "agent-media"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "server.json"
+  ],
+  "bin": {
+    "mcp-server": "./dist/index.js",
+    "agent-media-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@agentmedia/schema": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod-to-json-schema": "^3.25.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

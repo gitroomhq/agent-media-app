@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Skill Center v2 — proposal</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 960px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 22px; margin-top: 28px; color: #1a3a5c; }
+  h3 { font-size: 17px; margin-top: 20px; color: #444; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  .gap { background: #fff7e6; border-left: 4px solid #d97706; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  .mock { background: #15161D; color: #E9E9F0; padding: 18px; border-radius: 8px; font-size: 12px; line-height: 1.4; font-family: ui-monospace, monospace; white-space: pre; }
+</style>
+</head>
+<body>
+
+<h1>Skill Center — what's there + what to build</h1>
+
+<h2>What's live today (`/dashboard/skills`)</h2>
+<ul>
+  <li>One page. Lists skills from <code>GET /v1/skills</code>. Cards expand inline into a form.</li>
+  <li>Submit → 202 → polls every 4s. Shows active runs at top with per-step artifact links.</li>
+  <li>5 hand-coded forms, one per skill.</li>
+</ul>
+<div class="gap">
+Gaps: no persistent run history, no per-skill detail page, no MCP/SDK install snippets, no cost or time info on the card, no icons, no search, no empty-state guidance for new users.
+</div>
+
+<h2>Proposal — Skill Center v2 (3 pages)</h2>
+
+<h3>1. `/dashboard/skills` — Library (refreshed)</h3>
+<div class="mock">
+┌──────────────────────────────────────────────────────────────────────┐
+│ Skill Center                                            5 skills   │
+│ Run any vNext skill. Same surface as REST + MCP.                  │
+├──────────────────────────────────────────────────────────────────────┤
+│ [ Search… ]                                                         │
+│                                                                      │
+│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                 │
+│ │ ✨ Portrait  │ │ 📋 Char Sheet│ │ 🎥 Selfie    │                 │
+│ │ v1.0.0       │ │ v1.0.0       │ │ v1.0.0       │                 │
+│ │ 35 cr · 60s  │ │ 35 cr · 90s  │ │ 100+ cr · 5m │                 │
+│ │ Generate a…  │ │ Magazine-…   │ │ 5/10/15s vid.│                 │
+│ │       [Run →]│ │       [Run →]│ │       [Run →]│                 │
+│ └──────────────┘ └──────────────┘ └──────────────┘                 │
+│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                 │
+│ │ 💬 Subtitles │ │ 🎬 UGC Video │ │ + Add Skill  │                 │
+│ │ 15 cr · 20s  │ │ ~285 cr · 7m │ │  (coming)    │                 │
+│ └──────────────┘ └──────────────┘ └──────────────┘                 │
+└──────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>2. `/dashboard/skills/[slug]` — Skill detail + run</h3>
+<div class="mock">
+┌──────────────────────────────────────────────────────────────────────┐
+│ ← Skill Center                                                       │
+│                                                                      │
+│ 🎬 Make UGC Video    v1.0.0     ~285 cr · ~7 min                  │
+│ End-to-end UGC video in one call. Description → portrait → sheet… │
+│                                                                      │
+│ ┌─────────────────────────────┬──────────────────────────────────┐ │
+│ │ Run                          │ MCP                              │ │
+│ │ ────                         │ ───                              │ │
+│ │ [ form fields ]              │ Add this skill to Claude.ai      │ │
+│ │ [ Run skill ]                │ ┌──────────────────────────────┐ │ │
+│ │                              │ │ POST /v1/skills/make_ugc_video│ │ │
+│ │                              │ │   /run                        │ │ │
+│ │                              │ │ Authorization: Bearer …       │ │ │
+│ │                              │ └──────────────────────────────┘ │ │
+│ │                              │ Or via MCP: copy this snippet:   │ │
+│ │                              │ ┌──────────────────────────────┐ │ │
+│ │                              │ │ {"mcpServers":{...}}          │ │ │
+│ │                              │ └──────────────────────────────┘ │ │
+│ └─────────────────────────────┴──────────────────────────────────┘ │
+│                                                                      │
+│ Recent runs                                                          │
+│ ────────                                                             │
+│ • 7252a5f8…  succeeded  4 hr ago    [open video]                  │
+│ • 348f21c2…  succeeded  yesterday   [open video]                  │
+└──────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>3. `/dashboard/skills/runs/[id]` — Run timeline</h3>
+<div class="mock">
+┌──────────────────────────────────────────────────────────────────────┐
+│ ← Make UGC Video                                                     │
+│                                                                      │
+│ Run 7252a5f8-…    succeeded · 7 min total                          │
+│                                                                      │
+│ Timeline                                                             │
+│ ───                                                                  │
+│ ● portrait_gpt2          succeeded  1m 02s   [open png]           │
+│ ● character_sheet_gpt2   succeeded  1m 39s   [open png]           │
+│ ● simple_selfie          succeeded  3m 25s   [open mp4]           │
+│ ● subtitles_v2           succeeded  0m 14s   [open mp4]           │
+│                                                                      │
+│ Final video                                                          │
+│ ┌──────────────────────────────────────────────────────────────────┐ │
+│ │ [ embedded mp4 player ]                                          │ │
+│ └──────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│ Input                                Cost                            │
+│ ──                                   ──                              │
+│ description: "a friendly 27yo…"      ~285 credits                   │
+│ script: "Okay this is wild…"                                         │
+│ duration: 5                                                          │
+└──────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h2>Concrete build list</h2>
+<table>
+<tr><th>#</th><th>What</th><th>Where</th><th>Effort</th></tr>
+<tr><td>1</td><td>Refresh library page — grid of cards with icon + version + cost + time + truncated description.</td><td>Replace inline-form layout in <code>(app-dark)/dashboard/skills/page.tsx</code>.</td><td>30 min</td></tr>
+<tr><td>2</td><td>Per-skill detail page <code>/dashboard/skills/[slug]</code>. Reuse the hand-coded forms. Add an "MCP setup" sidebar with copy-paste snippets for Claude.ai / Cursor / Claude Code.</td><td>New file <code>(app-dark)/dashboard/skills/[slug]/page.tsx</code>.</td><td>1 hour</td></tr>
+<tr><td>3</td><td>Run timeline page <code>/dashboard/skills/runs/[id]</code>. Pulls from <code>GET /v1/skills/runs/:id</code> or <code>/v1/primitives/runs/:id</code>. Embedded video player for final artifact.</td><td>New file <code>(app-dark)/dashboard/skills/runs/[id]/page.tsx</code>.</td><td>45 min</td></tr>
+<tr><td>4</td><td>Recent runs per skill — small section on detail page listing the user's last 5 runs of that skill (filter by primitive_id in <code>/v1/me/gallery</code>).</td><td>Extend the gallery API to accept <code>?primitive=&lt;id&gt;</code> filter.</td><td>20 min</td></tr>
+<tr><td>5</td><td>Cost + time metadata. Hard-code per-skill in the page (same numbers we used in <code>credit-quotes.ts</code> + the codegen).</td><td>Constants in the page file or shared lib.</td><td>10 min</td></tr>
+<tr><td>6</td><td>Icons. Use <code>lucide-react</code> (already installed) — Sparkles / Layout / Video / Captions / Film for the 5 skills.</td><td>Card render in page.tsx.</td><td>5 min</td></tr>
+<tr><td>7</td><td>Documentation. Each detail page links to the SKILL.md in <code>github.com/gitroomhq/agent-media/skills/&lt;slug&gt;</code> for the full source-of-truth doc.</td><td>External link.</td><td>5 min</td></tr>
+</table>
+
+<h2>What I would NOT build in this round</h2>
+<ul>
+  <li><strong>Search.</strong> 5 skills doesn't need search; revisit at 15+.</li>
+  <li><strong>Categories / tags.</strong> Same reason.</li>
+  <li><strong>Install/uninstall flow.</strong> Future, when we accept third-party skills.</li>
+  <li><strong>Skill ratings / reviews.</strong> Future.</li>
+  <li><strong>Editing skill metadata in the UI.</strong> Registry is the source of truth.</li>
+</ul>
+
+<div class="ask">
+<strong>Pick one:</strong>
+<ol>
+  <li><strong>Full v2</strong> (items 1–7 above) — ~3 hrs. Three pages. Best end-state.</li>
+  <li><strong>Lean v2</strong> — items 1, 2, 5, 6 only (library refresh + detail page with form). Skip the dedicated run timeline page (active runs still live on the library page like today). ~1.5 hrs.</li>
+  <li><strong>Polish only</strong> — items 1, 5, 6 (cards + icons + cost) without breaking the single-page flow. ~45 min.</li>
+</ol>
+<p>I'd pick <strong>Lean v2</strong> — the detail page is where the most value lives (MCP setup snippets + a focused form). The dedicated run timeline page is nice but the existing inline active-run cards already cover most of it.</p>
+</div>
+
+</body>
+</html>

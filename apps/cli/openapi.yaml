@@ -1,0 +1,1611 @@
+# Copyright 2026 agent-media contributors. Apache-2.0 license.
+
+openapi: "3.1.0"
+info:
+  title: agent-media Edge Functions API
+  version: "0.1.0"
+  description: >-
+    RESTful API for AI-powered video and image generation. All endpoints are
+    hosted as Supabase Edge Functions. Authenticated endpoints accept a Bearer
+    JWT (Supabase auth token) or an API key prefixed with `am_`.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  contact:
+    name: agent-media
+    url: https://agent-media.ai
+
+servers:
+  - url: https://ppwvarkmpffljlqxkjux.supabase.co
+    description: Production Supabase project
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Security Schemes
+# ──────────────────────────────────────────────────────────────────────────────
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT access token obtained via OTP or OAuth login.
+
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: >-
+        API key issued by the apikey-manage endpoint. Pass as
+        `Bearer am_<key>`. The server detects the `am_` prefix and validates
+        against the hashed key store.
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Reusable Schemas
+  # ────────────────────────────────────────────────────────────────────────────
+
+  schemas:
+    # ── Error ──────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code.
+          examples: ["unauthorized", "invalid_request", "server_error"]
+        error_description:
+          type: string
+          description: Human-readable explanation.
+
+    RateLimitError:
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          properties:
+            retry_after:
+              type: integer
+              description: Seconds until the rate limit window resets.
+
+    # ── Device Token ──────────────────────────────────────────────────────
+    DeviceTokenInitiateResponse:
+      type: object
+      required:
+        - device_code
+        - user_code
+        - confirmation_code
+        - verification_url
+        - expires_in
+        - interval
+      properties:
+        device_code:
+          type: string
+          description: 32-character hex device code for polling.
+        user_code:
+          type: string
+          pattern: "^[A-Z]{4}-[A-Z]{4}$"
+          description: User-facing code in ABCD-EFGH format.
+        confirmation_code:
+          type: string
+          pattern: "^\\d{6}$"
+          description: 6-digit numeric confirmation code.
+        verification_url:
+          type: string
+          format: uri
+          description: URL the user should visit to authorize the device.
+        expires_in:
+          type: integer
+          description: Seconds until the device code expires.
+        interval:
+          type: integer
+          description: Minimum poll interval in seconds.
+
+    DeviceTokenPollRequest:
+      type: object
+      required: [device_code]
+      properties:
+        device_code:
+          type: string
+          description: The device code returned from the initiate step.
+
+    DeviceTokenPollApprovedResponse:
+      type: object
+      required: [status, key_prefix, user_id]
+      properties:
+        status:
+          type: string
+          enum: [approved]
+        api_key:
+          type: string
+          description: >-
+            The raw API key. Returned exactly once on the first successful poll
+            after approval; subsequent polls return null.
+        key_prefix:
+          type: string
+          description: Display prefix (first 12 chars) of the API key.
+        user_id:
+          type: string
+          format: uuid
+
+    DeviceTokenApproveRequest:
+      type: object
+      required: [user_code, confirmation_code]
+      properties:
+        user_code:
+          type: string
+          pattern: "^[A-Z]{4}-[A-Z]{4}$"
+        confirmation_code:
+          type: string
+          pattern: "^\\d{6}$"
+
+    DeviceTokenApproveResponse:
+      type: object
+      required: [status, key_prefix, message]
+      properties:
+        status:
+          type: string
+          enum: [approved]
+        key_prefix:
+          type: string
+        message:
+          type: string
+
+    # ── Credits ────────────────────────────────────────────────────────────
+    CreditsCheckResponse:
+      type: object
+      required: [user_id, plan, credits, limits]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        plan:
+          type: object
+          required: [tier, name, status, trial_active]
+          properties:
+            tier:
+              type: string
+              enum: [free, payg, starter, creator, pro_plus]
+            name:
+              type: string
+            status:
+              type: string
+              enum: [active, trialing, past_due, canceled, unpaid]
+            trial_active:
+              type: boolean
+            trial_ends_at:
+              type: string
+              format: date-time
+              nullable: true
+            current_period_end:
+              type: string
+              format: date-time
+              nullable: true
+        credits:
+          type: object
+          required: [monthly_remaining, purchased, total]
+          properties:
+            monthly_remaining:
+              type: integer
+            purchased:
+              type: integer
+            total:
+              type: integer
+        limits:
+          type: object
+          required: [max_concurrent_jobs, max_video_duration, models_available]
+          properties:
+            max_concurrent_jobs:
+              type: integer
+            max_video_duration:
+              type: integer
+              description: Maximum video duration in seconds for the plan.
+            models_available:
+              type: array
+              items:
+                type: string
+
+    # ── Generate ──────────────────────────────────────────────────────────
+    GenerateRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model:
+          type: string
+          description: Model slug, e.g. "kling3", "flux2-pro".
+        prompt:
+          type: string
+          maxLength: 4000
+        duration:
+          type: integer
+          minimum: 1
+          maximum: 30
+          nullable: true
+          description: Video duration in seconds.
+        resolution:
+          type: string
+          enum: ["360p", "480p", "720p", "1080p", "2k", "4k"]
+          nullable: true
+        aspect_ratio:
+          type: string
+          enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "21:9"]
+          nullable: true
+        seed:
+          type: integer
+          minimum: 0
+          nullable: true
+        input_media_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL or storage:// path for image-to-video workflows.
+        idempotency_key:
+          type: string
+          nullable: true
+        dry_run:
+          type: boolean
+          default: false
+          description: When true, returns cost estimate without submitting.
+
+    GenerateResponse:
+      type: object
+      required: [job_id, status, estimated_duration, credits_deducted]
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [submitted]
+        estimated_duration:
+          type: integer
+          description: Estimated processing time in seconds.
+        credits_deducted:
+          type: integer
+
+    GenerateDryRunResponse:
+      type: object
+      required: [credits, costUsd, availableCredits, canAfford]
+      properties:
+        credits:
+          type: integer
+        costUsd:
+          type: number
+        availableCredits:
+          type: integer
+        canAfford:
+          type: boolean
+        modelDisplayName:
+          type: string
+        breakdown:
+          type: object
+          properties:
+            planCredits:
+              type: integer
+            purchasedCredits:
+              type: integer
+
+    InsufficientCreditsError:
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          properties:
+            credits_required:
+              type: integer
+            credits_available:
+              type: integer
+            monthly_remaining:
+              type: integer
+            purchased_balance:
+              type: integer
+
+    # ── Job Status ─────────────────────────────────────────────────────────
+    JobStatusSingleRequest:
+      type: object
+      required: [jobId]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+
+    JobStatusListRequest:
+      type: object
+      required: [list]
+      properties:
+        list:
+          type: boolean
+          enum: [true]
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+        status:
+          type: string
+          enum: [pending, submitted, processing, completed, failed, canceled]
+        model:
+          type: string
+        sort:
+          type: string
+          enum: [newest, oldest]
+          default: newest
+
+    JobStatusCancelRequest:
+      type: object
+      required: [jobId, cancel]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        cancel:
+          type: boolean
+          enum: [true]
+
+    GenerationJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        model_slug:
+          type: string
+        operation:
+          type: string
+        status:
+          type: string
+          enum: [pending, submitted, processing, completed, failed, canceled]
+        prompt:
+          type: string
+        credit_cost:
+          type: integer
+        provider_job_id:
+          type: string
+          nullable: true
+        output_media_url:
+          type: string
+          format: uri
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        error_code:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    JobListResponse:
+      type: object
+      required: [jobs, total]
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenerationJob"
+        total:
+          type: integer
+
+    JobCancelResponse:
+      type: object
+      required: [canceled, jobId]
+      properties:
+        canceled:
+          type: boolean
+        jobId:
+          type: string
+          format: uuid
+        credits_refunded:
+          type: integer
+
+    # ── Poll Provider ──────────────────────────────────────────────────────
+    PollProviderRequest:
+      type: object
+      required: [jobId]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+
+    PollProviderResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [submitted, processing, completed, failed]
+        output_media_url:
+          type: string
+          format: uri
+          nullable: true
+        checkpoint:
+          type: string
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        message:
+          type: string
+        error:
+          type: string
+
+    # ── Pricing ────────────────────────────────────────────────────────────
+    PricingEntry:
+      type: object
+      required: [modelSlug, operation, creditCost, providerCostUsd]
+      properties:
+        modelSlug:
+          type: string
+        operation:
+          type: string
+          enum: [text_to_video, image_to_video, text_to_image]
+        durationSeconds:
+          type: integer
+          nullable: true
+        resolution:
+          type: string
+          nullable: true
+        creditCost:
+          type: integer
+        providerCostUsd:
+          type: number
+
+    PricingResponse:
+      type: object
+      required: [pricing]
+      properties:
+        pricing:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricingEntry"
+
+    # ── Upload URL ─────────────────────────────────────────────────────────
+    UploadUrlRequest:
+      type: object
+      required: [filename, content_type]
+      properties:
+        filename:
+          type: string
+          maxLength: 255
+        content_type:
+          type: string
+          enum:
+            - image/png
+            - image/jpeg
+            - image/jpg
+            - image/webp
+            - image/gif
+            - video/mp4
+            - video/webm
+            - video/quicktime
+            - video/x-msvideo
+
+    UploadUrlResponse:
+      type: object
+      required: [upload_url, storage_path, token, expires_in]
+      properties:
+        upload_url:
+          type: string
+          format: uri
+        storage_path:
+          type: string
+        token:
+          type: string
+        expires_in:
+          type: integer
+          description: Seconds until the presigned URL expires.
+        max_file_size:
+          type: integer
+          description: Maximum file size in bytes (100 MB).
+        content_type:
+          type: string
+
+    # ── Checkout ───────────────────────────────────────────────────────────
+    CheckoutRequest:
+      type: object
+      properties:
+        plan_tier:
+          type: string
+          enum: [starter, creator, pro_plus]
+          description: For subscription checkout. Mutually exclusive with payg_pack_id.
+        payg_pack_id:
+          type: string
+          enum: [pack_2500]
+          description: For PAYG credit purchase. Mutually exclusive with plan_tier.
+
+    CheckoutResponse:
+      type: object
+      required: [checkout_url, session_id]
+      properties:
+        checkout_url:
+          type: string
+          format: uri
+          description: Stripe-hosted checkout page URL.
+        session_id:
+          type: string
+          description: Stripe Checkout Session ID.
+
+    # ── Stripe Portal ──────────────────────────────────────────────────────
+    StripePortalRequest:
+      type: object
+      properties:
+        returnUrl:
+          type: string
+          format: uri
+          description: URL to redirect to after leaving the portal.
+
+    StripePortalResponse:
+      type: object
+      required: [portal_url]
+      properties:
+        portal_url:
+          type: string
+          format: uri
+
+    # ── API Key Manage ─────────────────────────────────────────────────────
+    ApiKeyCreateRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [create]
+        name:
+          type: string
+          maxLength: 100
+          default: Default
+
+    ApiKeyListRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [list]
+
+    ApiKeyRevokeRequest:
+      type: object
+      required: [action, keyId]
+      properties:
+        action:
+          type: string
+          enum: [revoke]
+        keyId:
+          type: string
+          format: uuid
+
+    ApiKeyRecord:
+      type: object
+      required: [id, key_prefix, name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key_prefix:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApiKeyCreateResponse:
+      type: object
+      required: [key, id, key_prefix, name, created_at]
+      properties:
+        key:
+          type: string
+          description: >-
+            The raw API key. Shown exactly once at creation time; it cannot be
+            retrieved again.
+        id:
+          type: string
+          format: uuid
+        key_prefix:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ApiKeyListResponse:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKeyRecord"
+
+    ApiKeyRevokeResponse:
+      type: object
+      required: [revoked, id]
+      properties:
+        revoked:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+
+    # ── Usage Stats ────────────────────────────────────────────────────────
+    UsageStatsResponse:
+      type: object
+      required: [period, period_start, period_end, summary, by_model, daily, by_operation]
+      properties:
+        period:
+          type: string
+          enum: ["7d", "30d", "90d"]
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        summary:
+          type: object
+          required: [total_jobs, completed_jobs, failed_jobs, credits_used]
+          properties:
+            total_jobs:
+              type: integer
+            completed_jobs:
+              type: integer
+            failed_jobs:
+              type: integer
+            credits_used:
+              type: integer
+        by_model:
+          type: array
+          items:
+            type: object
+            required: [model_slug, job_count, credits_used]
+            properties:
+              model_slug:
+                type: string
+              job_count:
+                type: integer
+              credits_used:
+                type: integer
+              avg_duration_seconds:
+                type: number
+                nullable: true
+        daily:
+          type: array
+          items:
+            type: object
+            required: [date, job_count, credits_used]
+            properties:
+              date:
+                type: string
+                format: date
+              job_count:
+                type: integer
+              credits_used:
+                type: integer
+        by_operation:
+          type: array
+          items:
+            type: object
+            required: [operation, job_count]
+            properties:
+              operation:
+                type: string
+              job_count:
+                type: integer
+
+    # ── Health Status ──────────────────────────────────────────────────────
+    HealthStatusResponse:
+      type: object
+      required: [status, providers, system, services, updated_at]
+      properties:
+        status:
+          type: string
+          enum: [operational, degraded, outage]
+        providers:
+          type: array
+          items:
+            type: object
+            required: [slug, status, circuit_state, avg_latency_ms, success_rate_24h, total_requests_24h]
+            properties:
+              slug:
+                type: string
+              status:
+                type: string
+                enum: [healthy, degraded, down]
+              circuit_state:
+                type: string
+                enum: [closed, open, half_open]
+              avg_latency_ms:
+                type: number
+              success_rate_24h:
+                type: number
+              total_requests_24h:
+                type: integer
+        system:
+          type: object
+          required: [total_jobs_24h, success_rate_24h, avg_response_time_ms, active_alerts]
+          properties:
+            total_jobs_24h:
+              type: integer
+            success_rate_24h:
+              type: number
+            avg_response_time_ms:
+              type: number
+            active_alerts:
+              type: integer
+        services:
+          type: array
+          items:
+            type: object
+            required: [name, status]
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+                enum: [operational, degraded, outage]
+        updated_at:
+          type: string
+          format: date-time
+
+    # ── Gallery Delete ─────────────────────────────────────────────────────
+    GalleryDeleteRequest:
+      type: object
+      required: [jobId]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        restore:
+          type: boolean
+          default: false
+          description: When true, restores a previously soft-deleted job.
+
+    GalleryDeleteResponse:
+      type: object
+      required: [success, jobId]
+      properties:
+        success:
+          type: boolean
+        jobId:
+          type: string
+          format: uuid
+        deletedAt:
+          type: string
+          format: date-time
+          description: Present on delete operations.
+        restored:
+          type: boolean
+          description: Present and true on restore operations.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Paths
+# ──────────────────────────────────────────────────────────────────────────────
+
+paths:
+  # ── Device Token ──────────────────────────────────────────────────────────
+  /functions/v1/device-token:
+    post:
+      operationId: deviceTokenInitiate
+      summary: Initiate device authorization flow
+      description: >-
+        Generates device and user codes for the OAuth Device Flow. The CLI
+        displays the user code and verification URL; the user visits the URL
+        in their browser to authorize the device.
+      tags: [Authentication]
+      responses:
+        "200":
+          description: Device codes generated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceTokenInitiateResponse"
+        "409":
+          description: Code collision; retry the request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /functions/v1/device-token/poll:
+    post:
+      operationId: deviceTokenPoll
+      summary: Poll device authorization status
+      description: >-
+        The CLI polls this endpoint until the user approves or denies the
+        device, or the code expires.
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceTokenPollRequest"
+      responses:
+        "200":
+          description: Device authorized; API key returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceTokenPollApprovedResponse"
+        "400":
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: User denied the request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Device code not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Device code expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "428":
+          description: Authorization pending; continue polling.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /functions/v1/device-token/approve:
+    post:
+      operationId: deviceTokenApprove
+      summary: Approve a device authorization request
+      description: >-
+        Called by the web UI after the authenticated user confirms the device
+        code. Generates an API key and links it to the device session.
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceTokenApproveRequest"
+      responses:
+        "200":
+          description: Device approved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceTokenApproveResponse"
+        "400":
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Confirmation code mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User code not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Device code already used.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Device code expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+
+  # ── Credits Check ────────────────────────────────────────────────────────
+  /functions/v1/credits-check:
+    get:
+      operationId: creditsCheck
+      summary: Get billing state and credit balance
+      description: >-
+        Returns the authenticated user's plan details, credit balances, and
+        tier-based feature limits. Includes self-healing logic to allocate
+        monthly credits if a Stripe webhook was missed.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Billing state returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditsCheckResponse"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Generate ─────────────────────────────────────────────────────────────
+  /functions/v1/generate:
+    post:
+      operationId: generate
+      summary: Submit a media generation job
+      description: >-
+        11-step pipeline: authenticate, validate, lookup model, check circuit
+        breaker, check tier and concurrent limits, calculate cost, handle
+        idempotency, deduct credits atomically, resolve media URLs, submit to
+        provider, create job record.
+      tags: [Generation]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRequest"
+      responses:
+        "201":
+          description: Job submitted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateResponse"
+        "200":
+          description: Dry-run cost estimate (when dry_run=true).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateDryRunResponse"
+        "400":
+          description: Invalid input or content moderation failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "402":
+          description: Insufficient credits.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsufficientCreditsError"
+        "403":
+          description: Model not available on plan or feature disabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Duplicate idempotency key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateResponse"
+        "429":
+          description: Rate limit or concurrent job limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Provider error (credits refunded).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Error"
+                  - type: object
+                    properties:
+                      credits_refunded:
+                        type: integer
+        "503":
+          description: Provider temporarily unavailable (circuit breaker open).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Error"
+                  - type: object
+                    properties:
+                      retry_after:
+                        type: integer
+                      provider_slug:
+                        type: string
+
+  # ── Job Status ───────────────────────────────────────────────────────────
+  /functions/v1/job-status:
+    post:
+      operationId: jobStatus
+      summary: Query or cancel generation jobs
+      description: >-
+        Multi-purpose endpoint for single job lookup, paginated listing, and
+        job cancellation. The action is determined by the request body shape.
+      tags: [Jobs]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/JobStatusSingleRequest"
+                - $ref: "#/components/schemas/JobStatusListRequest"
+                - $ref: "#/components/schemas/JobStatusCancelRequest"
+      responses:
+        "200":
+          description: >-
+            Job data returned. Shape depends on request type: single job
+            object, job list with total count, or cancel confirmation.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/GenerationJob"
+                  - $ref: "#/components/schemas/JobListResponse"
+                  - $ref: "#/components/schemas/JobCancelResponse"
+        "400":
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Poll Provider ────────────────────────────────────────────────────────
+  /functions/v1/poll-provider:
+    post:
+      operationId: pollProvider
+      summary: Poll provider for job completion
+      description: >-
+        Server-side polling fallback when provider webhooks are unreliable.
+        Checks the provider API directly; if the job has completed, downloads
+        the media to Supabase Storage and finalizes the job record.
+      tags: [Jobs]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PollProviderRequest"
+      responses:
+        "200":
+          description: Current job status from provider.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PollProviderResponse"
+        "400":
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server configuration error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Provider API error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Pricing ──────────────────────────────────────────────────────────────
+  /functions/v1/pricing:
+    get:
+      operationId: pricing
+      summary: Get model pricing
+      description: >-
+        Returns credit costs and USD prices for all active models. Public
+        endpoint; no authentication required. Supports optional model filter.
+      tags: [Billing]
+      parameters:
+        - name: model
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter pricing to a specific model slug.
+      responses:
+        "200":
+          description: Pricing data returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingResponse"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Upload URL ───────────────────────────────────────────────────────────
+  /functions/v1/upload-url:
+    post:
+      operationId: uploadUrl
+      summary: Generate a presigned upload URL
+      description: >-
+        Creates a presigned URL for uploading input media to Supabase Storage.
+        Used for image-to-video workflows where the user provides a reference
+        image or video.
+      tags: [Storage]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Invalid filename or content type.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Storage error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Checkout ─────────────────────────────────────────────────────────────
+  /functions/v1/checkout:
+    post:
+      operationId: checkout
+      summary: Create a Stripe Checkout session
+      description: >-
+        Creates a Stripe Checkout Session for subscription upgrades or PAYG
+        credit pack purchases. Returns the hosted checkout page URL.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "200":
+          description: Checkout session created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+        "400":
+          description: Invalid plan or pack.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Stripe or server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Stripe Portal ────────────────────────────────────────────────────────
+  /functions/v1/stripe-portal:
+    post:
+      operationId: stripePortal
+      summary: Create a Stripe Customer Portal session
+      description: >-
+        Generates a URL to the Stripe-hosted billing portal where users can
+        manage subscriptions, payment methods, and view invoices.
+      tags: [Billing]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StripePortalRequest"
+      responses:
+        "200":
+          description: Portal session created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StripePortalResponse"
+        "400":
+          description: No active subscription or invalid return URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Stripe or server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── API Key Manage ───────────────────────────────────────────────────────
+  /functions/v1/apikey-manage:
+    post:
+      operationId: apikeyManage
+      summary: Manage API keys
+      description: >-
+        Create, list, or revoke API keys. The action is determined by the
+        `action` field in the request body. Keys use the `am_` prefix and are
+        stored as SHA-256 hashes.
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/ApiKeyCreateRequest"
+                - $ref: "#/components/schemas/ApiKeyListRequest"
+                - $ref: "#/components/schemas/ApiKeyRevokeRequest"
+      responses:
+        "200":
+          description: List or revoke result.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ApiKeyListResponse"
+                  - $ref: "#/components/schemas/ApiKeyRevokeResponse"
+        "201":
+          description: API key created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreateResponse"
+        "400":
+          description: Invalid action or params, or key limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Key not found (revoke).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Usage Stats ──────────────────────────────────────────────────────────
+  /functions/v1/usage-stats:
+    get:
+      operationId: usageStats
+      summary: Get usage analytics
+      description: >-
+        Returns usage analytics for the authenticated user including job
+        summaries, per-model breakdowns, daily trends, and operation type
+        distributions.
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["7d", "30d", "90d"]
+            default: "30d"
+          description: Time period for analytics data.
+      responses:
+        "200":
+          description: Usage statistics returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageStatsResponse"
+        "400":
+          description: Invalid period parameter.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Health Status ────────────────────────────────────────────────────────
+  /functions/v1/health-status:
+    get:
+      operationId: healthStatus
+      summary: Get system health status
+      description: >-
+        Public endpoint returning system health, provider status, circuit
+        breaker state, and active alerts. No authentication required.
+      tags: [System]
+      responses:
+        "200":
+          description: Health status returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatusResponse"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Gallery Delete ───────────────────────────────────────────────────────
+  /functions/v1/gallery-delete:
+    post:
+      operationId: galleryDelete
+      summary: Soft-delete or restore a gallery item
+      description: >-
+        Soft-deletes a generation job by setting the deleted_at timestamp, or
+        restores a previously deleted job. Only jobs owned by the
+        authenticated user can be affected.
+      tags: [Gallery]
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GalleryDeleteRequest"
+      responses:
+        "200":
+          description: Job deleted or restored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GalleryDeleteResponse"
+        "400":
+          description: Invalid job ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Job not found or already in target state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+tags:
+  - name: Authentication
+    description: Device authorization flow and API key management.
+  - name: Billing
+    description: Credits, pricing, checkout, and subscription management.
+  - name: Generation
+    description: Media generation pipeline.
+  - name: Jobs
+    description: Job status tracking and provider polling.
+  - name: Storage
+    description: Media upload via presigned URLs.
+  - name: Gallery
+    description: Gallery item management (soft-delete/restore).
+  - name: Analytics
+    description: Usage statistics and reporting.
+  - name: System
+    description: System health and observability.

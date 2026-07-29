@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>vNext — Fix Commit Proposal</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 920px; margin: 40px auto; padding: 0 24px; line-height: 1.55; color: #222; background: #fafafa; }
+  h1 { font-size: 28px; border-bottom: 2px solid #333; padding-bottom: 8px; }
+  h2 { font-size: 22px; margin-top: 32px; color: #1a3a5c; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 18px 22px; margin: 16px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>Fix commit — done. Next step needs your pick.</h1>
+
+<div class="box ok">
+<strong>Builds green.</strong> Worker typecheck exit 0. api-v2 build exit 0.
+</div>
+
+<h2>What landed on the working tree</h2>
+<table>
+  <tr><th>Fix</th><th>Where</th></tr>
+  <tr><td>#1 CRITICAL — SSRF allowlist on <code>reference_photo_url</code> + <code>redirect: 'error'</code></td><td><code>portrait-gpt2.ts</code></td></tr>
+  <tr><td>#2 HIGH — Retry safety: if run already <code>succeeded</code>, return existing artifact (no double OpenAI spend)</td><td><code>portrait-gpt2.ts</code></td></tr>
+  <tr><td>#3 HIGH — Heartbeats after reference fetch, after OpenAI, after R2 upload</td><td><code>portrait-gpt2.ts</code></td></tr>
+  <tr><td>#4 HIGH — Idempotency-Key lookup in API route (return existing run instead of re-INSERT)</td><td><code>routes/v1/primitives.ts</code></td></tr>
+  <tr><td>Bonus — <code>classifyOpenAIError</code> + 4xx codes in <code>nonRetryableErrorTypes</code> (400/401/403/404/413/415/422/451)</td><td><code>openai.ts</code> + <code>workflows/portrait-gpt2.ts</code></td></tr>
+  <tr><td>Bonus — reference 5xx now retries (vs prior non-retryable)</td><td><code>portrait-gpt2.ts</code></td></tr>
+</table>
+
+<h2>Not addressed (lower priority)</h2>
+<ul>
+  <li><strong>#5 budget race</strong> — document only as accepted V1 risk in <code>PORTRAIT_GPT2.md</code>.</li>
+  <li><strong>#8 migration</strong> — add <code>DEFAULT gen_random_uuid()</code> on <code>primitive_runs.id</code>.</li>
+  <li><strong>#9 migration</strong> — covering partial index for the budget-cap query.</li>
+  <li><strong>#10–#12</strong> — singleton clients, <code>numeric(12,6)</code> precision, generated Supabase Database types. Defer.</li>
+</ul>
+
+<h2>Pick one</h2>
+<div class="box ask">
+<ol>
+  <li><strong>(a)</strong> Commit the fixes + the V1 budget-race doc note, push, continue to smoke test.</li>
+  <li><strong>(b)</strong> Also write the follow-up migration for #8 + #9 first (schema and code in one PR push), then smoke test.</li>
+  <li><strong>(c)</strong> Something else.</li>
+</ol>
+<p>Recommended: <strong>(b)</strong>. The migration is forward-only additive and pairs naturally with the code that uses it.</p>
+</div>
+
+</body>
+</html>

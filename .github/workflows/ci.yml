@@ -1,0 +1,245 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-lint-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-lint-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-typecheck-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-typecheck-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-build-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+  # ─── Tests ────────────────────────────────────────────────────────────────
+  # All tests must pass before merge. Enable branch protection in GitHub
+  # settings (Settings > Branches > Branch protection rules) and require
+  # the "test" job to pass before merging to main.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-test-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-test-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Run workspace tests (turbo)
+        run: pnpm test
+
+      - name: Run Stripe plans tests
+        run: |
+          npx tsc -p tsconfig.test.json
+          node --test dist-tests/stripe-plans.test.js
+
+      - name: CLI smoke test — version
+        run: node apps/cli/dist/index.js --version
+
+      - name: CLI smoke test — help
+        run: node apps/cli/dist/index.js --help
+
+  validate-migrations:
+    name: Validate Migrations
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate SQL migration files exist and are ordered
+        shell: bash
+        run: |
+          echo "Checking migration file naming convention..."
+          migration_dir="supabase/migrations"
+          if [ ! -d "$migration_dir" ]; then
+            echo "ERROR: migrations directory not found"
+            exit 1
+          fi
+
+          count=$(ls -1 "$migration_dir"/*.sql 2>/dev/null | wc -l)
+          echo "Found $count migration files"
+
+          if [ "$count" -eq 0 ]; then
+            echo "ERROR: no migration files found"
+            exit 1
+          fi
+
+          # Verify all migration files follow the naming convention
+          for f in "$migration_dir"/*.sql; do
+            basename=$(basename "$f")
+            if ! echo "$basename" | grep -qE '^[0-9]{16}_[a-z_]+\.sql$'; then
+              echo "WARNING: migration file '$basename' does not follow naming convention YYYYMMDDHHMMSS_name.sql"
+            fi
+          done
+
+          echo "Migration validation passed."
+
+      - name: Validate import_map.json
+        shell: bash
+        run: |
+          echo "Checking supabase/functions/import_map.json..."
+          if [ ! -f "supabase/functions/import_map.json" ]; then
+            echo "ERROR: import_map.json not found"
+            exit 1
+          fi
+          # Validate JSON syntax
+          python3 -m json.tool supabase/functions/import_map.json > /dev/null
+          echo "import_map.json is valid JSON."
+
+      - name: Validate Edge Function structure
+        shell: bash
+        run: |
+          echo "Checking Edge Function directories..."
+          for fn_dir in supabase/functions/*/; do
+            fn_name=$(basename "$fn_dir")
+            if [ "$fn_name" = "_shared" ]; then
+              continue
+            fi
+            if [ ! -f "$fn_dir/index.ts" ]; then
+              echo "ERROR: $fn_dir is missing index.ts"
+              exit 1
+            fi
+            echo "  OK: $fn_name/index.ts"
+          done
+          echo "Edge Function validation passed."

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design — Voice (ElevenLabs) primitive: photo + voice → talking video</title>
+<style>
+:root{color-scheme:dark}body{background:#0d0e14;color:#e7e7ef;font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:44px 24px}
+.wrap{max-width:940px;margin:0 auto}h1{font-size:27px;margin:0 0 4px}h2{font-size:19px;margin:34px 0 10px;padding-bottom:6px;border-bottom:1px solid #23252f}h3{font-size:15px;margin:16px 0 6px;color:#cdd}
+code{background:#1a1c25;padding:1px 6px;border-radius:5px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#c9d4ff}
+pre{background:#14161f;border:1px solid #23252f;border-radius:10px;padding:14px;overflow:auto;font-size:12.5px;line-height:1.5}
+.box{background:#14161f;border:1px solid #23252f;border-radius:12px;padding:14px 18px;margin:12px 0}
+.rec{border-left:3px solid #34d399;padding-left:14px}.warn{border-left:3px solid #fbbf24;padding-left:14px}.bad{border-left:3px solid #f87171;padding-left:14px}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}th,td{border-bottom:1px solid #23252f;padding:7px 9px;text-align:left;vertical-align:top}th{color:#9aa}
+ul{padding-left:20px}li{margin:5px 0}.tag{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.4);color:#c9b8ff}
+</style></head><body><div class="wrap">
+<h1>Voice primitive — “upload a photo + your voice → video of you, in your voice”</h1>
+<p style="color:#9aa">Short answer: <b>yes, very possible</b>, and you already own most of the tech. Below is how it should be built and the one architectural decision that makes or breaks it.</p>
+
+<h2>Where we are today</h2>
+<ul>
+<li><code>make_simple_selfie</code> calls Seedance with <code>generate_audio: true</code> → Seedance invents a <b>generic synthetic voice</b> and lip-syncs the face to it. The voice is <b>not</b> the user's.</li>
+<li>The legacy <code>media-worker-v2</code> already has working <b>ElevenLabs</b> code: <code>elevenlabs-tts.js</code>, <code>dubbing.js</code> (also Hume + OpenAI TTS). So TTS + voice handling is <b>proven in this codebase</b> — we port the approach into a vNext primitive, not invent it.</li>
+</ul>
+
+<h2>The one decision that matters: where does the voice come from?</h2>
+<p>You can't just generate a Seedance talking-head and swap its audio for the cloned voice — the lips were synced to Seedance's audio, so a swap drifts out of sync. There are two clean architectures:</p>
+<table>
+<tr><th>Approach</th><th>Flow</th><th>Verdict</th></tr>
+<tr><td><b>A — Generate then dub</b></td><td>Seedance makes video+voice → replace audio with ElevenLabs cloned voice → run a <b>lip-sync re-alignment</b> pass to re-match the mouth to the new audio.</td><td class="warn">Works but 2 video passes, lip-sync risk, more cost/latency. This is essentially what legacy <code>dubbing.js</code> does.</td></tr>
+<tr><td><b>B — Audio-first (recommended)</b></td><td>ElevenLabs makes the cloned-voice audio <b>first</b> → feed that audio into an <b>audio-driven lip-sync video</b> model (lips follow the real audio). Audio is the source of truth.</td><td class="rec">Cleaner, one source of truth, tightest sync. This is the right architecture.</td></tr>
+</table>
+<div class="box rec"><b>Recommendation: Approach B.</b> Voice is generated first and the mouth is driven from it, so lip-sync is correct by construction instead of patched after the fact.</div>
+
+<h2>Proposed primitives (2 new + 1 composed extension)</h2>
+
+<h3>1. <code>clone_voice</code> <span class="tag">new primitive</span></h3>
+<ul>
+<li><b>In:</b> <code>voice_sample_url</code> (R2-hosted, ~30s–2min of the user talking) + <code>consent: true</code>.</li>
+<li><b>Does:</b> ElevenLabs Instant Voice Cloning (<code>POST /v1/voices/add</code>) → returns a <code>voice_id</code>.</li>
+<li><b>Out:</b> persisted <code>voice_id</code> (new <code>voices</code> table, or a column on the character/actor). One-time per person — reused across all their videos.</li>
+<li><b>Note:</b> ElevenLabs requires a <b>consent/verification</b> step for cloning a real voice. We must capture explicit consent in the UI/API and store it. Compliance, not optional.</li>
+</ul>
+
+<h3>2. <code>voiced_selfie</code> <span class="tag">new primitive</span> (or an optional <code>voice_id</code> on <code>simple_selfie</code>)</h3>
+<pre>character_sheet_url + script + voice_id
+   │
+   ├─ 1. ElevenLabs TTS(script, voice_id)            → cloned-voice audio.mp3 → R2
+   ├─ 2. audio-driven lip-sync video
+   │        (character image + audio  →  mouth follows audio)   → talking.mp4
+   └─ 3. (optional) subtitles primitive on top</pre>
+<ul>
+<li><b>Lip-sync engine:</b> use the EvoLink Kling lip-sync you already use elsewhere (memory: it degrades past ~10s, so the primitive must <b>auto-split scripts &gt;10s</b> into ≤10s segments and stitch — same rule we already enforce).</li>
+<li><b>Extract audio before any re-encode</b> to avoid A/V drift (existing house rule).</li>
+</ul>
+
+<h3>3. Compose: extend <code>make_ugc_video</code> <span class="tag">composed</span></h3>
+<pre>photo (upload)  ─►  portrait/character_sheet   (identity)   [have this]
+voice sample    ─►  clone_voice → voice_id      (voice)      [new]
+script + voice_id ─► voiced_selfie              (talking video) [new]
+                   ─► subtitles                                  [have this]
+                   = final video of the user, speaking in their own voice</pre>
+
+<h2>End-user experience</h2>
+<ol>
+<li>User uploads <b>1 photo</b> + a <b>short voice clip</b> of themselves (and ticks consent).</li>
+<li>One call: <code>make_ugc_video</code> with <code>portrait_image</code> + <code>voice_sample</code> + <code>script</code>.</li>
+<li>Out: a 9:16 video that <b>looks like them and sounds like them</b>, lip-synced, optionally captioned.</li>
+<li>Their <code>voice_id</code> + character sheet are saved → every future video reuses them instantly (no re-upload).</li>
+</ol>
+
+<h2>How it fits the primitive runtime (no new patterns)</h2>
+<ul>
+<li>Same shape as existing primitives: Temporal workflow + activity, writes <code>primitive_runs</code>, uploads artifacts to R2, deducts credits at activity start (now idempotent), refunds on terminal failure.</li>
+<li>New client: <code>client/elevenlabs.ts</code> (port from <code>media-worker-v2/src/elevenlabs-tts.js</code>). New env: <code>ELEVENLABS_API_KEY</code>.</li>
+<li>New schema contracts: <code>CloneVoiceToolInput</code>, <code>VoicedSelfieToolInput</code>. Register in the skill registry → automatically flows to REST + MCP + CLI + public plugin via the codegen we already have.</li>
+<li>Storage: voice samples + generated audio under <code>vnext/primitive-runs/&lt;id&gt;/</code>, R2-allowlisted (SSRF guard applies to <code>voice_sample_url</code> too).</li>
+</ul>
+
+<h2>Risks / things to decide</h2>
+<ul>
+<li><b>Lip-sync quality past 10s</b> — must auto-split + stitch (proven constraint).</li>
+<li><b>ElevenLabs consent/compliance</b> — capture + store explicit consent for cloning a real voice; surface it in the UI.</li>
+<li><b>Cost/latency</b> — adds an ElevenLabs TTS call + a lip-sync video pass per clip; price the credit cost accordingly.</li>
+<li><b>Quality bar</b> — audio-driven lip-sync must hit the same realism bar as the selfie (no uncanny mouth). Validate the same way: render + eyeball.</li>
+<li><b>IVC vs Professional cloning</b> — Instant (fast, ~30s sample) is the right default; Professional (higher fidelity, more sample, hours to train) optional later.</li>
+</ul>
+
+<h2>Recommendation &amp; sequencing</h2>
+<div class="box rec">
+Build it as <b>Approach B</b>, two primitives (<code>clone_voice</code>, <code>voiced_selfie</code>) + extend <code>make_ugc_video</code>. Port ElevenLabs from the legacy worker rather than rebuild.
+<br><br>
+<b>But not yet</b> — finish validating the current 6-skill pass first (we're mid-Phase 2, the glow-fixed selfie is rendering now). Voice is a clean follow-on sprint once the base pipeline is signed off. I'd scope it as its own TaskML sprint.
+</div>
+</div></body></html>

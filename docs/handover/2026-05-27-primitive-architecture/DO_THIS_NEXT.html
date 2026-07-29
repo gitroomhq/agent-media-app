@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Do this next — Step 3</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 820px; margin: 40px auto; padding: 0 24px; line-height: 1.7; color: #222; background: #fafafa; }
+  h1 { font-size: 30px; }
+  .step { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 22px 26px; margin: 22px 0; }
+  .step h2 { margin-top: 0; font-size: 22px; color: #1a3a5c; }
+  .substep { background: #fafafa; border-left: 3px solid #1a3a5c; padding: 12px 16px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+  .num { display: inline-block; width: 28px; height: 28px; line-height: 28px; background: #1a3a5c; color: #fff; border-radius: 50%; text-align: center; font-weight: 700; margin-right: 6px; vertical-align: middle; font-size: 14px; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; padding: 12px 18px; border-radius: 6px; margin: 12px 0; }
+  .tip { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 18px; border-radius: 6px; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+  td, th { padding: 7px 9px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>Step 3 — create the Railway service</h1>
+<div class="ok">Migration ✓ applied. On to creating the new Railway service.</div>
+
+<p>This makes a new service alongside <code>temporal-worker</code> and <code>media-worker-v2</code>. It will run the new primitive worker. We're starting it in <strong>simulate mode</strong> — no real OpenAI calls yet.</p>
+
+<div class="step">
+<h2>3.1 — Open Railway and create the service</h2>
+<div class="substep"><span class="num">1</span> In your Railway dashboard, open the same <strong>agent-media production</strong> project (the one with temporal-worker, media-worker-v2, api-v2).</div>
+<div class="substep"><span class="num">2</span> Top-right: click <strong>"+ Add"</strong> → <strong>"GitHub Repo"</strong>.</div>
+<div class="substep"><span class="num">3</span> Pick <strong><code>yuvalsuede/agent-media</code></strong>.</div>
+<div class="substep"><span class="num">4</span> In the service that appears, click <strong>Settings</strong> (gear icon at top of the service detail pane).</div>
+</div>
+
+<div class="step">
+<h2>3.2 — Set the basics</h2>
+<table>
+<tr><th>Field</th><th>Value</th></tr>
+<tr><td>Service Name</td><td><code>primitive-worker-vnext</code></td></tr>
+<tr><td>Branch</td><td><code>vnext/primitive-foundation</code></td></tr>
+<tr><td>Root Directory</td><td>leave empty (the repo root)</td></tr>
+<tr><td>Build Command</td><td><code>pnpm install --frozen-lockfile &amp;&amp; pnpm --filter @agentmedia/schema build &amp;&amp; pnpm --filter primitive-worker-vnext build</code></td></tr>
+<tr><td>Start Command</td><td><code>pnpm --filter primitive-worker-vnext start</code></td></tr>
+<tr><td>Watch Paths (optional)</td><td><code>services/primitive-worker-vnext/**</code></td></tr>
+</table>
+<div class="tip">This is a Temporal worker — it does <strong>not</strong> need a public domain. Don't expose any port. Don't generate a domain.</div>
+</div>
+
+<div class="step">
+<h2>3.3 — Set the env variables</h2>
+<p>In the new service: <strong>Variables</strong> tab → paste these. For R2 and Supabase values, use the <strong>"Add from another service"</strong> feature and copy from <code>media-worker-v2</code> or <code>api-v2</code> — don't paste secrets into chat or random fields.</p>
+<pre>TEMPORAL_ADDRESS=us-west-2.aws.api.temporal.io:7233
+TEMPORAL_NAMESPACE=quickstart-agent-media.v5v8r
+TEMPORAL_API_KEY=&lt;same Temporal API key as before&gt;
+TEMPORAL_TLS=true
+TEMPORAL_PRIMITIVE_TASK_QUEUE=primitive-vnext-v1
+
+OPENAI_API_KEY=&lt;same OpenAI key as before&gt;
+OPENAI_IMAGE_MODEL=gpt-image-2
+
+R2_ACCOUNT_ID=&lt;copy from media-worker-v2&gt;
+R2_ACCESS_KEY_ID=&lt;copy from media-worker-v2&gt;
+R2_SECRET_ACCESS_KEY=&lt;copy from media-worker-v2&gt;
+R2_BUCKET=agent-media-outputs
+R2_PUBLIC_URL=https://pub-16e2ed8f6be84691845e91436920ce0a.r2.dev
+
+SUPABASE_URL=&lt;copy from api-v2&gt;
+SUPABASE_SERVICE_ROLE_KEY=&lt;copy from api-v2&gt;
+
+PRIMITIVE_CAP_USD=0.50
+RUN_CAP_USD=5.00
+DAY_CAP_USD=20.00
+
+SIMULATE_OPENAI=true</pre>
+<div class="tip"><strong>SIMULATE_OPENAI=true</strong> is critical. Keep it true for now — that's what stops any real OpenAI spend until we test the wiring.</div>
+</div>
+
+<div class="step">
+<h2>3.4 — Deploy</h2>
+<div class="substep"><span class="num">1</span> Hit <strong>Deploy</strong> on the new service.</div>
+<div class="substep"><span class="num">2</span> Watch the <strong>Build Logs</strong>. You should see <code>pnpm install</code>, then schema build, then primitive-worker-vnext build.</div>
+<div class="substep"><span class="num">3</span> Once build is done, watch the <strong>Deploy Logs</strong>. You should see one line like:<br>
+<pre>[primitive-worker-vnext] listening namespace=quickstart-agent-media.v5v8r queue=primitive-vnext-v1 simulate=true</pre>
+</div>
+</div>
+
+<div class="step">
+<h2>What I need from you when this is done</h2>
+<p>Just one thing: paste (or screenshot) the log line that starts with <code>[primitive-worker-vnext] listening...</code>.</p>
+<p>If the build or deploy fails, paste the last 20 lines of whichever logs failed.</p>
+</div>
+
+</body>
+</html>

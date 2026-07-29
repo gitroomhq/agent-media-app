@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>End-to-end UGC flow — what we still need</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 960px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 22px; margin-top: 32px; color: #1a3a5c; }
+  h3 { font-size: 17px; margin-top: 20px; color: #444; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .gap { background: #fef2f2; border-left: 4px solid #dc2626; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<h1>What a user can do today, and what's missing</h1>
+
+<h2>✅ Live on prod RIGHT NOW (REST + MCP)</h2>
+<div class="ok">
+<p>Any authenticated user (their <code>ma_*</code> Bearer key) can hit these:</p>
+<table>
+<tr><th>Skill</th><th>Input</th><th>Output</th></tr>
+<tr><td><code>make_portrait</code></td><td>text description (+optional R2 reference photo)</td><td>portrait PNG on R2</td></tr>
+<tr><td><code>make_character_sheet</code></td><td>portrait URL OR base64 image</td><td>character sheet PNG on R2</td></tr>
+<tr><td><code>make_simple_selfie</code></td><td>character sheet URL + script + duration</td><td>vertical MP4 with lip-synced audio on R2</td></tr>
+</table>
+<p>Same skills exposed as MCP tools at <code>POST https://api.agent-media.ai/mcp</code> for Claude.ai / Cursor / etc.</p>
+</div>
+
+<h2>What's missing for the "describe OR upload → finished video" UX</h2>
+
+<div class="gap">
+<p>To get a video out the door today a user needs <strong>three separate API calls</strong>:</p>
+<ol>
+  <li><code>POST /v1/skills/make_portrait/run</code> → wait → get portrait_url</li>
+  <li><code>POST /v1/skills/make_character_sheet/run</code> → wait → get sheet_url</li>
+  <li><code>POST /v1/skills/make_simple_selfie/run</code> → wait → get video_url</li>
+</ol>
+<p>That's not a product UX. We need a <strong>composed skill</strong> that does all three in one call.</p>
+</div>
+
+<h2>What we'd build: <code>make_ugc_video</code> (composed skill)</h2>
+
+<h3>Input (one call)</h3>
+<pre>POST /v1/skills/make_ugc_video/run
+{
+  // EXACTLY ONE source of identity:
+  "description":  "a friendly young woman, soft daylight",          // text-only OR
+  "portrait_url": "https://pub-...r2.dev/...",                       // OR R2 url OR
+  "portrait_image_base64": "iVBORw0KGgo...",                         // OR uploaded bytes
+
+  // What they say:
+  "script":   "Honestly, this app changed my morning routine.",      // word count 2-4 wps
+  "duration": 5,                                                     // 5 | 10 | 15
+
+  // Optional:
+  "character_description": "Sara, 28 years old",                     // ≤10 words for sheet
+  "location": "bright kitchen window light",
+  "pose":     "leaning slightly on counter"
+}
+</pre>
+
+<h3>What happens server-side (one Temporal workflow, three steps)</h3>
+<table>
+<tr><th>Step</th><th>Activity</th><th>Note</th></tr>
+<tr><td>0</td><td>normalize input</td><td>If base64 → R2 upload. If description only → step 1. If portrait_url → skip to step 2.</td></tr>
+<tr><td>1</td><td><code>portraitGpt2</code></td><td>only when no portrait was supplied</td></tr>
+<tr><td>2</td><td><code>characterSheetGpt2</code></td><td>from portrait_url</td></tr>
+<tr><td>3</td><td><code>simpleSelfie</code></td><td>from character_sheet_url + script + duration</td></tr>
+</table>
+
+<h3>Status surface (one run_id, the user polls)</h3>
+<pre>GET /v1/skills/runs/{skill_run_id}
+→ {
+    "skill_run_id": "...",
+    "status": "running",
+    "current_step": "character_sheet",
+    "steps": [
+      { "primitive": "portrait_gpt2",         "status": "succeeded", "url": "..." },
+      { "primitive": "character_sheet_gpt2",  "status": "running",   "url": null },
+      { "primitive": "simple_selfie",         "status": "pending",   "url": null }
+    ],
+    "final_video_url": null      // populated when last step succeeds
+  }</pre>
+
+<h2>Concrete build list</h2>
+
+<table>
+<tr><th>#</th><th>What</th><th>Where</th></tr>
+<tr><td>1</td><td>Schema <code>MakeUgcVideoSkillInputSchema</code> (XOR on the three identity inputs)</td><td><code>services/api-v2/src/skills/registry.ts</code></td></tr>
+<tr><td>2</td><td>New table <code>skill_runs</code> (id, user_id, skill_slug, status, current_step, started_at, finished_at, error, …) + a join table <code>skill_run_steps</code> (skill_run_id, ordinal, primitive_id, primitive_run_id, status, url)</td><td>raw SQL migration under <code>supabase/migrations/</code></td></tr>
+<tr><td>3</td><td>Temporal workflow <code>makeUgcVideoWorkflow</code> in primitive-worker-vnext that:
+  <ul>
+    <li>Inserts a <code>skill_runs</code> row.</li>
+    <li>Calls the three Activities in sequence (skipping step 1 if portrait already supplied).</li>
+    <li>Updates <code>skill_run_steps</code> after each step.</li>
+    <li>Sets final status + final_video_url.</li>
+  </ul>
+</td><td><code>services/primitive-worker-vnext/src/workflows/make-ugc-video.ts</code></td></tr>
+<tr><td>4</td><td>Skill registry entry <code>make_ugc_video</code> with the composed schema + workflow type.</td><td>registry.ts</td></tr>
+<tr><td>5</td><td>API route <code>POST /v1/skills/make_ugc_video/run</code> handles the base64 → R2 normalization (reuses the existing r2-upload helper).</td><td><code>services/api-v2/src/routes/v1/skills.ts</code></td></tr>
+<tr><td>6</td><td>API route <code>GET /v1/skills/runs/:skill_run_id</code> returns the composed run + step list (one query joining <code>skill_runs</code> + <code>skill_run_steps</code> + <code>primitive_artifacts</code>).</td><td>skills.ts</td></tr>
+<tr><td>7</td><td>MCP auto-picks-up via the registry. SKILL.md row. OpenAPI entries.</td><td>—</td></tr>
+</table>
+
+<h2>Cost &amp; time per end-to-end run</h2>
+<table>
+<tr><th>Step</th><th>USD</th><th>Wall time</th></tr>
+<tr><td>portrait_gpt2 (when needed)</td><td>~$0.20</td><td>~60s</td></tr>
+<tr><td>character_sheet_gpt2</td><td>~$0.20</td><td>~90s</td></tr>
+<tr><td>simple_selfie (5s)</td><td>~$0.60</td><td>~4–5 min</td></tr>
+<tr><td><strong>Total</strong></td><td><strong>~$1.00</strong> (text-to-video) or ~$0.80 (image-to-video)</td><td>~7 min</td></tr>
+</table>
+
+<h2>Things NOT in this composed skill</h2>
+<ul>
+  <li><strong>Wireframe</strong> step — the prod selfie pipeline has it for scene continuity. Simple UGC video can skip it; we'll add a <code>make_ugc_video_pro</code> later if needed.</li>
+  <li><strong>Subtitles burn-in</strong> — separate <code>subtitles</code> primitive, future composed skill.</li>
+  <li><strong>Product hold</strong> — a different composed skill (<code>make_product_ugc_video</code>) when we have the product-handling primitive.</li>
+</ul>
+
+<h2>Bottom line</h2>
+<div class="ask">
+<p>What you need to give a real end-user a "describe OR upload → finished video" flow:</p>
+<ol>
+  <li>One composed skill (<code>make_ugc_video</code>) — single POST, one workflow, three primitives chained.</li>
+  <li>One new table pair (<code>skill_runs</code> + <code>skill_run_steps</code>) + a small migration.</li>
+  <li>One status endpoint (<code>GET /v1/skills/runs/:id</code>).</li>
+</ol>
+<p>Time to build: ~1 hour. Cost per call: ~$1.</p>
+<p><strong>Confirm and I ship it.</strong></p>
+</div>
+
+</body>
+</html>

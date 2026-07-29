@@ -1,0 +1,36 @@
+{
+  "name": "primitive-worker-vnext",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/worker.js",
+    "dev": "tsx watch --env-file=../../.env.vnext.local src/worker.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@agentmedia/schema": "workspace:*",
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@aws-sdk/client-s3": "^3.1004.0",
+    "@sentry/node": "^10.56.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "@temporalio/activity": "^1.16.2",
+    "@temporalio/client": "^1.16.2",
+    "@temporalio/worker": "^1.16.2",
+    "@temporalio/workflow": "^1.16.2",
+    "openai": "^4.70.0",
+    "pino": "^10.3.1",
+    "undici": "^8.5.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.1.0"
+  }
+}

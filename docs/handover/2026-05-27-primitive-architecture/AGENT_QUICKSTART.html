@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent → Video — Quickstart</title>
+<style>
+:root{color-scheme:dark}body{background:#0d0e14;color:#e7e7ef;font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:44px 24px}
+.wrap{max-width:920px;margin:0 auto}h1{font-size:28px;margin:0 0 4px}h2{font-size:19px;margin:30px 0 8px;padding-bottom:6px;border-bottom:1px solid #23252f}h3{font-size:15px;margin:16px 0 6px;color:#cdd}
+.sub{color:#9aa}code{background:#1a1c25;padding:1px 6px;border-radius:5px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#c9d4ff}
+pre{background:#14161f;border:1px solid #23252f;border-radius:10px;padding:14px;overflow:auto;font-size:12.5px;line-height:1.5}
+.box{background:#14161f;border:1px solid #23252f;border-radius:12px;padding:14px 18px;margin:12px 0}
+.step{border-left:3px solid #A78BFA;padding-left:14px;margin:12px 0}
+ul{padding-left:20px}li{margin:5px 0}.tag{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.4);color:#c9b8ff}
+</style></head><body><div class="wrap">
+<h1>Get your agent making videos</h1>
+<p class="sub">Three things: (1) have credits, (2) connect your agent to agent-media, (3) call one skill. The headline skill is <code>make_ugc_video</code> — description + script → finished captioned video.</p>
+
+<h2>Step 0 — Credits + an API key</h2>
+<div class="step">
+<ul>
+<li>Buy credits on the dashboard (<code>app.agent-media.ai</code> → Add Credits). A 10s talking-head is ~280 credits.</li>
+<li>Get your API key: run <code>agent-media login</code> (opens a browser, stores a <code>ma_…</code> token), or grab it from the dashboard. Every surface authenticates with that Bearer token.</li>
+</ul>
+</div>
+
+<h2>Step 1 — Connect your agent (pick one)</h2>
+
+<h3>A) Claude Code / Cursor — the plugin <span class="tag">easiest</span></h3>
+<pre>claude /plugin install github.com/gitroomhq/agent-media</pre>
+<p>That installs the skills + the MCP tools. Then just tell the agent in plain language:</p>
+<pre>"Make a 10-second UGC video of a friendly 28-year-old woman saying:
+ 'Okay, this app changed my whole morning routine — you have to try it.'"</pre>
+<p>The agent picks <code>make_ugc_video</code>, runs it, and hands you back the video URL.</p>
+
+<h3>B) Any MCP agent (n8n, custom, Windsurf…)</h3>
+<p>Add the MCP server to your agent's <code>.mcp.json</code>:</p>
+<pre>{
+  "mcpServers": {
+    "agent-media": {
+      "command": "npx",
+      "args": ["-y", "-p", "@agentmedia/mcp-server@latest", "agent-media-mcp"],
+      "env": { "AGENT_MEDIA_API_KEY": "ma_your_key_here" }
+    }
+  }
+}</pre>
+<p>The agent now sees tools like <code>make_ugc_video</code>, <code>make_simple_selfie</code>, <code>make_lip_sync</code>, etc. (loaded live — always current).</p>
+
+<h3>C) Terminal / scripts — the CLI</h3>
+<pre>npm i -g agent-media-cli
+agent-media login
+agent-media skills run make_ugc_video --input @video.json
+agent-media skills status &lt;run_id&gt;</pre>
+
+<h3>D) Raw REST (any language)</h3>
+<pre>curl -X POST https://api.agent-media.ai/v1/skills/make_ugc_video/run \
+  -H "Authorization: Bearer ma_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{ "description": "a friendly 28-year-old woman, soft daylight",
+        "script": "Okay this changed my morning routine, you have to try it.",
+        "duration": 10, "subtitles": true }'</pre>
+
+<h2>Step 2 — One call makes the whole video</h2>
+<div class="box">
+<b><code>make_ugc_video</code></b> runs the full pipeline in one request: portrait → character sheet → lip-synced talking-head → burned-in captions.
+<ul>
+<li><b>Identity:</b> give EITHER <code>description</code> (text→video) OR <code>portrait_url</code> (R2-hosted image) OR an uploaded image.</li>
+<li><b>script:</b> what they say (2–4 words/sec of duration). <b>duration:</b> 5 / 10 / 15.</li>
+<li><b>subtitles:</b> true/false + <code>subtitles_style</code> (hormozi / tiktok / minimal).</li>
+</ul>
+Returns <code>{ skill_run_id }</code> → poll <code>GET /v1/skills/runs/&lt;id&gt;</code> → when <code>status: "succeeded"</code>, <code>final_output.video_url</code> is your MP4.
+</div>
+
+<h2>Variations</h2>
+<ul>
+<li><b>Bring your own voice:</b> <code>make_lip_sync</code> — give a face image + your own audio recording; it lip-syncs the face to YOUR audio (no TTS).</li>
+<li><b>Step-by-step</b> (approve each stage): <code>make_portrait</code> → <code>make_character_sheet</code> → <code>make_simple_selfie</code> → <code>make_subtitles</code>.</li>
+<li><b>Reuse a character:</b> keep the <code>character_sheet_url</code> and feed it to <code>make_simple_selfie</code> for every new script — same person, instantly.</li>
+</ul>
+
+<h2>That's it</h2>
+<p>Connect once (plugin / MCP / CLI / REST), make sure there are credits, call <code>make_ugc_video</code>. The agent gets a finished vertical UGC video back. All 7 skills are live and self-describe their inputs via MCP <code>tools/list</code>, so an agent can discover them with no extra docs.</p>
+</div></body></html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>portrait_gpt2 — Haiku-built prompt</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 920px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; background: #fafafa; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; margin-top: 28px; color: #1a3a5c; }
+  .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; margin: 16px 0; }
+  .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+  .ask { background: #eff6ff; border-left: 4px solid #2563eb; }
+  pre { background: #1a1a1a; color: #e6e6e6; padding: 12px 16px; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+  code { background: #f1f1f1; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+</style>
+</head>
+<body>
+
+<h1>Replace static prompt with Claude Haiku call</h1>
+
+<h2>New flow inside <code>portraitGpt2Activity</code></h2>
+<ol>
+  <li>Take user's <code>description</code>, <code>setting</code>, <code>aspect_ratio</code>, <code>realism_target</code>.</li>
+  <li>Call <strong>Claude Haiku</strong> with the instruction below.</li>
+  <li>Receive back a single-sentence portrait prompt.</li>
+  <li>Send THAT prompt to OpenAI <code>gpt-image-2</code>.</li>
+  <li>Store the Haiku-generated prompt in <code>primitive_runs.input.generated_prompt</code> so you can audit what was sent.</li>
+</ol>
+
+<h2>The instruction I'd give Haiku (system prompt)</h2>
+<div class="box ok">
+<pre>You are a portrait-prompt builder for a UGC-style photoreal image model (OpenAI gpt-image-2). Your only job: turn the user inputs below into a single image prompt.
+
+Hard rules:
+- Output ONE single sentence. No paragraphs, no line breaks, no markdown, no quotes around it.
+- Comma-separated clauses only. Stops are commas. Final period only.
+- Output ONLY the prompt. No preamble, no explanation.
+- The portrait must look like a real candid iPhone photo of a real person, not an AI render.
+
+Mandatory clauses to bake in every time (paraphrase freely, do not omit):
+- Skin realism: natural skin texture, visible pores, subtle freckles or tiny facial hairs, no plastic shine, no airbrushing, no AI artifacts.
+- Asymmetry & humanity: subtle facial asymmetries, micro-expressions, genuine eye catchlights, not perfectly symmetrical.
+- UGC aesthetic: candid iPhone selfie framing, slight handheld tilt, imperfect framing, subtle digital noise or film grain, shallow depth of field, softly blurred background, warm iPhone color grade, not studio-perfect.
+- Lighting (driven by realism_target):
+  * natural -> soft natural window daylight, gentle wrap shadows, ambient room reflection in the eyes.
+  * commercial -> clean commercial soft key light, neutral seamless backdrop, subtle catchlights, skin texture still preserved.
+  * raw_iphone -> unedited iPhone front camera selfie, raw HDR, slight handheld breathing, mild low-light grain, exposure imperfection.
+- Constraints tail: single subject, eyes engaged with camera, no text, no watermark, no logo.
+
+Stay faithful to the user's description and setting. Do not invent contradicting details. Do not flatter or hedge. Just emit the sentence.</pre>
+</div>
+
+<h2>Sample user input the Activity will pass</h2>
+<div class="box">
+<pre>{
+  "description": "a friendly young woman smiling at the camera, soft natural daylight, candid framing",
+  "setting": null,
+  "aspect_ratio": "1:1",
+  "realism_target": "natural"
+}</pre>
+</div>
+
+<h2>Cost &amp; latency added per portrait</h2>
+<ul>
+  <li>Haiku call: ~$0.001 + ~700ms.</li>
+  <li>Negligible vs the $0.20 OpenAI cost; worth it for prompt quality + auditability.</li>
+</ul>
+
+<h2>Model id</h2>
+<div class="box">
+<p>You said "Haiku 4.6". The latest Anthropic Haiku I have on record is <strong><code>claude-haiku-4-5</code></strong> (Oct 2025). If <code>claude-haiku-4-6</code> exists in your account, name it and I'll pin that exact ID. Otherwise I'll use <code>claude-haiku-4-5</code>.</p>
+</div>
+
+<h2>What changes in code</h2>
+<ul>
+  <li>Add <code>@anthropic-ai/sdk</code> to <code>services/primitive-worker-vnext/package.json</code>.</li>
+  <li>New file <code>src/client/anthropic.ts</code> — singleton Claude client + <code>buildPortraitPrompt(input)</code> async function.</li>
+  <li><code>activities/portrait-gpt2.ts</code>: replace the inline <code>buildPrompt()</code> with <code>await buildPortraitPrompt(input)</code>.</li>
+  <li>Persist the generated prompt into <code>primitive_runs.input.generated_prompt</code> for audit.</li>
+  <li>Add <code>ANTHROPIC_API_KEY</code> env var to <code>primitive-worker-vnext</code> in Railway (reuse the same key already on api-v2).</li>
+  <li>Haiku errors → retryable (it's just prompt synthesis; transient Anthropic outage shouldn't kill the run).</li>
+</ul>
+
+<div class="ask">
+<p><strong>Confirm:</strong></p>
+<ol>
+  <li>Model id: <code>claude-haiku-4-5</code> unless you correct.</li>
+  <li>Approve the instruction text above — or paste edits you want.</li>
+  <li>Approve cost: another ~$0.20 (OpenAI) + ~$0.001 (Haiku) for the re-test.</li>
+</ol>
+</div>
+
+</body>
+</html>
