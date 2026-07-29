@@ -15,6 +15,7 @@ import {
   Check,
 } from 'lucide-react';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
+import { getVar } from '@/components/variable-context';
 
 interface Actor {
   slug: string;
@@ -27,7 +28,12 @@ interface Actor {
 
 const DURATIONS = [5, 10, 15] as const;
 const WORDS_PER_SECOND = 3;
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+// Runtime config (see components/variable-context). Lazy on purpose: a
+// module-level const evaluates before the root layout publishes window.vars.
+const supabaseUrl = () =>
+  (getVar('supabaseUrl', process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') ?? '')
+    .trim()
+    .replace(/\/+$/, '');
 const UPLOAD_BUCKET = 'generation-inputs';
 
 function wordCount(s: string): number {
@@ -127,7 +133,7 @@ export default function ShowYourAppPage() {
         throw new Error(`Upload failed (${put.status}): ${errBody.slice(0, 200)}`);
       }
 
-      const url = `${SUPABASE_URL}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
+      const url = `${supabaseUrl()}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
       setAppScreenshotUrl(url);
 
       // Client-side vertical check

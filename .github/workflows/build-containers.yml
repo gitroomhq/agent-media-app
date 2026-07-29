@@ -47,11 +47,19 @@ jobs:
           - primitive-worker-vnext
           - subtitle-worker
           - brand-extractor
+        # arch must be a real matrix dimension so we get the 5x2 cross-product.
+        # `include` is used ONLY to map each arch onto its native runner: an
+        # include entry introducing new keys is merged into every combination,
+        # so two entries both defining `runnertags` would overwrite each other
+        # and silently build one arch twice.
+        arch:
+          - amd64
+          - arm64
         include:
-          - runnertags: ubuntu-latest
-            arch: amd64
-          - runnertags: ubuntu-24.04-arm
-            arch: arm64
+          - arch: amd64
+            runnertags: ubuntu-latest
+          - arch: arm64
+            runnertags: ubuntu-24.04-arm
     runs-on: ${{ matrix.runnertags }}
     steps:
       - name: Checkout

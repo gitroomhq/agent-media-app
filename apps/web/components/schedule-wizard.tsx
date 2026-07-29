@@ -21,9 +21,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Search, Upload as UploadIcon, User as UserIcon, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
+import { getVar } from '@/components/variable-context';
 
 const TOTAL_STEPS = 6;
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+// Runtime config (see components/variable-context). Lazy on purpose: a
+// module-level const evaluates at import time, before the root layout has
+// published window.vars, and would capture '' forever.
+const supabaseUrl = () =>
+  (getVar('supabaseUrl', process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') ?? '')
+    .trim()
+    .replace(/\/+$/, '');
 const UPLOAD_BUCKET = 'generation-inputs';
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
@@ -391,7 +398,7 @@ export function ScheduleWizardSheet({ open, onClose, onFinish, selectedDestinati
         const text = await put.text().catch(() => '');
         throw new Error(`Upload failed (HTTP ${put.status})${text ? ': ' + text.slice(0, 200) : ''}`);
       }
-      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
+      const publicUrl = `${supabaseUrl()}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
       setReferenceImageUrl(publicUrl);
       setUploadState('done');
     } catch (err) {
@@ -442,7 +449,7 @@ export function ScheduleWizardSheet({ open, onClose, onFinish, selectedDestinati
         const text = await put.text().catch(() => '');
         throw new Error(`Upload failed (HTTP ${put.status})${text ? ': ' + text.slice(0, 200) : ''}`);
       }
-      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
+      const publicUrl = `${supabaseUrl()}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
       setAssetUrl(publicUrl);
       setAssetUploadState('done');
     } catch (err) {

@@ -5,10 +5,12 @@
 /**
  * Lightweight analytics wrapper.
  *
- * PostHog-ready but works standalone -- if NEXT_PUBLIC_POSTHOG_KEY is not
- * set (or posthog-js is not installed) all tracking calls gracefully degrade
- * to dev-mode console logs only.
+ * PostHog-ready but works standalone -- if no PostHog key is configured (or
+ * posthog-js is not installed) all tracking calls gracefully degrade to
+ * dev-mode console logs only.
  */
+
+import { loadVars } from '@/components/variable-context';
 
 type EventProperties = Record<string, string | number | boolean | null>;
 
@@ -19,7 +21,10 @@ class Analytics {
   async init() {
     if (this.initialized) return;
 
-    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    // Runtime config, not build-time: read from the VariableContext the root
+    // layout populated (window.vars), so one image works in any environment.
+    // Falls back to the build-time value for non-container deployments.
+    const key = loadVars().posthogKey || process.env.NEXT_PUBLIC_POSTHOG_KEY;
     if (key && typeof window !== 'undefined') {
       try {
         const ph = await import('posthog-js');

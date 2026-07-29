@@ -25,12 +25,22 @@ import { Check, Loader2 } from 'lucide-react';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
 import { createClient } from '@/lib/supabase/client';
 import { analytics } from '@/lib/analytics';
+import { getVar } from '@/components/variable-context';
 
 // ── Stripe ──────────────────────────────────────────────────────────────────
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
-);
+// Lazy + memoized: reads the runtime key on first use rather than at module
+// import time, so one build works across environments. loadStripe is only
+// called once regardless of re-renders.
+let stripePromiseCache: ReturnType<typeof loadStripe> | null = null;
+function getStripePromise(): ReturnType<typeof loadStripe> {
+  if (!stripePromiseCache) {
+    stripePromiseCache = loadStripe(
+      getVar('stripePublishableKey', process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '') ?? '',
+    );
+  }
+  return stripePromiseCache;
+}
 
 // ── Plans ───────────────────────────────────────────────────────────────────
 
@@ -350,7 +360,7 @@ export default function Subscribe2Page() {
             <>
               <h2 className="mb-4 text-lg font-semibold text-white">Payment</h2>
               <Elements
-                stripe={stripePromise}
+                stripe={getStripePromise()}
                 options={{
                   clientSecret,
                   appearance: {

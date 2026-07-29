@@ -33,6 +33,10 @@ export interface VariableContextInterface {
   supabaseAnonKey: string;
   /** True when Stripe is configured server-side; hides billing UI when false. */
   billingEnabled: boolean;
+  /** Stripe publishable key (browser-safe). Empty when billing is off. */
+  stripePublishableKey: string;
+  /** Community invite link shown in the dashboard; empty hides the link. */
+  discordUrl: string;
   /** Hosted MCP connector URL, shown on the integrations page. */
   mcpUrl: string;
   /** 'development' | 'production' */
@@ -47,6 +51,8 @@ const EMPTY: VariableContextInterface = {
   supabaseUrl: '',
   supabaseAnonKey: '',
   billingEnabled: false,
+  stripePublishableKey: '',
+  discordUrl: '',
   mcpUrl: '',
   environment: 'production',
   sentryDsn: '',
@@ -60,6 +66,15 @@ export const VariableContextComponent: FC<
 > = (props) => {
   const { children, ...vars } = props;
 
+  // Publish synchronously during render, not in an effect. Module-level code in
+  // client bundles (e.g. `const SUPABASE_URL = getVar('supabaseUrl')`) runs at
+  // import time, which is BEFORE effects flush — an effect-only assignment
+  // would hand those modules an empty string on first paint.
+  if (typeof window !== 'undefined') {
+    (window as unknown as { vars: VariableContextInterface }).vars = vars;
+  }
+
+  // Keep it in sync if props change on a later render.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as unknown as { vars: VariableContextInterface }).vars = vars;
@@ -71,6 +86,22 @@ export const VariableContextComponent: FC<
 
 /** Read runtime config inside a React component. */
 export const useVariables = () => useContext(VariableContext);
+
+/**
+ * Read one runtime value outside React, with a build-time fallback.
+ *
+ * Call this LAZILY (inside a function or handler), never at module top level:
+ * imported modules evaluate before the root layout renders, so a module-level
+ * `const X = getVar('supabaseUrl')` would capture an empty string forever.
+ * Write `const supabaseUrl = () => getVar('supabaseUrl')` instead.
+ */
+export function getVar<K extends keyof VariableContextInterface>(
+  key: K,
+  fallback?: VariableContextInterface[K],
+): VariableContextInterface[K] {
+  const v = loadVars()[key];
+  return (v === '' || v === undefined ? (fallback ?? v) : v) as VariableContextInterface[K];
+}
 
 /** Read runtime config outside React (after first client render). */
 export const loadVars = (): VariableContextInterface =>

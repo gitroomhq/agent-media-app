@@ -15,8 +15,10 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createClient } from '@/lib/supabase/server';
 
-const SUPPORT_INBOX = 'yuvalsuede@gmail.com';
-const FROM = 'agent-media support <support@agent-media.ai>';
+// Configured, not hardcoded — self-hosters route support mail to their own
+// inbox. Empty means the support form is disabled.
+const SUPPORT_INBOX = process.env.SUPPORT_INBOX ?? '';
+const FROM = process.env.SUPPORT_FROM ?? 'support <support@example.com>';
 
 interface Body {
   subject?: unknown;

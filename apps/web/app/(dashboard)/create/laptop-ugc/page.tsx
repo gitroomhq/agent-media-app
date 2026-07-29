@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
+import { getVar } from '@/components/variable-context';
 
 interface Actor {
   slug: string;
@@ -32,7 +33,12 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;      // 5 MB
 const MAX_RECORDING_SECONDS = 10;
 const RECORDING_MIME = ['video/mp4', 'video/quicktime'];
 const IMAGE_MIME = ['image/png', 'image/jpeg', 'image/webp'];
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+// Runtime config (see components/variable-context). Lazy on purpose: a
+// module-level const evaluates before the root layout publishes window.vars.
+const supabaseUrl = () =>
+  (getVar('supabaseUrl', process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') ?? '')
+    .trim()
+    .replace(/\/+$/, '');
 const UPLOAD_BUCKET = 'generation-inputs';
 
 type AssetMode = 'recording' | 'image';
@@ -168,7 +174,7 @@ export default function LaptopUgcPage() {
         throw new Error(`Upload failed (${put.status}): ${errBody.slice(0, 200)}`);
       }
 
-      const url = `${SUPABASE_URL}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
+      const url = `${supabaseUrl()}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
       setAssetUrl(url);
       setUploadState('done');
     } catch (err) {

@@ -51,6 +51,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}
           supabaseAnonKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''}
           billingEnabled={Boolean(process.env.STRIPE_SECRET_KEY)}
+          stripePublishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ''}
+          discordUrl={process.env.NEXT_PUBLIC_DISCORD_INVITE_URL ?? ''}
           mcpUrl={process.env.NEXT_PUBLIC_MCP_URL ?? ''}
           environment={process.env.NODE_ENV ?? 'production'}
           sentryDsn={process.env.NEXT_PUBLIC_SENTRY_DSN ?? ''}

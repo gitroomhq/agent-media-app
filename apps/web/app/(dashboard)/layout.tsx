@@ -7,15 +7,20 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Images, CreditCard, Settings, BookOpen, Users, PlusCircle, ShieldCheck, Sparkles, Activity, MessageCircle } from 'lucide-react';
 
-// Set NEXT_PUBLIC_DISCORD_INVITE_URL in Vercel for the Support link to
-// appear. We don't ship a hardcoded URL because invites rotate.
-const DISCORD_URL = process.env.NEXT_PUBLIC_DISCORD_INVITE_URL ?? '';
 import { UserMenu } from '@/components/user-menu';
 import { CreditPill } from '@/components/credit-pill';
 import { PostizLogo } from '@/components/postiz-logo';
 import { createClient } from '@/lib/supabase/client';
+import { useVariables } from '@/components/variable-context';
 
-const ADMIN_EMAILS = new Set(['yuvalsuede@gmail.com', 'nevo@postiz.com']);
+// Admins are configured, not hardcoded: set NEXT_PUBLIC_ADMIN_EMAILS to a
+// comma-separated list. Empty (the default) means nobody sees the admin link.
+const ADMIN_EMAILS = new Set(
+  (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+);
 
 // Two-tier sidebar: workflow items at top, account / utility / admin
 // pinned to the bottom of the rail so they don't compete with the
@@ -45,12 +50,14 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
+  // Runtime config: the Support link only renders when an invite is configured.
+  const { discordUrl: DISCORD_URL } = useVariables();
 
   useEffect(() => {
     async function checkAdmin() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email && ADMIN_EMAILS.has(user.email)) {
+      if (user?.email && ADMIN_EMAILS.has(user.email.toLowerCase())) {
         setIsAdmin(true);
       }
     }

@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { ArrowLeft, Loader2, Check, Upload, Sparkles, Users, PenSquare, Download, ExternalLink } from 'lucide-react';
 import { useGenerationJob, type GenerationJobRow, type JobStatus } from '@/lib/hooks/use-generation-job';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
+import { getVar } from '@/components/variable-context';
 import {
   phaseLabel,
   SHEET_EXPECTED_SECONDS,
@@ -26,7 +27,12 @@ interface Actor {
 type Step = 'sheet' | 'storyboard' | 'video' | 'done';
 type SheetMode = 'describe' | 'upload' | 'pick';
 
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+// Runtime config (see components/variable-context). Lazy on purpose: a
+// module-level const evaluates before the root layout publishes window.vars.
+const supabaseUrl = () =>
+  (getVar('supabaseUrl', process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') ?? '')
+    .trim()
+    .replace(/\/+$/, '');
 const UPLOAD_BUCKET = 'generation-inputs';
 
 const DEFAULT_BEATS = [
@@ -281,7 +287,7 @@ function ContentMachineWizard() {
       });
       if (!put.ok) throw new Error(`Upload failed (${put.status})`);
 
-      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
+      const publicUrl = `${supabaseUrl()}/storage/v1/object/public/${UPLOAD_BUCKET}/${storagePath}`;
       setUploadedUrl(publicUrl);
       setUploadState('done');
     } catch (err) {
