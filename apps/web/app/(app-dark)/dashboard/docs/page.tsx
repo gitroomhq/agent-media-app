@@ -12,8 +12,6 @@
  * would bounce the signed-in user out to the marketing site.
  */
 
-import { SkillsHub } from '@/components/skills-hub';
 
 export default function DocsPage() {
-  return <SkillsHub initialTab="mcp" internal />;
 }

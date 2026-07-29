@@ -1,0 +1,125 @@
+# agent-media — self-host stack.
+#
+#   cp .env.example .env   # fill in provider keys
+#   docker compose up
+#
+# This bundles OPEN equivalents of the managed services the hosted product
+# uses, so you are not tied to our vendors:
+#   Supabase Postgres -> postgres        (this file)
+#   Temporal Cloud    -> temporal        (this file)
+#   Cloudflare R2     -> minio           (S3-compatible; R2 is S3-compatible too)
+#
+# Billing is OFF unless STRIPE_SECRET_KEY is set — self-hosters bring their own
+# provider keys and generate freely. See BILLING_ENABLED in the docs.
+
+name: agent-media
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agentmedia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentmedia}
+      POSTGRES_DB: ${POSTGRES_DB:-agentmedia}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agentmedia}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # S3-compatible object storage (stands in for Cloudflare R2).
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${R2_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["miniodata:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Creates the outputs bucket on first boot.
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${R2_ACCESS_KEY_ID:-minioadmin} ${R2_SECRET_ACCESS_KEY:-minioadmin} &&
+      mc mb -p local/${R2_BUCKET:-agent-media-outputs} &&
+      mc anonymous set download local/${R2_BUCKET:-agent-media-outputs} || true"
+
+  # Durable orchestration for the vNext composed workflows.
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-agentmedia}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-agentmedia}
+      POSTGRES_SEEDS: postgres
+    ports: ["7233:7233"]
+
+  # ── Application services ────────────────────────────────────────────────
+  # Each has its own Dockerfile and is buildable/deployable independently to
+  # any container host (Railway, Fly, Render, ECS, a VPS...).
+
+  api-v2:
+    build:
+      context: .
+      dockerfile: services/api-v2/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    env_file: [.env]
+    environment:
+      PORT: 3001
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_TLS: "false"
+      R2_PUBLIC_URL: http://localhost:9000/${R2_BUCKET:-agent-media-outputs}
+    ports: ["3001:3001"]
+
+  primitive-worker-vnext:
+    build:
+      context: .
+      dockerfile: services/primitive-worker-vnext/Dockerfile
+    depends_on: [api-v2, temporal]
+    env_file: [.env]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_TLS: "false"
+      API_V2_URL: http://api-v2:3001
+
+  media-worker-v2:
+    build:
+      context: .
+      dockerfile: services/media-worker-v2/Dockerfile
+    depends_on: [api-v2]
+    env_file: [.env]
+    environment:
+      PORT: 3000
+      API_V2_URL: http://api-v2:3001
+    ports: ["3002:3000"]
+
+  subtitle-worker:
+    build:
+      context: .
+      dockerfile: services/subtitle-worker/Dockerfile
+    depends_on: [api-v2]
+    env_file: [.env]
+    environment:
+      PORT: 3000
+      API_V2_URL: http://api-v2:3001
+    ports: ["3003:3000"]
+
+volumes:
+  pgdata:
+  miniodata:

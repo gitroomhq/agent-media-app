@@ -4,6 +4,8 @@ AI UGC video generation from your terminal, your editor, or your AI agent.
 
 [`agent-media.ai`](https://agent-media.ai) · [Install the skill](https://agent-media.ai/skill) · [API reference](https://agent-media.ai/docs/api-reference) · [Pricing](https://agent-media.ai/pricing)
 
+**Docs:** [Architecture](ARCHITECTURE.md) · [Self-hosting](#self-hosting) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
 ## What it does
 
 ### Agents (MCP / HTTP): one tool — `make_ugc`
@@ -117,3 +119,29 @@ Add a new v2 product: drop a row in `packages/schema/src/v2/generators.ts`, run 
 ## License
 
 Apache-2.0
+
+## Self-hosting
+
+Run the whole stack locally or on your own infrastructure. Billing is **off** by
+default for self-hosters — bring your own provider keys and generate freely.
+
+```bash
+cp .env.example .env     # add your Evolink / OpenAI / Anthropic keys
+docker compose up
+```
+
+That brings up Postgres, Temporal, MinIO (S3-compatible storage) and the
+application services. api-v2 listens on `http://localhost:3001`.
+
+You are not tied to our vendors: Supabase Postgres → plain Postgres, Temporal
+Cloud → the Temporal container, Cloudflare R2 → MinIO, Railway/Vercel → any
+container or Node host. Every backend service ships its own `Dockerfile`, so you
+can deploy them independently and scale them separately. Configuration is
+injected at runtime; nothing is baked into the images.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together and which
+providers are swappable.
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE). No follow-on obligations beyond the license.
