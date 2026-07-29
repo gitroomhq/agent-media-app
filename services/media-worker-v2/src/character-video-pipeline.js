@@ -27,8 +27,7 @@ import { mkdtemp, readFile, rm, writeFile, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createClient } from '@supabase/supabase-js';
 import { r2Upload } from './r2.js';
-import { runGeneration as runEvolinkGeneration } from './evolink-client.js';
-import { runVideoGeneration as runByteplusVideo, BYTEPLUS_MODELS } from './byteplus-client.js';
+import { generateVideo, getVideoProvider } from './providers/index.js';
 import { generateStoryboardSheet, generateCharacterSheet } from './character-sheets.js';
 import { transcribeWithWhisper } from './whisper.js';
 import { generateASS } from './ass-generator.js';
@@ -160,12 +159,10 @@ async function patchJobInputParams(jobId, patch) {
   if (updErr) throw new Error(`update input_params for ${jobId}: ${updErr.message}`);
 }
 
-const EVOLINK_API_KEY = process.env.EVOLINK_API_KEY;
-const ARK_API_KEY = process.env.ARK_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const SCRIPT_MODEL = process.env.SCRIPT_MODEL ?? 'claude-opus-4-7';
-// Provider switch: 'evolink' (default, standard Seedance 2.0) or
-// 'byteplus' (BytePlus ModelArk direct, Seedance 2.0 fast).
+// Provider credentials are validated by the registry (src/providers/). This is
+// kept only for log lines — the pipeline never branches on it.
 const VIDEO_PROVIDER = (process.env.VIDEO_PROVIDER || 'evolink').toLowerCase();
 
 const VIDEO_TIMEOUT_MS = parsePositiveInteger(
@@ -329,11 +326,8 @@ async function generateRunScript({ brief, recentTopics = [], assetType = null, d
  * @param {boolean} [params.generate_audio=true]
  */
 export async function processCharacterVideo(params) {
-  if (VIDEO_PROVIDER === 'byteplus') {
-    if (!ARK_API_KEY) throw new Error('ARK_API_KEY not configured (VIDEO_PROVIDER=byteplus)');
-  } else if (!EVOLINK_API_KEY) {
-    throw new Error('EVOLINK_API_KEY not configured');
-  }
+  // Fail fast with a provider-specific message if credentials are missing.
+  getVideoProvider();
 
   const {
     job_id,
@@ -514,38 +508,23 @@ export async function processCharacterVideo(params) {
     //     (the fast variant). Cheaper + faster but pricing not yet
     //     reconciled with our credit charges — keep credits at the
     //     EvoLink-720p basis until we have BytePlus's per-call cost.
-    let seedanceVideoUrl;
-    if (VIDEO_PROVIDER === 'byteplus') {
-      const model = BYTEPLUS_MODELS.SEEDANCE_2_0_FAST;
-      console.log(`  [character-video] BytePlus ${model} (duration=${clampedDuration}s)...`);
-      seedanceVideoUrl = await runByteplusVideo(
-        model,
-        {
-          prompt: fullPrompt,
-          image_urls: imageUrls,
-          duration: clampedDuration,
-          ratio: aspect_ratio, // BytePlus calls it 'ratio', not 'aspect_ratio'
-          generate_audio,
-          watermark: false,
-        },
-        { timeoutMs: VIDEO_TIMEOUT_MS },
-      );
-    } else {
-      const model = 'seedance-2.0-reference-to-video';
-      console.log(`  [character-video] EvoLink ${model} 720p (duration=${clampedDuration}s)...`);
-      seedanceVideoUrl = await runEvolinkGeneration(
-        model,
-        {
-          prompt: fullPrompt,
-          image_urls: imageUrls,
-          duration: clampedDuration,
-          aspect_ratio,
-          generate_audio,
-          quality: '720p',
-        },
-        { timeoutMs: VIDEO_TIMEOUT_MS },
-      );
-    }
+    // Provider-neutral: the registry resolves VIDEO_PROVIDER and the adapter
+    // translates into that vendor's dialect. Adding a backend touches
+    // src/providers/, never this pipeline.
+    console.log(
+      `  [character-video] ${VIDEO_PROVIDER} video (duration=${clampedDuration}s)...`,
+    );
+    const seedanceVideoUrl = await generateVideo(
+      {
+        prompt: fullPrompt,
+        imageUrls,
+        duration: clampedDuration,
+        aspectRatio: aspect_ratio,
+        generateAudio: generate_audio,
+        quality: '720p',
+      },
+      { timeoutMs: VIDEO_TIMEOUT_MS },
+    );
     console.log(`    Seedance returned: ${seedanceVideoUrl}`);
 
     // ── Download Seedance output to a temp file ───────────────────────

@@ -229,29 +229,45 @@ directly.
 
 ## Provider abstraction
 
-Video and image generation sit behind swappable provider clients rather than
-being hardcoded to one vendor:
+Video generation goes through an **adapter registry** — pipelines never branch
+on the vendor. Adding a backend is a new file plus one registry line.
 
-- `services/media-worker-v2/src/evolink-client.js` — Evolink (Seedance 2.0 mini), the default
-- `services/media-worker-v2/src/byteplus-client.js` — BytePlus Ark (Dreamina Seedance)
-- `services/media-worker-v2/src/replicate-client.js` — Replicate
-- `services/media-worker-v2/src/provider-limiter.js` — per-key concurrency governor
-- `packages/types/src/providers.ts` — shared provider types
+```
+services/media-worker-v2/src/providers/
+  index.js      registry: getVideoProvider(), normalizeRequest(), generateVideo()
+  evolink.js    EvoLink / Seedance 2.0 (default)
+  byteplus.js   BytePlus ModelArk / Dreamina Seedance
+```
 
-Selection is by environment variable: `VIDEO_PROVIDER` (default `evolink`), with
-`BROLL_PROVIDER` and `TALKING_HEAD_PROVIDER` for those lanes. Images go through
-`gpt-image-2` (`OPENAI_API_KEY`) and prompt craft through Anthropic
-(`ANTHROPIC_API_KEY`). Pin models with `EVOLINK_SEEDANCE_MODEL`,
+Every adapter implements one interface:
+
+```js
+{
+  name: 'evolink',
+  requiredEnv: ['EVOLINK_API_KEY'],
+  isConfigured(): boolean,
+  generateVideo(request, options): Promise<string>   // -> video URL
+}
+```
+
+`request` is **provider-neutral** — `{ prompt, imageUrls, durationSeconds,
+aspectRatio, generateAudio, quality }` — and each adapter translates it into its
+vendor's dialect, so quirks stay contained (BytePlus calls the aspect ratio
+`ratio`; EvoLink takes a `quality` tier). Duration clamping happens once in
+`normalizeRequest()` rather than in every pipeline.
+
+Selection is by `VIDEO_PROVIDER` (default `evolink`). An unknown name or missing
+credentials fails fast with a message naming the required env vars, instead of a
+generic 500 mid-render. Pin models with `EVOLINK_SEEDANCE_MODEL`,
 `BYTEPLUS_SEEDANCE_MODEL`, `GPT_IMAGE_MODEL`.
 
-**Known limitation, and where it is going.** The switch is currently
-`if (provider === ...)` branching across four pipeline files
-(`character-video-pipeline.js`, `video-gen.js`, `talking-head.js`,
-`ugc-pipeline.js`) rather than a single adapter registry. Adding a provider
-today means writing a client *and* touching those branch points. Consolidating
-this into one provider interface — so a new backend is a config change, not a
-code change — is active work. Contributions welcome; see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+**To add a provider:** create `providers/<name>.js` exporting an adapter, import
+it in `providers/index.js`, add it to `PROVIDERS`. No pipeline changes.
+
+Images go through `gpt-image-2` (`OPENAI_API_KEY`) and prompt craft through
+Anthropic (`ANTHROPIC_API_KEY`). The legacy b-roll and talking-head lanes still
+read `BROLL_PROVIDER` / `TALKING_HEAD_PROVIDER` directly and have not yet been
+migrated onto the registry — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security model
 

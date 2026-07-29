@@ -75,6 +75,11 @@ export async function deductPrimitiveCredits(args: {
    *  primitive free (e.g. a character sheet generated inside a video). */
   creditsOverride?: number;
 }): Promise<number> {
+  // Self-host: billing is ON only when Stripe is configured. Without it there
+  // is no credit ledger to debit — the operator pays the upstream providers
+  // directly. Deliberate bypass, mirrored from api-v2's preflight.
+  if (!process.env.STRIPE_SECRET_KEY?.trim()) return 0;
+
   const credits = args.creditsOverride ?? quotePrimitiveCredits(args.primitive, args.duration);
   // Free primitive (portrait, or a sheet inside a video): stamp 0 and skip the
   // ledger RPC entirely — there is nothing to charge.

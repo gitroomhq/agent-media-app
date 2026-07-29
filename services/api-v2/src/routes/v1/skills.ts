@@ -55,11 +55,27 @@ async function committedInFlightCredits(userId: string): Promise<number> {
   return committed;
 }
 
+/**
+ * Billing is ON only when Stripe is configured.
+ *
+ * Self-hosted / open-source deployments bring their own provider keys and pay
+ * the upstream providers directly, so there is no credit ledger to enforce.
+ * This is a DELIBERATE bypass — distinct from the `needed <= 0` fall-through
+ * below, which means "this skill has no price", and from the fail-open on a DB
+ * read error. Keeping them separate means a self-host deployment never silently
+ * looks like a pricing bug.
+ */
+export function isBillingEnabled(): boolean {
+  return Boolean(process.env.STRIPE_SECRET_KEY?.trim());
+}
+
 async function preflightCreditCheck(
   userId: string,
   slug: string,
   input: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; needed: number; available: number; committed: number }> {
+  // Self-host: no billing configured, so nothing to reserve or charge.
+  if (!isBillingEnabled()) return { ok: true };
   const needed = quoteSkillCredits(slug, input);
   if (needed <= 0) return { ok: true };
   const { data, error } = await supabase
