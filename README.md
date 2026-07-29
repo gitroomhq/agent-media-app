@@ -32,7 +32,7 @@ The fastest path is the public install hub: <https://agent-media.ai/skill>. It r
 ```bash
 npm install -g agent-media-cli@latest
 agent-media login
-claude skills add github:gitroomhq/agent-media
+claude skills add github:gitroomhq/agent-media-app
 ```
 
 ### Claude.ai / Cowork / Claude Desktop
