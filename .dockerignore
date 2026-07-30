@@ -10,5 +10,8 @@ node_modules
 apps/
 /workflows/
 /scripts/
-services/subtitle-worker/
 supabase/
+# NOTE: do NOT ignore services/subtitle-worker/. Every service is built with the
+# repo root as context, so ignoring it here made `docker compose build` and the
+# GHCR release workflow fail with "/services/subtitle-worker/src: not found".
+# The cost of shipping it in other services' contexts is a few KB of JS.

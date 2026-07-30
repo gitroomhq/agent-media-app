@@ -26,33 +26,89 @@ x-supabase-jwt: &supabase-jwt
   # Generate your own for anything internet-facing: https://supabase.com/docs/guides/self-hosting
   JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
 
+# The anon / service_role JWTs matching the demo JWT_SECRET above. api-v2 and
+# the workers REQUIRE these at boot, so without defaults here `docker compose up`
+# died instantly on a fresh clone and the self-host path was unusable. Override
+# both (and JWT_SECRET) for anything reachable from the internet.
+x-supabase-keys: &supabase-keys
+  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNjQxNzY5MjAwLCJleHAiOjE3OTk1MzU2MDB9.tILz8nMY9G1CrOiUvuQtb8R3TjMaqW-abNon7hOAvv0}
+  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.3dbh5HNpw6he-fu8fg6jtfDHYbk2MzwEMokJ_bttOAw}
+
+# Shared secrets the services use to authenticate to EACH OTHER. They are
+# required at boot and must be IDENTICAL across services, so they get local
+# defaults here — otherwise a fresh clone dies with "INTERNAL_API_SECRET is
+# required". Nothing here is reachable from outside the compose network; set
+# real values via .env for any deployment that is.
+x-internal-secrets: &internal-secrets
+  WORKER_SECRET: ${WORKER_SECRET:-selfhost-local-worker-secret}
+  INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-selfhost-local-internal-secret}
+  CRON_SECRET: ${CRON_SECRET:-selfhost-local-cron-secret}
+  SUBTITLE_WORKER_SECRET: ${SUBTITLE_WORKER_SECRET:-selfhost-local-subtitle-secret}
+  VNEXT_PRIMITIVE_WORKER_SECRET: ${VNEXT_PRIMITIVE_WORKER_SECRET:-selfhost-local-vnext-secret}
+
 services:
   # ── Data plane ──────────────────────────────────────────────────────────
   postgres:
     image: supabase/postgres:15.8.1.020
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      # Deliberately NOT setting POSTGRES_USER. This image bootstraps itself as
+      # supabase_admin and creates the anon/authenticated/service_role roles;
+      # overriding the superuser makes its own migrate.sh fail with
+      # 'role "supabase_admin" does not exist' and no roles ever get created.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # Migrations run in filename order on FIRST boot of an empty volume.
-      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+      # NOTE: do NOT mount app migrations at /docker-entrypoint-initdb.d. That
+      # path already contains the Supabase image's own bootstrap (roles, the
+      # auth/storage/extensions schemas), and mounting over it silently deletes
+      # them — every migration then failed with 'schema "auth" does not exist'.
+      # Migrations are applied by the `migrate` service below, after GoTrue has
+      # created auth.users.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 20
 
+  # The image creates the anon/authenticated/service_role/authenticator roles but
+  # leaves them password-less, so GoTrue and PostgREST both died with
+  # "password authentication failed". This sets their passwords once, before
+  # anything tries to connect.
+  db-init:
+    image: supabase/postgres:15.8.1.020
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      # supabase_admin, not postgres: `authenticator` is a reserved role in this
+      # image and only a superuser may alter it ("is a reserved role, only
+      # superusers can modify it").
+      PGURI: postgres://supabase_admin:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}
+      PGPASS: ${POSTGRES_PASSWORD:-postgres}
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        for role in authenticator supabase_auth_admin supabase_storage_admin; do
+          psql -v ON_ERROR_STOP=1 "$$PGURI" \
+            -c "ALTER ROLE $$role WITH LOGIN PASSWORD '$$PGPASS'"
+        done
+        echo "ROLE PASSWORDS SET"
+    restart: "no"
+
   # Supabase Auth. The app verifies user JWTs and runs the MCP OAuth flow
   # against this.
   auth:
     image: supabase/gotrue:v2.177.0
     depends_on:
-      postgres: { condition: service_healthy }
+      db-init: { condition: service_completed_successfully }
     environment:
       <<: *supabase-jwt
+      # GoTrue reads its own GOTRUE_-prefixed name, not JWT_SECRET. Without this
+      # it exits immediately: "required key GOTRUE_JWT_SECRET missing value".
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
       API_EXTERNAL_URL: ${SUPABASE_URL:-http://localhost:8000}
@@ -65,11 +121,69 @@ services:
       GOTRUE_MAILER_AUTOCONFIRM: "true"
     ports: ["9999:9999"]
 
+  # One-shot schema bootstrap. Waits for GoTrue to create auth.users (many
+  # migrations reference it), then applies every migration in filename order and
+  # exits. App services wait for this to succeed, so they never see a half-built
+  # schema. Re-running is safe on an existing volume only if your migrations are
+  # idempotent; for a clean slate use `docker compose down -v`.
+  migrate:
+    image: supabase/postgres:15.8.1.020
+    depends_on:
+      postgres: { condition: service_healthy }
+      auth: { condition: service_started }
+      storage: { condition: service_started }
+    volumes:
+      - ./supabase/migrations:/migrations:ro
+    environment:
+      PGURI: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        echo "waiting for GoTrue to create auth.users..."
+        for i in $$(seq 1 60); do
+          if psql "$$PGURI" -tAc "select 1 from auth.users limit 1" >/dev/null 2>&1; then
+            echo "auth.users is present"; break
+          fi
+          sleep 3
+        done
+        echo "waiting for storage-api to migrate the storage schema..."
+        for i in $$(seq 1 60); do
+          if psql "$$PGURI" -tAc \
+            "select 1 from information_schema.columns where table_schema='storage' and table_name='buckets' and column_name='public'" \
+            | grep -q 1; then
+            echo "storage schema is ready"; break
+          fi
+          sleep 3
+        done
+        # Ledger of what has already run. Without it a second `docker compose up`
+        # re-applied all 100 migrations against an existing database, failed, and
+        # took every app service down with it (they wait on this job succeeding).
+        psql -v ON_ERROR_STOP=1 "$$PGURI" -c \
+          "CREATE TABLE IF NOT EXISTS public._selfhost_migrations (
+             name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())"
+        # Only timestamped migrations. Files starting with '_' are test fixtures
+        # (e.g. _test_deduct_credits_idempotent.sql), which assert against seeded
+        # data and fail on an empty database — they are not schema migrations.
+        for f in /migrations/[0-9]*.sql; do
+          n=$$(basename "$$f")
+          if psql -tAc "select 1 from public._selfhost_migrations where name='$$n'" "$$PGURI" | grep -q 1; then
+            continue
+          fi
+          echo "applying $$n"
+          psql -v ON_ERROR_STOP=1 "$$PGURI" -f "$$f"
+          psql -v ON_ERROR_STOP=1 "$$PGURI" -c \
+            "INSERT INTO public._selfhost_migrations (name) VALUES ('$$n')"
+        done
+        echo "ALL MIGRATIONS APPLIED"
+    restart: "no"
+
   # PostgREST — the REST surface the supabase-js client talks to.
   rest:
     image: postgrest/postgrest:v12.2.3
     depends_on:
-      postgres: { condition: service_healthy }
+      db-init: { condition: service_completed_successfully }
     environment:
       <<: *supabase-jwt
       PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}
@@ -78,6 +192,39 @@ services:
       PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
       PGRST_DB_USE_LEGACY_GUCS: "false"
     ports: ["8000:3000"]
+
+  # Supabase Storage. Three migrations create buckets and RLS policies on
+  # storage.objects, and the bare image ships only a stub storage schema — so
+  # without this service they failed with 'column "public" of relation "buckets"
+  # does not exist'. storage-api migrates that schema on boot. Its own object
+  # bytes live in MinIO, same as everything else here.
+  storage:
+    image: supabase/storage-api:v1.11.13
+    depends_on:
+      db-init: { condition: service_completed_successfully }
+      minio: { condition: service_healthy }
+    environment:
+      <<: [*supabase-keys, *internal-secrets]
+      ANON_KEY: ${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNjQxNzY5MjAwLCJleHAiOjE3OTk1MzU2MDB9.tILz8nMY9G1CrOiUvuQtb8R3TjMaqW-abNon7hOAvv0}
+      SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.3dbh5HNpw6he-fu8fg6jtfDHYbk2MzwEMokJ_bttOAw}
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}
+      POSTGREST_URL: http://rest:3000
+      TENANT_ID: selfhost
+      REGION: us-east-1
+      FILE_SIZE_LIMIT: "524288000"
+      STORAGE_BACKEND: s3
+      GLOBAL_S3_BUCKET: ${R2_BUCKET:-agent-media-outputs}
+      GLOBAL_S3_ENDPOINT: http://minio:9000
+      GLOBAL_S3_FORCE_PATH_STYLE: "true"
+      GLOBAL_S3_PROTOCOL: http
+      AWS_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+      AWS_DEFAULT_REGION: us-east-1
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    # Deliberately not published. Nothing outside the compose network talks to
+    # storage-api directly, and port 5000 is taken by AirPlay Receiver on macOS,
+    # which made `docker compose up` fail with "address already in use".
 
   # ── Object storage (stands in for Cloudflare R2) ────────────────────────
   minio:
@@ -133,12 +280,17 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     env_file: [.env]
     environment:
+      <<: [*supabase-keys, *internal-secrets]
       PORT: 3001
       BILLING_MODE: disabled
       SUPABASE_URL: http://rest:3000
       TEMPORAL_ADDRESS: temporal:7233
+      # The bundled Temporal auto-setup creates exactly one namespace, "default".
+      # The worker treats this as required and exits without it.
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TLS: "false"
       S3_ENDPOINT: http://minio:9000
       S3_FORCE_PATH_STYLE: "true"
@@ -156,9 +308,11 @@ services:
     depends_on: [api-v2, temporal]
     env_file: [.env]
     environment:
+      <<: [*supabase-keys, *internal-secrets]
       BILLING_MODE: disabled
       SUPABASE_URL: http://rest:3000
       TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TLS: "false"
       API_V2_URL: http://api-v2:3001
       S3_ENDPOINT: http://minio:9000
@@ -176,6 +330,7 @@ services:
     depends_on: [api-v2]
     env_file: [.env]
     environment:
+      <<: [*supabase-keys, *internal-secrets]
       PORT: 3000
       BILLING_MODE: disabled
       SUPABASE_URL: http://rest:3000
@@ -196,6 +351,7 @@ services:
     depends_on: [api-v2]
     env_file: [.env]
     environment:
+      <<: [*supabase-keys, *internal-secrets]
       PORT: 3000
       SUPABASE_URL: http://rest:3000
       API_V2_URL: http://api-v2:3001
