@@ -169,14 +169,26 @@ cp .env.example .env     # add your Evolink / OpenAI / Anthropic keys
 docker compose up
 ```
 
-That brings up Postgres, Temporal, MinIO (S3-compatible storage) and the
-application services. api-v2 listens on `http://localhost:3001`.
+That brings up the full backend: Postgres, Supabase Auth (GoTrue), PostgREST,
+Supabase Storage, Temporal, MinIO (S3-compatible storage), and the four
+application services. Migrations are applied automatically on first boot.
+**api-v2 listens on `http://localhost:3001`.**
 
-You are not tied to our vendors: Supabase Postgres → plain Postgres, Temporal
-Cloud → the Temporal container, Cloudflare R2 → MinIO, Railway/Vercel → any
-container or Node host. Every backend service ships its own `Dockerfile`, so you
-can deploy them independently and scale them separately. Configuration is
-injected at runtime; nothing is baked into the images.
+Note that a bare Postgres is *not* enough — the app depends on Supabase's Auth
+and PostgREST APIs, so the compose file runs those as real services rather than
+pretending Postgres alone will do.
+
+**This is the API, not the web UI.** `apps/web` is in the repo and Apache-2.0
+like everything else, but it has no container in this compose file — run it with
+`pnpm --filter @agent-media/web dev` and point it at `http://localhost:3001`.
+Agents talk to the API directly, so the UI is optional for the agent use case.
+
+You are not tied to our vendors: Temporal Cloud → the Temporal container,
+Cloudflare R2 → MinIO (or any S3-compatible store via `S3_ENDPOINT`),
+Railway/Vercel → any container or Node host. Every backend service ships its own
+`Dockerfile` and is published to GHCR, so you can deploy them independently and
+scale them separately. Configuration is injected at runtime; nothing is baked
+into the images.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit together and which
 providers are swappable.
