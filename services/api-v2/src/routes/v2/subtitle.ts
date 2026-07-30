@@ -11,12 +11,16 @@
  *   5. Dispatch to media-worker-v2 POST /v2/subtitle
  *   6. Return 201 + job_id + credits_deducted
  *
- * Pricing is per-second so the credit cost depends on the source
- * video length. We don't know the length here (we'd have to HEAD +
- * ffprobe the URL first), so we charge a placeholder duration of
- * 30s up front and reconcile via webhook once the worker probes
- * the real duration. That's the same pattern api-v2 already uses
- * for legacy subtitle jobs.
+ * Pricing is FLAT (15 credits), defined once in
+ * packages/schema/src/v2/generators.ts and shared with the make_subtitles skill,
+ * the CLI, the webhook and the dashboard — so every surface quotes the same
+ * number.
+ *
+ * It used to bill a hardcoded 30s placeholder (90 credits for any clip) with a
+ * comment promising webhook reconciliation that was never implemented, which
+ * made this endpoint 6x the price of the identical make_subtitles skill. Our
+ * cost is ~$0.01-0.02 per clip, so a flat price is both simpler and accurate
+ * enough; see the cost basis note in generators.ts.
  */
 
 import type { Request, Response } from 'express';
@@ -30,9 +34,7 @@ import { supabase } from '../../server.js';
 const WORKER_V2_URL = process.env.WORKER_V2_URL;
 const WORKER_SECRET = process.env.WORKER_SECRET;
 
-// Placeholder duration we quote up-front. Real reconciliation happens
-// in the webhook handler when the worker reports actual seconds.
-const QUOTED_DURATION_S = 30;
+
 
 function buildCallbackUrl(jobId: string): string {
   const supabaseUrl = process.env.SUPABASE_URL ?? '';
@@ -58,7 +60,8 @@ export async function subtitleRoute(req: Request, res: Response): Promise<void> 
     return;
   }
   const input = parsed.data;
-  const creditCost = quoteV2Credits('subtitle', { durationSeconds: QUOTED_DURATION_S });
+  // Flat price — no duration needed, so nothing to reconcile later.
+  const creditCost = quoteV2Credits('subtitle');
 
   if (!WORKER_V2_URL || !WORKER_SECRET) {
     res.status(503).json({

@@ -171,10 +171,22 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
     //   ffmpeg compute: a few cents at most for a short clip
     //   R2 download + re-upload: rounding error
     // Realistic our-cost for an 8s clip: < $0.01. For a 60s clip: ~$0.02.
-    // 70% margin floor → priced generously at 3 credits/sec so a casual
-    // 8s subtitle is 24 credits ($0.24) — small enough that users don't
-    // think twice.
-    pricing: { basis: 'per_clip', baseCredits: 0, perSecondCredits: 3 },
+    //
+    // FLAT, not per-second. Per-second pricing was the original intent, but the
+    // caller does not know the video's length at submit time (it would need a
+    // HEAD + ffprobe first), so /v2/subtitle billed a hardcoded 30s placeholder
+    // — 90 credits for every clip regardless of length — and the webhook
+    // "reconciliation" that was supposed to correct it afterwards was never
+    // built. The result was the SAME operation costing 90 credits through
+    // /v2/subtitle and 15 through the make_subtitles skill: a 6x split for
+    // identical work.
+    //
+    // Since our cost is ~$0.01-0.02 either way, per-second precision buys
+    // nothing here. One flat price of 15 credits matches SUBTITLES_CREDITS in
+    // api-v2's credit-quotes.ts, so every surface (REST route, skill, CLI,
+    // webhook, dashboard) now quotes the same number — and there is no phantom
+    // reconciliation step to implement.
+    pricing: { basis: 'one_shot', baseCredits: 15 },
   },
 } as const;
 
