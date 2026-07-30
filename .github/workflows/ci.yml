@@ -124,6 +124,16 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The agent skill pack (public-skill/) and the root plugin manifest are
+      # GENERATED from the skill registry. If someone edits the registry without
+      # regenerating — or hand-edits emitted output — the published pack silently
+      # stops matching the API it documents. That is how the pacing docs came to
+      # advertise a word→duration table the pricing code disagreed with, which
+      # mis-billed agents. Runs after Build because the generator imports
+      # @agentmedia/schema from dist.
+      - name: Generated artifacts are up to date
+        run: pnpm --filter api-v2 gen:public-skill:check
+
   # ─── Tests ────────────────────────────────────────────────────────────────
   # All tests must pass before merge. Enable branch protection in GitHub
   # settings (Settings > Branches > Branch protection rules) and require

@@ -134,6 +134,46 @@ app.use(express.json({ limit: '12mb' }));
 // and /register (dynamic client registration), proxied to Supabase's OAuth
 // server. Mounted FIRST so its routes win over the /functions/v1/* catch-all.
 // No-op when Supabase OAuth env is absent, so local/dev boots unchanged.
+// OAuth limiters. Defined HERE, immediately above their use, rather than with the
+// other limiters further down: the OAuth router mounts early (it must beat the
+// /functions/v1/* catch-all), and a `const` declared later would be in the
+// temporal dead zone at this point.
+//
+// IP-keyed on purpose — every one of these routes is pre-auth, so there is no
+// userId to key on yet.
+const oauthIpKey = (req: express.Request): string =>
+  req.ip ? ipKeyGenerator(req.ip) : 'unknown';
+
+/** Dynamic client registration: a real client registers once, then reuses its id. */
+const oauthRegisterLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  keyGenerator: oauthIpKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many client registrations. Slow down and retry.' } },
+});
+
+/** Token exchange + revoke: a few per connect, plus refreshes. */
+const oauthTokenLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyGenerator: oauthIpKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many token requests. Slow down and retry.' } },
+});
+
+/** Authorize is browser-driven; humans retry, so keep it roomier than /token. */
+const oauthAuthorizeLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 120,
+  keyGenerator: oauthIpKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many authorization attempts. Slow down and retry.' } },
+});
+
 if (isMcpOAuthConfigured()) {
   // Log every OAuth-path request. This router mounts before the correlation-id
   // middleware, so without this the entire connector handshake is invisible in
@@ -145,6 +185,22 @@ if (isMcpOAuthConfigured()) {
     }
     next();
   });
+  // Rate limit the OAuth surface BEFORE the router handles it.
+  //
+  // These routes mount here — far above the general `app.use(ipFloodLimiter)`
+  // that guards the API route table — because they must win over the
+  // /functions/v1/* catch-all. That ordering left /authorize, /token, /register
+  // and /revoke with NO rate limiting at all: an attacker could hammer token
+  // exchange or spray dynamic client registrations unthrottled.
+  //
+  // Keyed on IP because these are pre-auth by definition (there is no user yet;
+  // establishing one is the whole point). Registration is the tightest: a
+  // legitimate client registers once and then reuses its client_id, so a healthy
+  // caller never approaches these ceilings.
+  app.use(['/register'], oauthRegisterLimiter);
+  app.use(['/token', '/revoke'], oauthTokenLimiter);
+  app.use(['/authorize'], oauthAuthorizeLimiter);
+
   app.use(createMcpOAuthRouter());
   logger.info({ service: 'api-v2' }, 'MCP OAuth router mounted');
 } else {

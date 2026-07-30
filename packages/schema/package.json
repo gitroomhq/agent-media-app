@@ -1,7 +1,7 @@
 {
   "name": "@agentmedia/schema",
-  "version": "0.5.4",
-  "description": "Type-safe schema definitions for AI UGC video generation — enums, Zod validation, and generator registry. Single source of truth for the agent-media platform.",
+  "version": "0.5.5",
+  "description": "Type-safe schema definitions for AI UGC video generation \u2014 enums, Zod validation, and generator registry. Single source of truth for the agent-media platform.",
   "type": "module",
   "license": "Apache-2.0",
   "homepage": "https://agent-media.ai/docs/api-reference",
@@ -52,7 +52,7 @@
     "gen:v2-docs": "tsx scripts/generate-v2-docs.ts",
     "gen:v1-tool-contracts": "tsx scripts/generate-v1-tool-contracts.ts",
     "check:spec": "tsx scripts/check-spec-freshness.ts",
-    "check:sdk-types": "npx openapi-typescript ../../generated/openapi.json -o ../../generated/api-types.d.ts && echo '✓ SDK types generated'"
+    "check:sdk-types": "npx openapi-typescript ../../generated/openapi.json -o ../../generated/api-types.d.ts && echo '\u2713 SDK types generated'"
   },
   "dependencies": {
     "zod": "^3.23.0",

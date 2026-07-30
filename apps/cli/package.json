@@ -1,6 +1,6 @@
 {
   "name": "agent-media-cli",
-  "version": "1.18.3",
+  "version": "1.18.5",
   "type": "module",
   "private": false,
   "license": "Apache-2.0",

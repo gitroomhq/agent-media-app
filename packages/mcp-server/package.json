@@ -1,8 +1,8 @@
 {
   "name": "@agentmedia/mcp-server",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "mcpName": "io.github.gitroomhq/agent-media-app",
-  "description": "MCP server for agent-media — generate AI UGC videos from Claude Code, Cursor, Windsurf, or any MCP-compatible client.",
+  "description": "MCP server for agent-media \u2014 generate AI UGC videos from Claude Code, Cursor, Windsurf, or any MCP-compatible client.",
   "type": "module",
   "license": "Apache-2.0",
   "homepage": "https://agent-media.ai/integrations",
