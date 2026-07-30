@@ -147,90 +147,27 @@ export function splitScript(script: string, segDurations: number[]): string[] {
   return parts.map((p) => p.trim()).filter(Boolean);
 }
 
-/** Minimum span (seconds) needed to carve a separate intro phase. */
-export const INTRO_SECONDS = 5;
+// Take planning is imported from @agentmedia/schema — the SAME module api-v2
+// quotes with — so the price quoted and the takes rendered cannot diverge. This
+// file used to own the canonical copy while api-v2 kept a subtly different one;
+// re-implementing any of it here would reopen that bug. Re-exported below so
+// existing importers of this module keep working.
+// Imported for use inside this workflow AND re-exported, because other modules
+// (and tests) already import these names from here. `export ... from` alone would
+// not put them in local scope.
+import {
+  INTRO_SECONDS,
+  countWords,
+  fitDuration,
+  chunkScript,
+  splitIntroMoves,
+} from '@agentmedia/schema';
 
-function countWords(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
+export { INTRO_SECONDS, countWords, fitDuration, chunkScript, splitIntroMoves };
 
-/** Pick the take length whose allowed word band [d, d*2.2] contains the script's
- *  word count (5s: 5-11, 10s: 10-22, 15s: 15-33), matching simple_selfie's
- *  validation so every chunk passes. */
-export function fitDuration(script: string): 5 | 10 | 15 {
-  const w = countWords(script);
-  if (w <= 11) return 5;
-  if (w <= 22) return 10;
-  return 15;
-}
 
-/** Pack a script into the FEWEST sentence-aligned chunks that each still fit a
- *  single <=15s take (<=33 words). Fewer chunks = fewer takes = fewer seams =
- *  fewer continuity hops, which is the biggest lever against cross-take face
- *  drift (the decay only became objectionable past ~2 takes). Long sentences are
- *  hard-split; tiny tails (<5 words) are merged so no chunk is below 5 words. */
-const TAKE_MAX_WORDS = 33; // upper word band of a single 15s take
-export function chunkScript(text: string): string[] {
-  const clean = text.trim();
-  if (!clean) return [];
-  const sentences = clean.match(/[^.!?]+[.!?]*/g)?.map((s) => s.trim()).filter(Boolean) ?? [clean];
-  const grouped: string[] = [];
-  let cur = '';
-  for (const s of sentences) {
-    const candidate = cur ? `${cur} ${s}` : s;
-    // Pack sentences until the next one would overflow a single 15s take, so we
-    // emit the fewest possible takes.
-    if (cur && countWords(candidate) > TAKE_MAX_WORDS) {
-      grouped.push(cur);
-      cur = s;
-    } else {
-      cur = candidate;
-    }
-  }
-  if (cur) grouped.push(cur);
-  // Hard-split any single chunk still longer than one take can hold, into the
-  // fewest <=33-word (15s) pieces.
-  const sized: string[] = [];
-  for (const p of grouped) {
-    if (countWords(p) <= TAKE_MAX_WORDS) {
-      sized.push(p);
-      continue;
-    }
-    const words = p.split(/\s+/);
-    for (let i = 0; i < words.length; i += TAKE_MAX_WORDS) sized.push(words.slice(i, i + TAKE_MAX_WORDS).join(' '));
-  }
-  // Merge a sub-5-word tail into its neighbour (5s takes need >=5 words).
-  for (let i = sized.length - 1; i > 0; i -= 1) {
-    if (countWords(sized[i]) < 5) {
-      sized[i - 1] = `${sized[i - 1]} ${sized[i]}`;
-      sized.splice(i, 1);
-    }
-  }
-  if (sized.length > 1 && countWords(sized[0]) < 5) {
-    sized[1] = `${sized[0]} ${sized[1]}`;
-    sized.shift();
-  }
-  return sized.length ? sized : [clean];
-}
 
-/**
- * Split a script into an INTRO part and a MOVES part for the review-style shape.
- * The author marks the boundary with a line that is exactly `---`. Returns null
- * when there's no marker (→ caller uses the plain word-proportional path), or
- * when either side is empty / the total duration is too short for two phases.
- */
-export function splitIntroMoves(
-  script: string,
-  duration: number,
-): { intro: string; moves: string } | null {
-  if (duration < INTRO_SECONDS * 2) return null; // too short to carve an intro
-  const m = script.split(/(?:^|\n)\s*---\s*(?:\n|$)/);
-  if (m.length < 2) return null;
-  const intro = m[0].trim();
-  const moves = m.slice(1).join(' ').trim();
-  if (!intro || !moves) return null;
-  return { intro, moves };
-}
+
 
 // Refund on terminal failure so a paid broll that never completes returns the
 // user's credits. Idempotent (guards ALREADY_REFUNDED / NO_DEDUCTION_FOUND).

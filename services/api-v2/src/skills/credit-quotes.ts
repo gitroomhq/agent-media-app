@@ -11,6 +11,9 @@
  */
 
 import { decideMakeUgcRoute, type MakeUgcProps } from './make-ugc-router.js';
+// Shared take planner — the SAME module the worker plans with, so quote and run
+// cannot disagree. See packages/schema/src/take-planner.ts.
+import { countWords, fitDuration, planTakeDurations } from '@agentmedia/schema';
 
 // Portraits are free; a character sheet is charged only standalone (a sheet
 // generated inside make_ugc_video is free — see the make_ugc_video case).
@@ -36,68 +39,13 @@ function selfieFor(duration: unknown): number {
 // The worker sizes each take to its own word count and chunks long scripts, so
 // the quote has to plan the same takes — otherwise preflight under-charges and a
 // run can fail mid-way on INSUFFICIENT_CREDITS.
-const INTRO_SECONDS = 5;
-function countWords(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
-function fitDuration(s: string): 5 | 10 | 15 {
-  const w = countWords(s);
-  if (w <= 11) return 5;
-  if (w <= 22) return 10;
-  return 15;
-}
-function chunkScript(text: string): string[] {
-  const clean = text.trim();
-  if (!clean) return [];
-  const sentences = clean.match(/[^.!?]+[.!?]*/g)?.map((s) => s.trim()).filter(Boolean) ?? [clean];
-  const grouped: string[] = [];
-  let cur = '';
-  for (const s of sentences) {
-    const candidate = cur ? `${cur} ${s}` : s;
-    if (cur && countWords(candidate) > 28) {
-      grouped.push(cur);
-      cur = s;
-    } else {
-      cur = candidate;
-    }
-  }
-  if (cur) grouped.push(cur);
-  const sized: string[] = [];
-  for (const p of grouped) {
-    if (countWords(p) <= 33) {
-      sized.push(p);
-      continue;
-    }
-    const words = p.split(/\s+/);
-    for (let i = 0; i < words.length; i += 22) sized.push(words.slice(i, i + 22).join(' '));
-  }
-  for (let i = sized.length - 1; i > 0; i -= 1) {
-    if (countWords(sized[i]) < 5) {
-      sized[i - 1] = `${sized[i - 1]} ${sized[i]}`;
-      sized.splice(i, 1);
-    }
-  }
-  if (sized.length > 1 && countWords(sized[0]) < 5) {
-    sized[1] = `${sized[0]} ${sized[1]}`;
-    sized.shift();
-  }
-  return sized.length ? sized : [clean];
-}
-function splitIntroMoves(script: string, duration: number): { intro: string; moves: string } | null {
-  if (duration < INTRO_SECONDS * 2) return null;
-  const m = script.split(/(?:^|\n)\s*---\s*(?:\n|$)/);
-  if (m.length < 2) return null;
-  const intro = m[0].trim();
-  const moves = m.slice(1).join(' ').trim();
-  if (!intro || !moves) return null;
-  return { intro, moves };
-}
+// Take planning lives in @agentmedia/schema so the quote and the worker cannot
+// drift. This file previously held a private copy whose constants differed from
+// the worker's (packed at 28 words and hard-split at 22, vs the worker's 33/33),
+// so a 34-word script quoted 560 while the worker rendered 420 — a false 402 for
+// anyone holding less than 560. Do not re-introduce a local copy.
 function brollTakeDurations(script: string, duration: number): Array<5 | 10 | 15> {
-  const intro = splitIntroMoves(script, duration);
-  const chunks = intro
-    ? [...chunkScript(intro.intro), ...chunkScript(intro.moves)]
-    : chunkScript(script);
-  return chunks.map(fitDuration);
+  return planTakeDurations(script, duration);
 }
 
 // ── make_podcast take plan (MUST stay byte-identical to the worker's
