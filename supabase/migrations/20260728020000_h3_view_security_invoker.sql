@@ -47,9 +47,18 @@ ALTER VIEW public.user_generation_summary   SET (security_invoker = on);
 -- NOTE: public_models, generation_dispatch_depth (dropped) and
 -- generation_dispatch_status (intentional definer ops view) are left untouched.
 
--- 2. Remove the policy that lets anon read provider_cost_usd off model_pricing.
---    After this drop, model_pricing has no permissive SELECT policy for anon, so
---    RLS returns zero rows to the anon role (provider_cost_usd becomes unreadable).
+-- 2. Remove BOTH permissive SELECT policies on model_pricing.
+--
+--    20260216000012_rls_policies.sql created two `USING (true)` policies — one for
+--    anon, one for authenticated. Dropping only the anon one still leaves
+--    provider_cost_usd (and therefore our margins) readable by any signed-up user,
+--    which is the same leak with one extra step. Both must go.
+--
+--    Safe for the app: the only reader is the `pricing` edge function, which uses
+--    supabaseAdmin() (service_role, bypasses RLS). Customer-facing pricing is
+--    served by the public_models view, which deliberately excludes
+--    provider_cost_usd — see 20260216000013_views.sql.
 DROP POLICY IF EXISTS model_pricing_select_anon ON public.model_pricing;
+DROP POLICY IF EXISTS model_pricing_select_authenticated ON public.model_pricing;
 
 COMMIT;

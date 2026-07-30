@@ -56,17 +56,26 @@ async function committedInFlightCredits(userId: string): Promise<number> {
 }
 
 /**
- * Billing is ON only when Stripe is configured.
+ * Is billing enabled for this deployment?
  *
- * Self-hosted / open-source deployments bring their own provider keys and pay
- * the upstream providers directly, so there is no credit ledger to enforce.
- * This is a DELIBERATE bypass — distinct from the `needed <= 0` fall-through
- * below, which means "this skill has no price", and from the fail-open on a DB
- * read error. Keeping them separate means a self-host deployment never silently
- * looks like a pricing bug.
+ * FAIL-CLOSED by design: billing is ON unless it is *explicitly* disabled with
+ * `BILLING_MODE=disabled`. An unset, empty, or misspelled value bills normally.
+ *
+ * Deliberately NOT derived from `STRIPE_SECRET_KEY`. Inferring it from a Stripe
+ * key means any service that legitimately lacks one — a video worker, for
+ * instance — stops charging the moment it deploys, which is a silent revenue
+ * leak rather than a visible failure.
+ *
+ * This switch MUST be set identically on api-v2 and on every worker; keep this
+ * predicate the inverse of `isBillingDisabled()` in
+ * services/primitive-worker-vnext/src/client/credits.ts.
+ *
+ * Distinct from two other paths below, which must not be conflated with it: the
+ * `needed <= 0` fall-through ("this skill has no price") and the fail-open on a
+ * DB read error (the worker's ledger is the final arbiter).
  */
 export function isBillingEnabled(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY?.trim());
+  return process.env.BILLING_MODE?.trim().toLowerCase() !== 'disabled';
 }
 
 async function preflightCreditCheck(

@@ -11,6 +11,23 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ApplicationFailure } from '@temporalio/activity';
 
+/**
+ * Is billing explicitly disabled for this deployment?
+ *
+ * FAIL-CLOSED by design: anything other than an explicit opt-out means CHARGE.
+ * An unset, empty, misspelled, or partially-configured environment therefore
+ * bills normally instead of giving media away.
+ *
+ * `BILLING_MODE=disabled` is the self-host switch (no credit ledger; the operator
+ * pays upstream providers directly). It MUST be set identically on api-v2 and on
+ * every worker — a split configuration is what makes silent revenue loss possible,
+ * so keep this predicate byte-identical to `isBillingEnabled()` in
+ * services/api-v2/src/routes/v1/skills.ts.
+ */
+export function isBillingDisabled(): boolean {
+  return process.env.BILLING_MODE?.trim().toLowerCase() === 'disabled';
+}
+
 export type PrimitiveCreditableId =
   | 'portrait_gpt2'
   | 'character_sheet_gpt2'
@@ -75,10 +92,17 @@ export async function deductPrimitiveCredits(args: {
    *  primitive free (e.g. a character sheet generated inside a video). */
   creditsOverride?: number;
 }): Promise<number> {
-  // Self-host: billing is ON only when Stripe is configured. Without it there
-  // is no credit ledger to debit — the operator pays the upstream providers
-  // directly. Deliberate bypass, mirrored from api-v2's preflight.
-  if (!process.env.STRIPE_SECRET_KEY?.trim()) return 0;
+  // Billing FAILS CLOSED: we charge unless billing is *explicitly* disabled.
+  //
+  // Do NOT infer this from the presence of STRIPE_SECRET_KEY. A worker has no
+  // reason to hold a Stripe key, so "no key ⇒ don't charge" silently turns every
+  // render free the moment the hosted worker is deployed without it — a direct
+  // revenue leak, and one that no test or health check would surface.
+  //
+  // Self-hosters opt out deliberately with BILLING_MODE=disabled (see
+  // isBillingDisabled), and that single switch must be set identically on the API
+  // and every worker.
+  if (isBillingDisabled()) return 0;
 
   const credits = args.creditsOverride ?? quotePrimitiveCredits(args.primitive, args.duration);
   // Free primitive (portrait, or a sheet inside a video): stamp 0 and skip the

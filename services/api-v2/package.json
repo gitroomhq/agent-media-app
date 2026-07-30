@@ -10,7 +10,7 @@
     "temporal:worker": "tsx src/orchestrator/temporal/worker.ts",
     "test": "vitest run",
     "gen:public-skill": "tsx scripts/generate-public-skill.ts",
-    "gen:public-skill:check": "tsx scripts/generate-public-skill.ts && git diff --exit-code ../../public-skill || (echo 'public-skill is stale; run pnpm --filter api-v2 gen:public-skill and commit' && exit 1)"
+    "gen:public-skill:check": "tsx scripts/generate-public-skill.ts && git diff --exit-code ../../public-skill ../../.claude-plugin || (echo 'generated artifacts are stale; run pnpm --filter api-v2 gen:public-skill and commit' && exit 1)"
   },
   "engines": {
     "node": ">=20"
