@@ -14,9 +14,15 @@ let _client: S3Client | null = null;
 
 function getClient(cfg: R2Config): S3Client {
   if (!_client) {
+    // S3_ENDPOINT lets a self-hoster use any S3-compatible store (MinIO, Ceph).
+    // Unset → Cloudflare R2, so hosted behaviour is unchanged. MinIO needs
+    // S3_FORCE_PATH_STYLE=true (buckets served as /bucket/key).
     _client = new S3Client({
-      region: 'auto',
-      endpoint: `https://${cfg.accountId}.r2.cloudflarestorage.com`,
+      region: process.env.S3_REGION?.trim() || 'auto',
+      endpoint:
+        process.env.S3_ENDPOINT?.trim() ||
+        `https://${cfg.accountId}.r2.cloudflarestorage.com`,
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE?.trim() === 'true',
       credentials: {
         accessKeyId: cfg.accessKeyId,
         secretAccessKey: cfg.secretAccessKey,

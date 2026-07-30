@@ -190,6 +190,63 @@ jobs:
       - name: CLI smoke test — help
         run: node apps/cli/dist/index.js --help
 
+  # ─── Self-host contract ───────────────────────────────────────────────────
+  # The compose stack is the only thing standing behind the README's "clone and
+  # run it yourself" claim, and it breaks in ways nothing else catches. Two
+  # guards, both from real bugs:
+  #   1. Inline comments in .env.example. Compose's env_file reader does NOT
+  #      strip them, so `R2_BUCKET=outputs  # note` sets the bucket to
+  #      "outputs  # note" and every upload 404s against a bucket that does not
+  #      exist. Silent, and invisible in code review.
+  #   2. Compose drifting out of sync with the storage clients.
+  selfhost:
+    name: Self-host contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .env.example has no inline comments
+        shell: bash
+        run: |
+          if grep -nE '^[A-Za-z_][A-Za-z0-9_]*=.*#' .env.example; then
+            echo "ERROR: the lines above put a comment after '=' on the same line."
+            echo "Docker Compose does not strip these — the '#' and everything"
+            echo "after it becomes part of the value. Move the comment to its"
+            echo "own line ABOVE the variable."
+            exit 1
+          fi
+          echo "OK: no inline comments."
+
+      - name: docker-compose.yml resolves against .env.example
+        shell: bash
+        run: |
+          cp .env.example .env
+          docker compose config > /tmp/resolved.yml
+          rm -f .env
+          # A value that still contains '#' means an inline comment leaked
+          # through despite the check above (e.g. via a compose default).
+          if grep -nE '^\s+[A-Z_0-9]+: .*#' /tmp/resolved.yml; then
+            echo "ERROR: resolved env values contain '#'."
+            exit 1
+          fi
+          echo "OK: compose resolves cleanly."
+
+      - name: Storage clients and compose agree on the S3_* names
+        shell: bash
+        run: |
+          # Every S3_* var the code reads must appear in .env.example, or a
+          # self-hoster has no way to discover it.
+          missing=0
+          for v in $(grep -rhoE 'process\.env\.S3_[A-Z_]+' services/ \
+                     | sed 's/process\.env\.//' | sort -u); do
+            if ! grep -qE "^${v}=" .env.example; then
+              echo "ERROR: code reads $v but .env.example does not document it"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] && echo "OK: all S3_* vars documented."
+          exit $missing
+
   validate-migrations:
     name: Validate Migrations
     runs-on: ubuntu-latest

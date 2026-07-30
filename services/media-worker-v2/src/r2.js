@@ -20,12 +20,22 @@ let _client = null;
 
 function getClient() {
   if (!_client) {
-    if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
-      throw new Error('R2 credentials not configured (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY)');
+    // R2_ACCOUNT_ID only builds Cloudflare's endpoint hostname. With S3_ENDPOINT
+    // set (MinIO, AWS S3, Ceph) it is never read, so self-hosters must not be
+    // required to invent one.
+    const hasCustomEndpoint = Boolean(process.env.S3_ENDPOINT?.trim());
+    if ((!R2_ACCOUNT_ID && !hasCustomEndpoint) || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+      throw new Error('R2 credentials not configured (R2_ACCOUNT_ID or S3_ENDPOINT, plus R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY)');
     }
+    // S3_ENDPOINT lets a self-hoster use any S3-compatible store (MinIO, Ceph).
+    // Unset → Cloudflare R2, so hosted behaviour is unchanged. MinIO needs
+    // S3_FORCE_PATH_STYLE=true (buckets served as /bucket/key).
     _client = new S3Client({
-      region: 'auto',
-      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      region: process.env.S3_REGION?.trim() || 'auto',
+      endpoint:
+        process.env.S3_ENDPOINT?.trim() ||
+        `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE?.trim() === 'true',
       credentials: {
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,

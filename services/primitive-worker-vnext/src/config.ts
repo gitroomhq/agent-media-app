@@ -103,7 +103,12 @@ export function getConfig(): WorkerConfig {
         : required('INTERNAL_API_SECRET'),
     },
     r2: {
-      accountId: required('R2_ACCOUNT_ID'),
+      // R2_ACCOUNT_ID only builds Cloudflare's endpoint hostname; when
+      // S3_ENDPOINT points elsewhere (MinIO, AWS S3, Ceph) it is never read,
+      // so a self-hoster must not be forced to invent one.
+      accountId: optional('S3_ENDPOINT')
+        ? (optional('R2_ACCOUNT_ID') ?? '')
+        : required('R2_ACCOUNT_ID'),
       accessKeyId: required('R2_ACCESS_KEY_ID'),
       secretAccessKey: required('R2_SECRET_ACCESS_KEY'),
       bucket: optional('R2_BUCKET') ?? 'agent-media-outputs',

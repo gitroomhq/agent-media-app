@@ -37,14 +37,18 @@ function readEnv(): R2Env {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  if (!accountId) missing.push('R2_ACCOUNT_ID');
+  // R2_ACCOUNT_ID exists only to build Cloudflare's endpoint hostname. When
+  // S3_ENDPOINT is set (MinIO, AWS S3, Ceph) it is never read, so requiring it
+  // would block every self-host deployment on a value with no meaning there.
+  const hasCustomEndpoint = Boolean(process.env.S3_ENDPOINT?.trim());
+  if (!accountId && !hasCustomEndpoint) missing.push('R2_ACCOUNT_ID');
   if (!accessKeyId) missing.push('R2_ACCESS_KEY_ID');
   if (!secretAccessKey) missing.push('R2_SECRET_ACCESS_KEY');
   if (missing.length > 0) {
     throw new Error(`r2: missing env ${missing.join(', ')}`);
   }
   _env = {
-    accountId: accountId!,
+    accountId: accountId ?? '',
     accessKeyId: accessKeyId!,
     secretAccessKey: secretAccessKey!,
     bucket: process.env.R2_BUCKET || 'agent-media-outputs',
@@ -58,9 +62,17 @@ function readEnv(): R2Env {
 function getClient(): S3Client {
   if (_client) return _client;
   const env = readEnv();
+  // S3_ENDPOINT lets a self-hoster point at any S3-compatible store (MinIO,
+  // Ceph, Backblaze). Unset → Cloudflare R2, so hosted behaviour is unchanged.
+  // S3_FORCE_PATH_STYLE is required by MinIO, which serves buckets as
+  // /bucket/key rather than the virtual-host style R2 uses.
+  const endpoint =
+    process.env.S3_ENDPOINT?.trim() ||
+    `https://${env.accountId}.r2.cloudflarestorage.com`;
   _client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${env.accountId}.r2.cloudflarestorage.com`,
+    region: process.env.S3_REGION?.trim() || 'auto',
+    endpoint,
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE?.trim() === 'true',
     credentials: {
       accessKeyId: env.accessKeyId,
       secretAccessKey: env.secretAccessKey,

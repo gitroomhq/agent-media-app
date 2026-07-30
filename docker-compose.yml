@@ -1,35 +1,85 @@
 # agent-media — self-host stack.
 #
-#   cp .env.example .env   # fill in provider keys
+#   cp .env.example .env     # fill in provider keys (Evolink/OpenAI/Anthropic)
 #   docker compose up
 #
-# This bundles OPEN equivalents of the managed services the hosted product
+# This bundles OPEN equivalents of every managed service the hosted product
 # uses, so you are not tied to our vendors:
-#   Supabase Postgres -> postgres        (this file)
-#   Temporal Cloud    -> temporal        (this file)
-#   Cloudflare R2     -> minio           (S3-compatible; R2 is S3-compatible too)
 #
-# Billing is OFF unless STRIPE_SECRET_KEY is set — self-hosters bring their own
-# provider keys and generate freely. See BILLING_ENABLED in the docs.
+#   Supabase (managed) -> postgres + auth (GoTrue) + rest (PostgREST)  [this file]
+#   Temporal Cloud     -> temporal                                      [this file]
+#   Cloudflare R2      -> minio (S3-compatible)                         [this file]
+#
+# Billing is OFF here (BILLING_MODE=disabled): you bring your own provider keys
+# and generate freely against them, with no credit ledger and no Stripe.
+#
+# NOTE ON SUPABASE: the app needs more than a bare Postgres — it uses Supabase's
+# Auth (GoTrue) and PostgREST APIs. Running plain postgres alone is why an
+# earlier version of this file could not actually boot the app. The services
+# below provide those APIs; SUPABASE_URL points at the local `rest` gateway.
 
 name: agent-media
 
+x-supabase-jwt: &supabase-jwt
+  # Local-only demo keys. They are signed with JWT_SECRET below and are safe to
+  # publish BECAUSE they only ever authenticate against your own local stack.
+  # Generate your own for anything internet-facing: https://supabase.com/docs/guides/self-hosting
+  JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+
 services:
+  # ── Data plane ──────────────────────────────────────────────────────────
   postgres:
-    image: postgres:15
+    image: supabase/postgres:15.8.1.020
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-agentmedia}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentmedia}
-      POSTGRES_DB: ${POSTGRES_DB:-agentmedia}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
     ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Migrations run in filename order on FIRST boot of an empty volume.
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agentmedia}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
 
-  # S3-compatible object storage (stands in for Cloudflare R2).
+  # Supabase Auth. The app verifies user JWTs and runs the MCP OAuth flow
+  # against this.
+  auth:
+    image: supabase/gotrue:v2.177.0
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      <<: *supabase-jwt
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: ${SUPABASE_URL:-http://localhost:8000}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}
+      GOTRUE_SITE_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+    ports: ["9999:9999"]
+
+  # PostgREST — the REST surface the supabase-js client talks to.
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      <<: *supabase-jwt
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    ports: ["8000:3000"]
+
+  # ── Object storage (stands in for Cloudflare R2) ────────────────────────
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
@@ -42,9 +92,8 @@ services:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
 
-  # Creates the outputs bucket on first boot.
   minio-init:
     image: minio/mc
     depends_on:
@@ -55,7 +104,7 @@ services:
       mc mb -p local/${R2_BUCKET:-agent-media-outputs} &&
       mc anonymous set download local/${R2_BUCKET:-agent-media-outputs} || true"
 
-  # Durable orchestration for the vNext composed workflows.
+  # ── Durable orchestration (vNext composed workflows) ────────────────────
   temporal:
     image: temporalio/auto-setup:1.25.2
     depends_on:
@@ -63,14 +112,19 @@ services:
     environment:
       DB: postgres12
       DB_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-agentmedia}
-      POSTGRES_PWD: ${POSTGRES_PASSWORD:-agentmedia}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_SEEDS: postgres
     ports: ["7233:7233"]
 
   # ── Application services ────────────────────────────────────────────────
-  # Each has its own Dockerfile and is buildable/deployable independently to
-  # any container host (Railway, Fly, Render, ECS, a VPS...).
+  # Each has its own Dockerfile and deploys independently to any container host
+  # (Railway, Fly, Render, ECS, a plain VPS).
+  #
+  # The S3_* vars are what make MinIO work: without them the storage clients
+  # default to Cloudflare R2's endpoint and the bundled MinIO sits unused.
+  # S3_FORCE_PATH_STYLE is required because MinIO serves /bucket/key rather than
+  # the virtual-host style R2 uses.
 
   api-v2:
     build:
@@ -82,8 +136,16 @@ services:
     env_file: [.env]
     environment:
       PORT: 3001
+      BILLING_MODE: disabled
+      SUPABASE_URL: http://rest:3000
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_TLS: "false"
+      S3_ENDPOINT: http://minio:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_REGION: us-east-1
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+      R2_BUCKET: ${R2_BUCKET:-agent-media-outputs}
       R2_PUBLIC_URL: http://localhost:9000/${R2_BUCKET:-agent-media-outputs}
     ports: ["3001:3001"]
 
@@ -94,9 +156,18 @@ services:
     depends_on: [api-v2, temporal]
     env_file: [.env]
     environment:
+      BILLING_MODE: disabled
+      SUPABASE_URL: http://rest:3000
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_TLS: "false"
       API_V2_URL: http://api-v2:3001
+      S3_ENDPOINT: http://minio:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_REGION: us-east-1
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+      R2_BUCKET: ${R2_BUCKET:-agent-media-outputs}
+      R2_PUBLIC_URL: http://localhost:9000/${R2_BUCKET:-agent-media-outputs}
 
   media-worker-v2:
     build:
@@ -106,7 +177,16 @@ services:
     env_file: [.env]
     environment:
       PORT: 3000
+      BILLING_MODE: disabled
+      SUPABASE_URL: http://rest:3000
       API_V2_URL: http://api-v2:3001
+      S3_ENDPOINT: http://minio:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_REGION: us-east-1
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+      R2_BUCKET: ${R2_BUCKET:-agent-media-outputs}
+      R2_PUBLIC_URL: http://localhost:9000/${R2_BUCKET:-agent-media-outputs}
     ports: ["3002:3000"]
 
   subtitle-worker:
@@ -117,7 +197,14 @@ services:
     env_file: [.env]
     environment:
       PORT: 3000
+      SUPABASE_URL: http://rest:3000
       API_V2_URL: http://api-v2:3001
+      S3_ENDPOINT: http://minio:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_REGION: us-east-1
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+      R2_BUCKET: ${R2_BUCKET:-agent-media-outputs}
     ports: ["3003:3000"]
 
 volumes:

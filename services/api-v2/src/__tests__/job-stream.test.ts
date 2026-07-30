@@ -87,6 +87,15 @@ function baseJob(status: string): JobStatusView {
   };
 }
 
+/** Polls until `cond` holds. Replaces fixed sleeps that flake under load. */
+async function waitFor(cond: () => boolean, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error('waitFor: condition never became true');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
 describe('job stream route', () => {
   it('emits realtime updates and closes on terminal state', async () => {
     let current = baseJob('submitted');
@@ -115,7 +124,12 @@ describe('job stream route', () => {
     const url = `http://127.0.0.1:${addr.port}/v2/jobs/${JOB_ID}/stream`;
 
     const reading = readSseEvents(url, 8);
-    await new Promise((r) => setTimeout(r, 25));
+    // Barrier, not a sleep. The route reads the initial snapshot (emitting
+    // 'submitted') BEFORE it calls subscribe(), so once hooks.onUpdate exists
+    // the first emit has provably happened. A fixed 25ms sleep raced here: on a
+    // loaded machine the request had not reached the handler yet, so readJob()
+    // returned 'processing' and the 'submitted' event was never emitted.
+    await waitFor(() => hooks.onUpdate !== undefined);
     current = { ...baseJob('processing'), updated_at: new Date().toISOString() };
     if (hooks.onUpdate) await hooks.onUpdate();
     await new Promise((r) => setTimeout(r, 25));
