@@ -78,6 +78,48 @@ export function isBillingEnabled(): boolean {
   return process.env.BILLING_MODE?.trim().toLowerCase() !== 'disabled';
 }
 
+/**
+ * Refund every credit charged under a skill run.
+ *
+ * Used by cancel, where Temporal's `terminate()` skips the workflow's own
+ * compensation. Walks `primitive_runs` by `skill_run_id` rather than
+ * reconstructing deterministic child ids, so it also catches primitives a
+ * workflow created outside the expected step list.
+ *
+ * `refund_credits(p_job_id)` is SECURITY DEFINER and idempotent: it raises
+ * ALREADY_REFUNDED when a refund exists and NO_DEDUCTION_FOUND when nothing was
+ * charged. Both are success for our purposes — the invariant we want is "no
+ * charge survives a run that did not deliver", not "exactly one refund row".
+ *
+ * Throws on any *other* RPC error so the caller can leave the run cancellable
+ * and let a retry finish the refund.
+ */
+export async function refundSkillRunCharges(
+  skillRunId: string,
+): Promise<{ charged: number; refunded: number }> {
+  const { data: rows, error } = await supabase
+    .from('primitive_runs')
+    .select('id, credits_deducted')
+    .eq('skill_run_id', skillRunId);
+  if (error) throw new Error(`primitive_runs lookup failed: ${error.message}`);
+
+  const charged = (rows ?? []).filter((r) => Number(r.credits_deducted ?? 0) > 0);
+  let refunded = 0;
+
+  for (const row of charged) {
+    const { error: rpcErr } = await supabase.rpc('refund_credits', { p_job_id: row.id });
+    if (!rpcErr) {
+      refunded += 1;
+      continue;
+    }
+    // Idempotent outcomes — the money is already where it should be.
+    if (/ALREADY_REFUNDED|NO_DEDUCTION_FOUND/i.test(rpcErr.message)) continue;
+    throw new Error(`refund_credits failed for primitive_run ${row.id}: ${rpcErr.message}`);
+  }
+
+  return { charged: charged.length, refunded };
+}
+
 async function preflightCreditCheck(
   userId: string,
   slug: string,
@@ -991,6 +1033,39 @@ export async function cancelSkillRunRoute(req: Request, res: Response): Promise<
       res.status(502).json({ error: 'temporal_terminate_failed', detail: msg });
       return;
     }
+  }
+
+  // Refund what was already charged, BEFORE marking the run canceled.
+  //
+  // `terminate()` kills the workflow without running its catch block, so the
+  // compensation that a *failed* run relies on never executes. Without this a
+  // completed-and-charged primitive stayed debited on a run reported as
+  // "canceled" — and because the idempotent guard above short-circuits any later
+  // cancel of a terminal run, those credits were stranded permanently.
+  //
+  // Ordering matters: refund first. If we marked the row canceled and the refund
+  // then failed, the retry would hit the already-terminal early return and the
+  // money would never come back. Failing here leaves the run cancellable, so a
+  // retry finishes the job.
+  //
+  // Policy matches the failure path (makeUgcVideoWorkflow's catch refunds every
+  // step, succeeded or not): a run that does not deliver its final output is
+  // refunded in full. refund_credits is idempotent, so zero-credit primitives
+  // (portrait, in-video sheet) and any already-refunded rows are no-ops.
+  try {
+    const refund = await refundSkillRunCharges(run.id);
+    if (refund.refunded > 0) {
+      console.log(
+        `[cancel] refunded ${refund.refunded}/${refund.charged} charged primitive(s) for skill_run ${run.id}`,
+      );
+    }
+  } catch (err) {
+    res.status(500).json({
+      error: 'cancel_refund_failed',
+      detail: errorMessage(err),
+      hint: 'run left cancellable so the refund can be retried; credits are not lost',
+    });
+    return;
   }
 
   const { error: updErr } = await supabase
