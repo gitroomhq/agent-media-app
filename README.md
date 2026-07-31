@@ -169,19 +169,22 @@ cp .env.example .env     # add your Evolink / OpenAI / Anthropic keys
 docker compose up
 ```
 
-That brings up the full backend: Postgres, Supabase Auth (GoTrue), PostgREST,
-Supabase Storage, Temporal, MinIO (S3-compatible storage), and the four
-application services. Migrations are applied automatically on first boot.
-**api-v2 listens on `http://localhost:3001`.**
+That brings up everything: Postgres, Supabase Auth (GoTrue), PostgREST, Supabase
+Storage, Temporal, MinIO (S3-compatible storage), the four backend services and
+the dashboard. Migrations are applied automatically on first boot.
 
-Note that a bare Postgres is *not* enough — the app depends on Supabase's Auth
-and PostgREST APIs, so the compose file runs those as real services rather than
+- **Dashboard** → `http://localhost:3000` (set `WEB_PORT` if 3000 is taken)
+- **API** → `http://localhost:3001`
+
+A bare Postgres is *not* enough — the app depends on Supabase's Auth and
+PostgREST APIs, so the compose file runs those as real services rather than
 pretending Postgres alone will do.
 
-**This is the API, not the web UI.** `apps/web` is in the repo and Apache-2.0
-like everything else, but it has no container in this compose file — run it with
-`pnpm --filter @agent-media/web dev` and point it at `http://localhost:3001`.
-Agents talk to the API directly, so the UI is optional for the agent use case.
+**Dashboard only — there is no marketing site here.** `/` redirects straight to
+`/dashboard`, and `robots.txt` disallows everything, because a self-hosted
+instance has no business being indexed. The hosted site at agent-media.ai keeps
+its own landing pages, pricing and SEO surface; none of that is in this repo.
+Agents talk to the API directly and never see the UI at all.
 
 You are not tied to our vendors: Temporal Cloud → the Temporal container,
 Cloudflare R2 → MinIO (or any S3-compatible store via `S3_ENDPOINT`),

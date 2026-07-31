@@ -301,6 +301,36 @@ services:
       R2_PUBLIC_URL: http://localhost:9000/${R2_BUCKET:-agent-media-outputs}
     ports: ["3001:3001"]
 
+  # The dashboard. There is no public marketing site in this distribution —
+  # `/` redirects to /dashboard, and robots.txt disallows everything, because a
+  # self-hosted instance has no business being indexed.
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Next bakes the image-optimizer allowlist at build time. MinIO serves
+        # generated media here, so it must be allowed or every <Image> 400s.
+        NEXT_PUBLIC_IMAGE_HOSTS: localhost
+    depends_on: [api-v2]
+    env_file: [.env]
+    environment:
+      <<: [*supabase-keys, *internal-secrets]
+      PORT: 3000
+      # Browser-facing: these are read at RUNTIME by the root layout, so one
+      # image serves any environment.
+      # The Next middleware builds a Supabase client on EVERY request and needs
+      # the browser-side names specifically. Without the anon key here, every
+      # route 500s with "Your project's URL and Key are required".
+      NEXT_PUBLIC_SUPABASE_URL: http://localhost:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNjQxNzY5MjAwLCJleHAiOjE3OTk1MzU2MDB9.tILz8nMY9G1CrOiUvuQtb8R3TjMaqW-abNon7hOAvv0}
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3001
+      NEXT_PUBLIC_MCP_URL: http://localhost:3001/mcp
+      SUPABASE_URL: http://rest:3000
+    # Port 3000 is the most contested port on any dev machine. Override with
+    # WEB_PORT=3005 in .env rather than editing this file.
+    ports: ["${WEB_PORT:-3000}:3000"]
+
   primitive-worker-vnext:
     build:
       context: .

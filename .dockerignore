@@ -7,7 +7,13 @@ node_modules
 *.png
 *.jpg
 *.jpeg
-apps/
+# apps/web IS built (see apps/web/Dockerfile), so this cannot be a blanket
+# `apps/` exclusion — that is what made services/subtitle-worker unbuildable.
+# The heavy part of apps/web is node_modules and .next, both excluded below.
+apps/cli
+apps/docs
+apps/web/node_modules
+apps/web/.next
 /workflows/
 /scripts/
 supabase/

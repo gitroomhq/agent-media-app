@@ -47,6 +47,9 @@ jobs:
           - primitive-worker-vnext
           - subtitle-worker
           - brand-extractor
+          # The dashboard. Its Dockerfile lives under apps/, not services/ —
+          # the build step resolves the path per service.
+          - web
         # arch must be a real matrix dimension so we get the 5x2 cross-product.
         # `include` is used ONLY to map each arch onto its native runner: an
         # include entry introducing new keys is merged into every combination,
@@ -79,8 +82,12 @@ jobs:
         env:
           CONTAINERVER: ${{ needs.common.outputs.containerver }}
         run: |
+          DOCKERFILE="services/${{ matrix.service }}/Dockerfile"
+          if [ "${{ matrix.service }}" = "web" ]; then
+            DOCKERFILE="apps/web/Dockerfile"
+          fi
           docker buildx build --platform linux/${{ matrix.arch }} \
-            -f services/${{ matrix.service }}/Dockerfile \
+            -f "$DOCKERFILE" \
             --pull --provenance=false --sbom=false \
             --output "type=registry,name=${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ env.CONTAINERVER }}-${{ matrix.arch }}" .
 
@@ -99,6 +106,9 @@ jobs:
           - primitive-worker-vnext
           - subtitle-worker
           - brand-extractor
+          # The dashboard. Its Dockerfile lives under apps/, not services/ —
+          # the build step resolves the path per service.
+          - web
     steps:
       - name: Login to ghcr
         uses: docker/login-action@v3
