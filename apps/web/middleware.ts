@@ -80,7 +80,18 @@ const AUTH_NO_SUB_ROUTES = new Set(['/onboarding', '/subscribe', '/invite']);
  */
 const SUBSCRIPTION_PREFIXES = ['/dashboard', '/create', '/gallery', '/billing', '/settings', '/admin'];
 const ENFORCE_SUBSCRIPTION_WALL = true;
-const SUBSCRIPTION_REDIRECT = '/onboarding/plan';
+
+/**
+ * Both gates are environment-driven so they can be reversed without a deploy.
+ * Defaults reproduce the historic behaviour exactly, so a fresh install and a
+ * self-hoster see no change until a variable is set.
+ *
+ * ENFORCE_ONBOARDING=false          drops the onboarding gate.
+ * SUBSCRIPTION_REDIRECT=/subscribe  sends unsubscribed users to the paywall
+ *                                   instead of the in-flow plan picker.
+ */
+const ENFORCE_ONBOARDING = process.env.ENFORCE_ONBOARDING !== 'false';
+const SUBSCRIPTION_REDIRECT = process.env.SUBSCRIPTION_REDIRECT ?? '/onboarding/plan';
 
 /** Security headers applied to every response. */
 const SECURITY_HEADERS: Record<string, string> = {
@@ -101,6 +112,41 @@ const SECURITY_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
+
+/**
+ * Cross-domain "is this browser signed in?" hint.
+ *
+ * When the marketing site and the app run on different hosts, the Supabase auth
+ * cookie is host-only, so the marketing host cannot see a session and cannot
+ * know whether to send a visitor to the app. This answers that one question.
+ *
+ * It carries NO credential — only the boolean. If it is stale the visitor is
+ * sent to the app, which checks the real session and shows login. Widening the
+ * auth cookie to the parent domain instead would leave existing users holding
+ * two cookies of the same name at different scopes, whose failure mode is
+ * intermittent logout.
+ *
+ * Disabled unless SESSION_HINT_DOMAIN is set, so a self-hosted single-host
+ * install writes nothing.
+ */
+const SESSION_HINT = 'am_session_hint';
+const HINT_DOMAIN = process.env.SESSION_HINT_DOMAIN?.trim() || '';
+
+function applySessionHint(
+  response: NextResponse,
+  action: 'set' | 'clear' | 'none',
+): NextResponse {
+  if (!HINT_DOMAIN || action === 'none') return response;
+  response.cookies.set(SESSION_HINT, action === 'set' ? '1' : '', {
+    domain: HINT_DOMAIN,
+    path: '/',
+    sameSite: 'lax',
+    secure: true,
+    httpOnly: false,
+    maxAge: action === 'set' ? 60 * 60 * 24 * 30 : 0,
+  });
+  return response;
+}
 
 /**
  * Apply security headers to a NextResponse.
@@ -176,6 +222,18 @@ export async function middleware(request: NextRequest) {
 
   const { user, supabase, supabaseResponse } = await updateSession(request);
 
+  /** Keep the hint in step with reality on every response after this point. */
+  const hadHint = request.cookies.get(SESSION_HINT)?.value === '1';
+  const hintAction: 'set' | 'clear' | 'none' = user
+    ? hadHint
+      ? 'none'
+      : 'set'
+    : hadHint
+      ? 'clear'
+      : 'none';
+  const finish = (res: NextResponse) =>
+    applySessionHint(applySecurityHeaders(res), hintAction);
+
   // Check if this is a subscription-required route
   const requiresSubscription = SUBSCRIPTION_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -189,20 +247,20 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     const redirectResponse = NextResponse.redirect(loginUrl);
-    return applySecurityHeaders(redirectResponse);
+    return finish(redirectResponse);
   }
 
   // Redirect authenticated users from homepage to dashboard
   if (pathname === '/' && user) {
     const redirectResponse = NextResponse.redirect(new URL('/dashboard', request.url));
-    return applySecurityHeaders(redirectResponse);
+    return finish(redirectResponse);
   }
 
   // On the app subdomain `/` is meaningless for logged-out users -
   // there's no marketing here. Send them to /login.
   if (pathname === '/' && !user && host === APP_HOST) {
     const redirectResponse = NextResponse.redirect(new URL('/login', request.url));
-    return applySecurityHeaders(redirectResponse);
+    return finish(redirectResponse);
   }
 
   // Redirect authenticated users away from login to dashboard
@@ -211,7 +269,7 @@ export async function middleware(request: NextRequest) {
     // Sanitise redirect: must be a relative path starting with /
     const redirectTo = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/dashboard';
     const redirectResponse = NextResponse.redirect(new URL(redirectTo, request.url));
-    return applySecurityHeaders(redirectResponse);
+    return finish(redirectResponse);
   }
 
   // Onboarding gate: a logged-in user that hasn't finished onboarding
@@ -219,14 +277,14 @@ export async function middleware(request: NextRequest) {
   // anything else. The entire /onboarding/* tree is exempt (the flow
   // has multiple steps); public routes are also exempt.
   const isOnboardingRoute = pathname === '/onboarding' || pathname.startsWith('/onboarding/');
-  if (user && supabase && !isOnboardingRoute) {
+  if (ENFORCE_ONBOARDING && user && supabase && !isOnboardingRoute) {
     const gateRequired = requiresSubscription || (isAuthNoSub && pathname !== '/invite');
     if (gateRequired) {
       const isOnboarded = await checkOnboarded(supabase, user.id);
       if (!isOnboarded) {
         const onboardingUrl = new URL('/onboarding', request.url);
         const redirectResponse = NextResponse.redirect(onboardingUrl);
-        return applySecurityHeaders(redirectResponse);
+        return finish(redirectResponse);
       }
     }
   }
@@ -239,7 +297,7 @@ export async function middleware(request: NextRequest) {
     if (!hasSubscription) {
       const planUrl = new URL(SUBSCRIPTION_REDIRECT, request.url);
       const redirectResponse = NextResponse.redirect(planUrl);
-      return applySecurityHeaders(redirectResponse);
+      return finish(redirectResponse);
     }
   }
 
@@ -257,11 +315,11 @@ export async function middleware(request: NextRequest) {
     if (hasSubscription) {
       const dashboardUrl = new URL('/dashboard', request.url);
       const redirectResponse = NextResponse.redirect(dashboardUrl);
-      return applySecurityHeaders(redirectResponse);
+      return finish(redirectResponse);
     }
   }
 
-  return applySecurityHeaders(supabaseResponse);
+  return finish(supabaseResponse);
 }
 
 export const config = {
