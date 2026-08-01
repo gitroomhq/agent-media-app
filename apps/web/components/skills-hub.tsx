@@ -31,11 +31,11 @@ const COST_BY_SLUG: Record<string, { cost: string; time: string }> = {
 };
 
 export function SkillsHub({
-  initialTab = 'skill',
+  initialTab = 'mcp',
   initialClient = 'claude-code',
   internal = false,
 }: {
-  initialTab?: 'mcp' | 'cli' | 'skill';
+  initialTab?: 'mcp' | 'cli';
   initialClient?: 'claude-code' | 'cursor' | 'claude-desktop' | 'codex';
   /** Rendered inside the logged-in dashboard: don't push public /mcp URLs,
    *  and reword the run CTA (the user is already signed in). */

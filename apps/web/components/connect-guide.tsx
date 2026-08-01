@@ -10,13 +10,19 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Check, Copy, Terminal, FileText, Server, ExternalLink } from 'lucide-react';
+import { Check, Copy, Terminal, Server, ExternalLink } from 'lucide-react';
 import { ClaudeIcon, CursorIcon, AnthropicIcon, OpenAIIcon } from '@/components/brand-icons';
 
-type Surface = 'mcp' | 'cli' | 'skill';
+/**
+ * Two surfaces, matching agent-media.ai. "Skill" was a third tab, which framed
+ * the Claude skill pack as a rival install path — it is not, it is something
+ * you run through MCP or the CLI. Its command now lives in CLI step 3, exactly
+ * where the public guide puts it.
+ */
+type Surface = 'mcp' | 'cli';
 type Client = 'claude-code' | 'cursor' | 'claude-desktop' | 'codex';
 
-const PATHS: Record<Surface, string> = { mcp: '/mcp', cli: '/cli', skill: '/skills' };
+const PATHS: Record<Surface, string> = { mcp: '/mcp', cli: '/cli' };
 const CLIENT_LABEL: Record<Client, string> = { 'claude-code': 'Claude Code', cursor: 'Cursor', 'claude-desktop': 'Claude Desktop', codex: 'Codex' };
 const CLIENT_HERO: Record<Client, string> = { 'claude-code': 'Claude Code', cursor: 'Cursor', 'claude-desktop': 'Claude', codex: 'Codex' };
 
@@ -93,7 +99,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   );
 }
 
-export function ConnectGuide({ initialTab = 'skill', initialClient = 'claude-code', routePaths = true }: { initialTab?: Surface; initialClient?: Client; routePaths?: boolean }) {
+export function ConnectGuide({ initialTab = 'mcp', initialClient = 'claude-code', routePaths = true }: { initialTab?: Surface; initialClient?: Client; routePaths?: boolean }) {
   const [surface, setSurface] = useState<Surface>(initialTab);
   const [client, setClient] = useState<Client>(initialClient);
 
@@ -105,7 +111,6 @@ export function ConnectGuide({ initialTab = 'skill', initialClient = 'claude-cod
     const sync = () => {
       const p = window.location.pathname;
       if (p === '/cli') setSurface('cli');
-      else if (p === '/skills') setSurface('skill');
       else if (p === '/mcp' || p.startsWith('/mcp/')) {
         setSurface('mcp');
         // Client lives in the path now (/mcp/<client>), not a query param.
@@ -157,7 +162,6 @@ export function ConnectGuide({ initialTab = 'skill', initialClient = 'claude-cod
         <div className="inline-flex p-1" style={{ background: '#08080B', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 8 }}>
           <Tab active={surface === 'mcp'} onClick={() => pick('mcp')}><Server className="h-3.5 w-3.5" /> MCP</Tab>
           <Tab active={surface === 'cli'} onClick={() => pick('cli')}><Terminal className="h-3.5 w-3.5" /> CLI</Tab>
-          <Tab active={surface === 'skill'} onClick={() => pick('skill')}><FileText className="h-3.5 w-3.5" /> Skill</Tab>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-3">
           {surface === 'mcp' && (
@@ -187,18 +191,11 @@ export function ConnectGuide({ initialTab = 'skill', initialClient = 'claude-cod
 
       {/* Panel */}
       <div className="mt-4 grid grid-cols-1 gap-7 p-5 sm:p-6 md:grid-cols-3" style={{ background: '#17171D', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12 }}>
-        {surface === 'skill' && (
-          <>
-            <Step n={1} title="Add the skills">One command pulls every agent-media skill into your agent.<Code text="npx skills add gitroomhq/agent-media" /></Step>
-            <Step n={2} title="Sign in">Connect your account so the skills can run jobs.<Code text="npm i -g agent-media-cli && agent-media login" /></Step>
-            <Step n={3} title="Just ask in chat">Say it in plain words — the agent calls make_ugc:<Code text={`"Make a UGC video of a friendly woman saying '…'."`} /></Step>
-          </>
-        )}
         {surface === 'cli' && (
           <>
             <Step n={1} title="Install the CLI">One line — auth, uploads, and polling are handled for you.<Code text="npm install -g agent-media-cli" /></Step>
             <Step n={2} title="Sign in">Opens a browser, takes 5 seconds. The token is stored locally.<Code text="agent-media login" /></Step>
-            <Step n={3} title="Run it"><code className="text-white/85">agent-media skills list</code> (one skill: make_ugc), then run and wait:<Code text={`agent-media skills run make_ugc \\\n  --input '{"script":"this app changed my mornings","person":"a friendly woman"}' \\\n  --wait`} /></Step>
+            <Step n={3} title="Run it, or hand it to your agent"><code className="text-white/85">agent-media skills list</code>, then run and wait:<Code text={`agent-media skills run make_ugc \\\n  --input '{"script":"this app changed my mornings","person":"a friendly woman"}' \\\n  --wait`} />To let Claude Code call these in plain English, pull in the skill pack:<Code text="npx skills add gitroomhq/agent-media-app" /></Step>
           </>
         )}
         {surface === 'mcp' && (

@@ -855,17 +855,28 @@ if (isPrimitivesRouteEnabled()) {
   app.post('/v1/agent', generateLimiter, authMiddleware, agentRoute);
   // Agent chat persistence (Phase 1) — reopenable sessions. Client-driven,
   // additive: the brain + /v1/skills/run are untouched. See agent-chats.ts.
+  //
+  // These are CRUD on chat records — creating a chat, appending a message,
+  // renaming one. They generate nothing and cost nothing, so they belong on the
+  // read tier (60/min), not the generate tier (10/min).
+  //
+  // On generate they made the agent unusable: one conversational turn is a
+  // brain call plus a message append plus sometimes a title patch, so three
+  // turns hit the ceiling. A first-time user got RATE_LIMITED on their first
+  // conversation. /v1/agent — the brain, which actually spends money — stays
+  // on generate.
   app.get('/v1/agent/chats', readLimiter, authMiddleware, listChatsRoute);
-  app.post('/v1/agent/chats', generateLimiter, authMiddleware, createChatRoute);
+  app.post('/v1/agent/chats', readLimiter, authMiddleware, createChatRoute);
   app.get('/v1/agent/chats/:id', readLimiter, authMiddleware, getChatRoute);
-  app.patch('/v1/agent/chats/:id', generateLimiter, authMiddleware, patchChatRoute);
-  app.delete('/v1/agent/chats/:id', generateLimiter, authMiddleware, deleteChatRoute);
-  app.post('/v1/agent/chats/:id/messages', generateLimiter, authMiddleware, appendMessagesRoute);
+  app.patch('/v1/agent/chats/:id', readLimiter, authMiddleware, patchChatRoute);
+  app.delete('/v1/agent/chats/:id', readLimiter, authMiddleware, deleteChatRoute);
+  app.post('/v1/agent/chats/:id/messages', readLimiter, authMiddleware, appendMessagesRoute);
   // Projects (Phase 3) — rail groups + pinned context injected into the brain.
+  // Same reasoning: record-keeping, not generation.
   app.get('/v1/agent/projects', readLimiter, authMiddleware, listProjectsRoute);
-  app.post('/v1/agent/projects', generateLimiter, authMiddleware, createProjectRoute);
-  app.patch('/v1/agent/projects/:id', generateLimiter, authMiddleware, patchProjectRoute);
-  app.delete('/v1/agent/projects/:id', generateLimiter, authMiddleware, deleteProjectRoute);
+  app.post('/v1/agent/projects', readLimiter, authMiddleware, createProjectRoute);
+  app.patch('/v1/agent/projects/:id', readLimiter, authMiddleware, patchProjectRoute);
+  app.delete('/v1/agent/projects/:id', readLimiter, authMiddleware, deleteProjectRoute);
   // Durable-loop tasks (Phase 1 — data layer; dormant until the Phase 2 workflow).
   app.get('/v1/agent/tasks', readLimiter, authMiddleware, listTasksRoute);
   app.post('/v1/agent/tasks', generateLimiter, authMiddleware, createTaskRoute);
