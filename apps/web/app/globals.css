@@ -62,10 +62,10 @@
   background:
     radial-gradient(
       40% 65% at 85% 50%,
-      #3a2c66 3.5%,
-      #271c4a 26.5%,
-      #1a1230 37.5%,
-      rgba(26, 18, 48, 0.55) 49%,
+      #3d2a7a 3.5%,
+      #2a0b6b 26.5%,
+      #16043a 37.5%,
+      rgba(22, 4, 58, 0.55) 49%,
       rgba(0, 0, 0, 0) 92.5%
     );
 }
@@ -89,36 +89,52 @@
  * not invent fallbacks — if a value is missing, ask before guessing.
  * No border token: Cryptix has zero rendered borders site-wide; surfaces
  * separate via mint glow + surface-2 elevation only. */
+/* Retargeted to the agent-media.ai palette (2026-08). The token NAMES are
+ * kept — they are referenced by ~every component — but every value now comes
+ * from the marketing site's design system, so the app and the site are one
+ * brand instead of two. Reference: agent-media-website/src/app/globals.css.
+ *
+ *   background   #000000   (site body)
+ *   card         #0D0E12   (site card fill)
+ *   accent       #9162FF   (site purple; #4500E7 deep, #CB3DFF hot)
+ *   CTA amber    #FFB83D   (site primary-button glow)
+ */
 .theme-cryptix {
-  --cryptix-bg:          #08070E;
-  --cryptix-surface:     #17171D;
-  --cryptix-surface-2:   #202026;
-  --cryptix-text:        #F5F5F5;
-  --cryptix-text-muted:  #B0B0B0;
+  --cryptix-bg:          #000000;
+  --cryptix-surface:     #0D0E12;
+  --cryptix-surface-2:   #17181F;
+  --cryptix-text:        #FFFFFF;
+  --cryptix-text-muted:  rgba(255, 255, 255, 0.65);
 
   /* Primary accent — Huly-style violet. The token name `cryptix-mint`
    * is kept as a back-compat alias so existing components don't need
    * a sweeping rename; the VALUE is what shifted the brand. */
-  --cryptix-mint:        #A78BFA;
-  --cryptix-mint-glow:   rgba(167, 139, 250, 0.28);
-  --cryptix-purple:      #A78BFA;
-  --cryptix-purple-glow: rgba(167, 139, 250, 0.28);
+  --cryptix-mint:        #9162FF;
+  --cryptix-mint-glow:   rgba(145, 98, 255, 0.28);
+  --cryptix-purple:      #9162FF;
+  --cryptix-purple-glow: rgba(145, 98, 255, 0.28);
 
-  /* Secondary accent — warm orange for high-energy CTAs. */
-  --cryptix-orange:      #FF8A4C;
-  --cryptix-orange-glow: rgba(255, 138, 76, 0.35);
+  /* Deep and hot ends of the site's purple ramp. */
+  --cryptix-purple-deep: #4500E7;
+  --cryptix-purple-hot:  #CB3DFF;
+
+  /* Secondary accent — the amber the site's primary button glows with. */
+  --cryptix-orange:      #FFB83D;
+  --cryptix-orange-glow: rgba(255, 184, 61, 0.35);
 
   /* Huly-style CTA pill: near-white background with a small warm
    * orange-cream radial glow inside and deep-orange-brown text. The
    * radial sits at 30%/50% (left-of-center) and fades to transparent
    * around 40% radius so the white base reads as the dominant colour
    * and the orange is just an accent, not a flood. */
-  --cryptix-cta-bg:      #EDEDED;
-  --cryptix-cta-text:    #5A250A;
+  /* The site's primary button: a white-to-lilac vertical fill with an amber
+   * halo. Base and text follow it. */
+  --cryptix-cta-bg:      #FFFFFF;
+  --cryptix-cta-text:    #000000;
   /* Inner-pill glow on the RIGHT (orange-cream comet) */
-  --cryptix-cta-glow:    radial-gradient(40% 90% at 85% 50%, rgba(255,196,140,0.95) 0%, rgba(255,225,180,0.55) 45%, rgba(237,237,237,0) 100%);
+  --cryptix-cta-glow:    radial-gradient(40% 90% at 85% 50%, rgba(255,184,61,0.85) 0%, rgba(255,214,140,0.45) 45%, rgba(255,255,255,0) 100%);
   /* Outer halo bleeding off the right edge of the pill */
-  --cryptix-cta-halo:    0 0 0 1px rgba(255,255,255,0.55) inset, 24px 0 50px -2px rgba(255,150,90,0.55), 48px 0 90px -8px rgba(255,170,110,0.35), -4px 0 18px -6px rgba(255,200,150,0.18);
+  --cryptix-cta-halo:    0 0 0 1px rgba(255,255,255,0.55) inset, 24px 0 50px -2px rgba(255,184,61,0.5), 48px 0 90px -8px rgba(255,184,61,0.3), -4px 0 18px -6px rgba(255,214,140,0.18);
 
   --cryptix-amber:       #F5B300;
   --cryptix-blue:        #008DE4;

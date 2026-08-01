@@ -64,7 +64,7 @@ export default function OnboardingProductPage() {
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-black text-white">
             <AgentMediaLogo size={22} color="#FFFFFF" />
           </span>
-          <span style={{ letterSpacing: '-0.01em' }}>AgentMedia</span>
+          <span style={{ letterSpacing: '-0.01em' }}>agent-media</span>
         </Link>
       </header>
 
