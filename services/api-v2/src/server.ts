@@ -65,6 +65,7 @@ import { asyncHandler } from './lib/async-handler.js';
 import { getMyGalleryRoute } from './routes/v1/me-gallery.js';
 import { listApiKeysRoute, createApiKeyRoute, revokeApiKeyRoute } from './routes/v1/me-api-keys.js';
 import { listSocialProvidersRoute, listSocialChannelsRoute, connectSocialRoute, deleteSocialChannelRoute, publishSocialRoute } from './routes/v1/social.js';
+import { videoConcurrencyGate } from './concurrency.js';
 import { agentRoute } from './routes/v1/agent.js';
 import {
   createChatRoute,
@@ -270,13 +271,17 @@ const ipFloodLimiter = rateLimit({
 type RateTier = 'generate' | 'read' | 'mcp';
 
 const perUserLimiters: Record<RateTier, express.RequestHandler> = {
+  // 60, not 10. Concurrency is now enforced properly by videoConcurrencyGate
+  // (MAX_CONCURRENT_VIDEOS, default 3), which limits renders in flight — the
+  // thing that actually costs money. This tier is back to being a coarse abuse
+  // guard, which is all a per-minute request counter can honestly be.
   generate: rateLimit({
     windowMs: 60_000,
-    max: 10,
+    max: 60,
     keyGenerator: rateLimitKey,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: { code: 'RATE_LIMITED', message: 'Too many generate requests. Max 10 per minute.' } },
+    message: { error: { code: 'RATE_LIMITED', message: 'Too many generate requests. Max 60 per minute.' } },
   }),
   read: rateLimit({
     windowMs: 60_000,
@@ -758,13 +763,13 @@ app.use(ipFloodLimiter);
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 
-app.post('/v1/generate/:generatorId', generateLimiter, authMiddleware, generateRoute);
+app.post('/v1/generate/:generatorId', generateLimiter, authMiddleware, videoConcurrencyGate, generateRoute);
 
 // ── v2 routes (Selfie, Character) — isolated, additive ────────────────────
-app.post('/v2/selfie',     generateLimiter, authMiddleware, selfieRoute);
-app.post('/v2/characters', generateLimiter, authMiddleware, characterCreateRoute);
+app.post('/v2/selfie',     generateLimiter, authMiddleware, videoConcurrencyGate, selfieRoute);
+app.post('/v2/characters', generateLimiter, authMiddleware, videoConcurrencyGate, characterCreateRoute);
 app.get('/v2/characters',  readLimiter,     authMiddleware, listCharactersRoute);
-app.post('/v2/subtitle',   generateLimiter, authMiddleware, subtitleRoute);
+app.post('/v2/subtitle',   generateLimiter, authMiddleware, videoConcurrencyGate, subtitleRoute);
 app.get('/v2/jobs/:jobId/stream', readLimiter, authMiddleware, jobStreamRoute);
 
 // ── HTTP MCP server (Claude.ai integrations + remote MCP clients) ─────────
@@ -839,7 +844,7 @@ if (isPrimitivesRouteEnabled()) {
   // unauthenticated marketing /skills landing page.
   app.get('/v1/public/skills', readLimiter, listSkillsRoute);
   app.post('/v1/skills/:slug/quote', readLimiter, authMiddleware, asyncHandler(quoteSkillRoute));
-  app.post('/v1/skills/:slug/run', generateLimiter, authMiddleware, asyncHandler(runSkillRoute));
+  app.post('/v1/skills/:slug/run', generateLimiter, authMiddleware, videoConcurrencyGate, asyncHandler(runSkillRoute));
   app.get('/v1/skills/runs/:skill_run_id', readLimiter, authMiddleware, asyncHandler(getSkillRunRoute));
   app.post('/v1/skills/runs/:skill_run_id/cancel', generateLimiter, authMiddleware, asyncHandler(cancelSkillRunRoute));
   app.get('/v1/me/gallery', readLimiter, authMiddleware, getMyGalleryRoute);
