@@ -52,10 +52,10 @@ export default function SkillCenterPage() {
           Skill Center
         </p>
         <h1 className="font-normal" style={{ color: '#E9E9F0', fontSize: 'clamp(28px,2.6vw,36px)', letterSpacing: '-0.03em', lineHeight: 1.05 }}>
-          Run any AgentMedia skill
+          Run any agent-media skill
         </h1>
         <p className="mt-1 max-w-2xl text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
-          Run any AgentMedia skill end-to-end. The same skills are exposed via REST at <code>POST /v1/skills/&lt;slug&gt;/run</code> and via MCP at <code>POST /mcp</code>. Click a card to run it or to copy the MCP install snippet.
+          Run any agent-media skill end-to-end. The same skills are exposed via REST at <code>POST /v1/skills/&lt;slug&gt;/run</code> and via MCP at <code>POST /mcp</code>. Click a card to run it or to copy the MCP install snippet.
         </p>
       </div>
 

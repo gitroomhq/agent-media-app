@@ -3,7 +3,7 @@
 'use client';
 
 /**
- * Onboarding step - "How did you find AgentMedia?".
+ * Onboarding step - "How did you find agent-media?".
  *
  * A grid of attribution pills. Exactly one is selectable at a time.
  * "Other" is just recorded as "other" - we intentionally do NOT ask a
@@ -93,7 +93,7 @@ export default function OnboardingSourcePage() {
             lineHeight: 1.1,
           }}
         >
-          How did you find AgentMedia?
+          How did you find agent-media?
         </h1>
         <p
           className="mt-3 text-sm"

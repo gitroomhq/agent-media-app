@@ -3,7 +3,7 @@
 'use client';
 
 /**
- * Onboarding step 2 - "AgentMedia is your content machine".
+ * Onboarding step 2 - "agent-media is your content machine".
  *
  * Six portrait video tiles in a 3x2 grid (1 column on mobile) under a
  * short two-row headline, with a single Continue button. The videos

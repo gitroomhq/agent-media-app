@@ -3,7 +3,7 @@
 'use client';
 
 /**
- * Onboarding step - "What is your goal with AgentMedia?".
+ * Onboarding step - "What is your goal with agent-media?".
  *
  * Multi-select pill grid. Each pill toggles independently; the answer
  * is recorded as an array of selected labels in
@@ -101,7 +101,7 @@ export default function OnboardingGoalPage() {
             lineHeight: 1.1,
           }}
         >
-          What is your goal with AgentMedia?
+          What is your goal with agent-media?
         </h1>
         <p
           className="mt-3 text-sm"

@@ -5,7 +5,7 @@
 /**
  * /home2 - Pipeline flow visualization.
  *
- *   [agent]  →  [AgentMedia]  →  [VIDEO]  ⇗  TikTok
+ *   [agent]  →  [agent-media]  →  [VIDEO]  ⇗  TikTok
  *                                          → Instagram
  *                                          ⇘  YouTube
  *
@@ -431,7 +431,7 @@ export function Home2Flow() {
                     className="text-sm font-medium"
                     style={{ color: 'var(--cryptix-text)' }}
                   >
-                    AgentMedia
+                    agent-media
                   </p>
                 </div>
               </div>

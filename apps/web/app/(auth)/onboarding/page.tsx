@@ -5,7 +5,7 @@
 /**
  * Onboarding step 1 - welcome.
  *
- * Plain white surface with the AgentMedia logo in BLACK (since the bg
+ * Plain white surface with the agent-media logo in BLACK (since the bg
  * is white this round), big "Welcome" headline, and a single primary
  * CTA. Top-left holds a back link + small wordmark. We'll iterate on
  * subsequent steps.
@@ -111,7 +111,7 @@ export default function OnboardingPage() {
             lineHeight: 1.1,
           }}
         >
-          Welcome to AgentMedia!
+          Welcome to agent-media!
         </h1>
         <p
           className="mt-3 text-sm"

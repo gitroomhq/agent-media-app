@@ -57,7 +57,7 @@ export default function LoginPage() {
             className="text-base font-semibold"
             style={{ color: 'var(--cryptix-text)', letterSpacing: '-0.01em' }}
           >
-            AgentMedia
+            agent-media
           </span>
         </Link>
       </header>
