@@ -30,6 +30,7 @@ import {
   quoteV2Credits,
 } from '@agentmedia/schema/v2';
 import { supabase } from '../../server.js';
+import { uploadUserVideoFromUrl } from '../../lib/r2-upload.js';
 
 const WORKER_V2_URL = process.env.WORKER_V2_URL;
 const WORKER_SECRET = process.env.WORKER_SECRET;
@@ -66,6 +67,29 @@ export async function subtitleRoute(req: Request, res: Response): Promise<void> 
   if (!WORKER_V2_URL || !WORKER_SECRET) {
     res.status(503).json({
       error: { code: 'WORKER_NOT_CONFIGURED', message: 'Subtitle service is not configured.' },
+    });
+    return;
+  }
+
+  // Re-host the source video onto R2 BEFORE taking credits.
+  //
+  // The worker only ever fetches R2 (SSRF guard), and it fails non-retryably on
+  // anything else. This endpoint used to forward the caller's URL untouched, so
+  // an external or Supabase-hosted video was charged for and then rejected by
+  // the worker — the user paid for a job that could not run. Doing it here, and
+  // before deduct_credits, means a bad URL is a 400 with no charge.
+  //
+  // Already-R2 URLs pass through without a fetch, so this is free in the common
+  // case.
+  try {
+    const rehosted = await uploadUserVideoFromUrl(userId, input.video_url);
+    input.video_url = rehosted.url;
+  } catch (err) {
+    res.status(400).json({
+      error: {
+        code: 'VIDEO_REHOST_FAILED',
+        message: `Could not fetch that video: ${err instanceof Error ? err.message : String(err)}`,
+      },
     });
     return;
   }

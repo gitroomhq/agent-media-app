@@ -441,6 +441,28 @@ export async function runSkillRoute(req: Request, res: Response): Promise<void> 
     }
   }
 
+  // make_subtitles: re-host the source video onto R2, same as every other
+  // user-supplied media input.
+  //
+  // Without this the worker's SSRF guard rejected anything not already on R2 —
+  // "video_url must be hosted on the configured R2 public URL" — which is a
+  // non-retryable Temporal failure AFTER credits were taken. A user pointing at
+  // their own video, or at a Supabase-hosted one, paid for a job that could
+  // never run. uploadUserVideoFromUrl passes R2 URLs straight through, so this
+  // costs nothing when the input is already ours.
+  if (slug === 'make_subtitles') {
+    const body = activityInputBody as { video_url?: string };
+    if (body.video_url) {
+      try {
+        const upv = await uploadUserVideoFromUrl(userId, String(body.video_url));
+        body.video_url = upv.url;
+      } catch (err) {
+        res.status(400).json({ error: 'video_rehost_failed', skill: slug, detail: errorMessage(err) });
+        return;
+      }
+    }
+  }
+
   // Pre-flight credit check — return 402 immediately so the caller
   // doesn't get a half-failed workflow on an insufficient balance.
   const preflight = await preflightCreditCheck(userId, slug, activityInputBody);
