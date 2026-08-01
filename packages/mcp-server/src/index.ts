@@ -16,6 +16,7 @@
  * API URL: Defaults to api-v2. Override with AGENT_MEDIA_API_URL.
  */
 
+import { createRequire } from 'node:module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -297,6 +298,44 @@ interface VnextSkillListEntry {
 
 const vnextBySlug: Record<string, VnextSkillListEntry> = {};
 
+/**
+ * Normalise a skill's JSON Schema into something MCP clients accept.
+ *
+ * api-v2 serialises these with zod-to-json-schema's default $ref strategy, so
+ * what arrives is `{ $ref: "#/definitions/make_ugc", definitions: {...} }` with
+ * no `type` at the top level. The MCP spec requires `inputSchema.type` to be
+ * the literal "object", and strict clients (Claude Code among them) reject the
+ * whole tools/list response when it isn't — which silently removed make_ugc,
+ * make_podcast and make_subtitles from every such client.
+ *
+ * We resolve one level of local $ref and keep the remaining definitions so
+ * nested references still resolve. If anything is unexpected we fall back to a
+ * permissive object rather than emitting something a client will reject.
+ */
+function normaliseInputSchema(raw: unknown): Record<string, unknown> {
+  const fallback = { type: 'object', additionalProperties: true } as const;
+  if (!raw || typeof raw !== 'object') return { ...fallback };
+
+  const schema = raw as Record<string, unknown>;
+  if (schema.type === 'object') return schema;
+
+  const ref = schema.$ref;
+  const definitions = schema.definitions as Record<string, unknown> | undefined;
+  if (typeof ref === 'string' && definitions) {
+    const key = ref.replace(/^#\/definitions\//, '');
+    const target = definitions[key];
+    if (target && typeof target === 'object') {
+      const resolved = { ...(target as Record<string, unknown>) };
+      // Keep the definitions block: sibling $refs inside the resolved schema
+      // still point at #/definitions/*.
+      if (Object.keys(definitions).length > 1) resolved.definitions = definitions;
+      if (resolved.type === 'object') return resolved;
+    }
+  }
+
+  return { ...fallback };
+}
+
 async function loadVnextSkills(): Promise<void> {
   try {
     const { status, data } = await apiCall('GET', '/v1/skills');
@@ -309,7 +348,7 @@ async function loadVnextSkills(): Promise<void> {
       tools.push({
         name: s.slug,
         description: `${s.name} (v${s.version}) — ${s.description}`,
-        inputSchema: (s.input_schema as object) ?? { type: 'object', additionalProperties: true },
+        inputSchema: normaliseInputSchema(s.input_schema),
       });
     }
   } catch (err) {
@@ -319,8 +358,19 @@ async function loadVnextSkills(): Promise<void> {
 
 // ── MCP Server ───────────────────────────────────────────────────────────────
 
+// Read the real published version rather than a hand-maintained literal —
+// this string is what MCP clients display, and a stale one makes it
+// impossible to tell which build a user is actually running.
+const SERVER_VERSION: string = (() => {
+  try {
+    return createRequire(import.meta.url)('../package.json').version as string;
+  } catch {
+    return '0.0.0';
+  }
+})();
+
 const server = new Server(
-  { name: 'agent-media', version: '0.1.0' },
+  { name: 'agent-media', version: SERVER_VERSION },
   { capabilities: { tools: {} } },
 );
 

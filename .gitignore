@@ -63,3 +63,4 @@ agent-media-vault/
 
 # Internal agent-automation scratch (contained a hardcoded service_role key)
 .a5c/
+.env*

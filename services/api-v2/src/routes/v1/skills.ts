@@ -201,6 +201,36 @@ export async function quoteSkillRoute(req: Request, res: Response): Promise<void
   });
 }
 
+/**
+ * The skill's input schema in the shape every consumer actually needs.
+ *
+ * `zodToJsonSchema(schema, name)` wraps the result as
+ * `{ $ref: "#/definitions/<name>", definitions: {...} }` with no top-level
+ * `type`. MCP requires `inputSchema.type === "object"`, and strict clients
+ * reject the entire tools/list response when it is missing — which is how
+ * make_ugc, make_podcast and make_subtitles disappeared from Claude Code
+ * while still appearing in `agent-media skills list`.
+ *
+ * `buildTools` in agent.ts already unwrapped this for Anthropic; this endpoint
+ * did not. Unwrap here so the CLI, the stdio MCP server and any future client
+ * all receive a plain object schema.
+ */
+function publicInputSchema(slug: string): Record<string, unknown> {
+  const wrapped = zodToJsonSchema(SKILLS[slug].inputSchema, slug) as {
+    definitions?: Record<string, Record<string, unknown>>;
+  } & Record<string, unknown>;
+  const inner = wrapped.definitions?.[slug];
+  if (!inner || inner.type !== 'object') {
+    return { type: 'object', properties: {}, additionalProperties: true };
+  }
+  const schema: Record<string, unknown> = { ...inner };
+  delete schema.$schema;
+  // Preserve sibling definitions so any nested $ref still resolves.
+  const rest = Object.entries(wrapped.definitions ?? {}).filter(([k]) => k !== slug);
+  if (rest.length > 0) schema.definitions = Object.fromEntries(rest);
+  return schema;
+}
+
 export function listSkillsRoute(_req: Request, res: Response): void {
   // When make_ugc is live it's the ONE listed generation skill (the others are
   // internal to its router) — so the CLI `skills list` and the local stdio
@@ -211,7 +241,7 @@ export function listSkillsRoute(_req: Request, res: Response): void {
     .filter((s) => (makeUgcOn ? s.agentFacing === true : true))
     .map((s) => ({
       ...s,
-      input_schema: zodToJsonSchema(SKILLS[s.slug].inputSchema, s.slug),
+      input_schema: publicInputSchema(s.slug),
     }));
   res.status(200).json({ skills });
 }
