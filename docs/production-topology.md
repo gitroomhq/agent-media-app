@@ -7,9 +7,8 @@ Every date and version below was read from the platform, not inferred.
 
 ## The short answer
 
-**As of 2026-08-02, four of five surfaces we build are sourced from this repo**
-and deploy automatically on push. One is not: `media-worker-v2`, held back
-deliberately — see step 4.
+**As of 2026-08-02, every surface we build is sourced from this repo** and
+deploys automatically on push.
 
 Ask production what it is running:
 
@@ -37,7 +36,7 @@ nothing to show for it from the outside.
 | `api-v2` | Railway | **`gitroomhq/agent-media-app`** | 2026-08-02 18:09, auto |
 | `primitive-worker-vnext` | Railway | **`gitroomhq/agent-media-app`** | 2026-08-02 18:04 |
 | Brand extractor | Railway | **`gitroomhq/agent-media-app`** | 2026-08-02 18:04 |
-| `media-worker-v2` | Railway | *no repo — manual only* | 2026-07-28 22:58 |
+| `media-worker-v2` | Railway | **`gitroomhq/agent-media-app`** | 2026-08-02 22:22 |
 | `temporal-worker` | Railway | *not our code* | 2026-07-25 03:48 |
 | 29 Supabase edge functions | Supabase | manual / CI-on-change | 2026-06-12, +2 on 2026-08-02 |
 
@@ -48,11 +47,6 @@ their image, and the take planner lives there — quote/run parity depends on th
 two moving together. So both watch `packages/schema/**` and the lockfile as well
 as their own directory. Watching only a service's own path would mean a planner
 change deploys neither, which is the drift this exercise exists to end.
-
-`media-worker-v2` has one commit since its last deploy, and that commit says
-itself that it is a no-op in production (`S3_ENDPOINT` is unset on every Railway
-service, so every branch resolves as before). It does not import the take
-planner. It does not need a deploy.
 
 `temporal-worker` has no source directory in this repo — it is the Temporal
 cluster, not a service we build.
@@ -119,13 +113,18 @@ with watch paths, so a docs-only commit does not rebuild containers.
 **3. ~~Repoint the Railway services to `gitroomhq/agent-media-app`.~~** Done for
 `api-v2`, `primitive-worker-vnext` and the brand extractor.
 
-**4. Resolve the one real divergence before repointing `media-worker-v2`.**
-This repo replaces the direct Evolink/BytePlus clients with a provider registry
-(`services/media-worker-v2/src/providers/`). Private still calls the clients
-directly. **The registry has never executed anywhere.** `media-worker-v2` is the
-service that renders customer video, so this is the only step in the list that
-can produce a bad frame rather than a failed deploy. It needs to run somewhere
-that is not production first.
+**4. ~~Resolve the divergence before repointing `media-worker-v2`.~~** Done.
+
+The provider registry (`services/media-worker-v2/src/providers/`) replaced the
+direct Evolink/BytePlus calls and had never executed anywhere. Checked for
+equivalence before switching rather than trusting it: same `runGeneration`
+client, same model (`seedance-2.0-reference-to-video`), same duration clamp
+(`min(max(n,5),15)`), identical arguments after the adapter's rename. Live env
+resolves the same way — `VIDEO_PROVIDER=evolink`, `EVOLINK_API_KEY` set,
+`EVOLINK_SEEDANCE_MODEL` unset.
+
+Then proved it with a real render. `[character-video] evolink video
+(duration=5s)` is the registry dispatching; the job produced a 7.59 MB MP4.
 
 Note the Dockerfile fix in `services/subtitle-worker` is in this repo and not in
 private: private's `COPY src/` resolves against the repo root and fails, because
@@ -197,3 +196,23 @@ was connected there was no sha to report.
 The marketing site has no Sentry at all — no `sentry.*.config.*` in
 `gitroomhq/agent-media-website`. It is the one surface where a white screen
 would go unreported.
+
+---
+
+## Still open
+
+- **Sentry projects.** `api-v2`, `primitive-worker-vnext` and the dashboard all
+  share one DSN project (`agent-media-web`), so backend and front-end errors
+  land in one bucket. Needs two new Sentry projects and a DSN swap per service.
+  No code change — `instrument.ts` reads the DSN from the environment.
+- **Sentry on the marketing site.** `gitroomhq/agent-media-website` has no
+  `sentry.*.config.*` at all. A white screen there goes unreported.
+- **Analytics.** Neither property has PostHog or Plausible. The old site had
+  them; nothing replaced them after the migration.
+- **`duration` on `make_ugc`** is documented as ignored when a script is set,
+  which is now true and honest, but the prop still exists on the schema. Worth
+  deciding whether to drop it.
+- **Cleanup, after a settling period.** Delete the `(landing)` route group from
+  the private `apps/web` and drop `agent-media.ai` from that Vercel project, so
+  it cannot reclaim the domain. Keep it until you are sure you will not need the
+  rollback.
