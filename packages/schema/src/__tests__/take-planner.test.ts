@@ -44,16 +44,31 @@ describe('fitDuration — sets the price, must match the published pacing table'
 });
 
 describe('the regression that motivated this module', () => {
-  it('a 34-word sentence is ONE 15s take (420), not two 10s takes (560)', () => {
+  it('a 34-word sentence is TWO renderable takes (560), not one unrenderable 15s take', () => {
+    // REVERSAL, and worth reading before "fixing" it back.
+    //
+    // This used to assert ONE 15s take at 420, on the reasoning that quote and
+    // worker had disagreed (560 vs 420) and the worker was right. Both halves of
+    // that were wrong: a 15s take is capped at round(15 x 2.2) = 33 words by
+    // SimpleSelfieToolInputSchema, which simple-selfie.ts safeParses on every
+    // take. 34 words in one take does not render at any price. Making the quote
+    // agree with the worker at 420 only meant both sides confidently priced a
+    // job that then failed on validation, after earlier takes had been paid for.
+    //
+    // Two 17-word takes both sit inside the 10s band [10, 22] and both render.
+    // 560 is the real cost of a 34-word script.
     const script = words(34);
-    expect(planTakes(script, 15)).toHaveLength(1);
-    expect(planTakeDurations(script, 15)).toEqual([15]);
-    expect(charge(script)).toBe(420);
+    expect(planTakes(script, 15)).toHaveLength(2);
+    expect(planTakeDurations(script, 15)).toEqual([10, 10]);
+    expect(charge(script)).toBe(560);
   });
 
-  it('a 67-word script does not over-quote', () => {
-    // Previously quoted 980 while the worker executed 840.
-    expect(charge(words(67))).toBe(840);
+  it('a 67-word script prices every take it will actually render', () => {
+    // Was 840, from the same over-long-take arithmetic. 67 words packs to
+    // three renderable takes rather than two-and-an-overflow.
+    const durations = planTakeDurations(words(67), 60);
+    const expected = durations.reduce((sum, d) => sum + CREDITS[d], 0);
+    expect(charge(words(67))).toBe(expected);
   });
 });
 
@@ -77,10 +92,14 @@ describe('chunkScript invariants — hold for every take', () => {
   ];
 
   it('never emits a chunk above what a 15s take can actually render', () => {
-    // The bound is TAKE_ABSOLUTE_MAX_WORDS (37), not the packing bound (33):
-    // merging a sub-minimum tail can legitimately push a chunk to 33 + 4, which is
-    // exactly floor(15s x 2.5 words/s). Asserting 33 here would fail on a 34-word
-    // script even though it renders correctly.
+    // The bound is the packing bound, 33 — which is round(15s x 2.2 words/s), the
+    // ceiling SimpleSelfieToolInputSchema enforces on every take.
+    //
+    // This previously allowed 37, on the reasoning that a tail-merge could push a
+    // chunk to 33 + 4 and that 37 = floor(15 x 2.5) was therefore the real
+    // capacity. 2.5 w/s is the chunking rate, not the render rate; the renderer
+    // rejects anything over 33, so those chunks failed at execution time. The
+    // merge now rebalances instead of overflowing.
     for (const s of scripts) {
       for (const c of chunkScript(s)) {
         expect(countWords(c)).toBeLessThanOrEqual(TAKE_ABSOLUTE_MAX_WORDS);
@@ -88,13 +107,10 @@ describe('chunkScript invariants — hold for every take', () => {
     }
   });
 
-  it('respects the packing bound for every chunk except a tail-merged one', () => {
+  it('respects the packing bound for EVERY chunk, including tail-merged ones', () => {
     for (const s of scripts) {
-      const chunks = chunkScript(s);
-      // Only the chunk that absorbed a tail may exceed the packing bound, so at
-      // most one chunk per script can be over it.
-      const over = chunks.filter((c) => countWords(c) > TAKE_MAX_WORDS);
-      expect(over.length).toBeLessThanOrEqual(1);
+      const over = chunkScript(s).filter((c) => countWords(c) > TAKE_MAX_WORDS);
+      expect(over).toEqual([]);
     }
   });
 

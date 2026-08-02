@@ -32,6 +32,7 @@
  */
 
 import { proxyActivities, ApplicationFailure } from '@temporalio/workflow';
+import { countWords, fitDuration } from '@agentmedia/schema';
 import type { PrimitiveActivities } from '../activities/index.js';
 import type { SimpleSelfieActivityInput, SimpleSelfieActivityResult } from '../activities/simple-selfie.js';
 import type { ExtractAudioActivityResult } from '../activities/extract-audio.js';
@@ -352,18 +353,17 @@ function makeChildRunId(skillRunId: string, step: string): string {
   return base.slice(0, base.length - 12) + suffix;
 }
 
-function countWords(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
-
-/** Pick the take length whose word band [d, d*2.2] holds the chunk (5s:5-11,
- *  10s:10-22, 15s:15-33), matching simple_selfie's pacing validation. */
-export function fitDuration(script: string): 5 | 10 | 15 {
-  const w = countWords(script);
-  if (w <= 11) return 5;
-  if (w <= 22) return 10;
-  return 15;
-}
+/**
+ * Pick the take length whose word band [d, d*2.2] holds the chunk (5s:5-11,
+ * 10s:10-22, 15s:15-33), matching simple_selfie's pacing validation.
+ *
+ * Re-exported from @agentmedia/schema rather than reimplemented. This module
+ * used to hold a third private copy of fitDuration/countWords alongside the one
+ * in the schema package and the one in api-v2's make-ugc-router. All three
+ * agreed, but only by hand, and the credit quote reads one while the worker
+ * renders from another.
+ */
+export { countWords, fitDuration };
 
 // A single Seedance take must fill 5/10/15s at ~1-2.2 words/sec, so simpleSelfie
 // validates word_count ∈ [duration, duration*2.2] — i.e. every take's script must

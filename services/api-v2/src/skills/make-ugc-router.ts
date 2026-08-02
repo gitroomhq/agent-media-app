@@ -9,7 +9,14 @@
  * skill's body. Identity URLs (uploaded image / looked-up character sheet) are
  * filled in by the run path; here they are placeholders so the quote can be
  * computed with no side effects.
+ *
+ * `countWords` / `fitDuration` are imported from @agentmedia/schema, never
+ * reimplemented. This file used to carry private copies; they happened to agree,
+ * but nothing enforced it, so a fix to the shared planner would not have reached
+ * the route decision — and the route decision is what sets the price.
  */
+
+import { countWords, fitDuration } from '@agentmedia/schema';
 
 export interface MakeUgcProps {
   script?: string;
@@ -41,25 +48,12 @@ const DEFAULT_PERSON =
  *  fitDuration ceiling (a 15s take tops out at ~33 words). */
 const SINGLE_CLIP_MAX_WORDS = 33;
 
-function countWords(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
-
 /** A long script needs the multi-take engine: more than one 15s take, or an
  *  explicit `---` intro/moves marker. */
 export function isLongScript(script?: string): boolean {
   if (!script) return false;
   if (/(?:^|\n)\s*---\s*(?:\n|$)/.test(script)) return true;
   return countWords(script) > SINGLE_CLIP_MAX_WORDS;
-}
-
-/** Size a ≤15s take to its word count so it passes the underlying selfie/ugc
- *  word-count validation (matches the worker's fitDuration). */
-function fitDuration(script: string): 5 | 10 | 15 {
-  const w = countWords(script);
-  if (w <= 11) return 5;
-  if (w <= 22) return 10;
-  return 15;
 }
 
 /**
