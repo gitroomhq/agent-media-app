@@ -19,6 +19,7 @@ import { createClient } from '@/lib/supabase/client';
 import { analytics } from '@/lib/analytics';
 import { AgentMediaLogo } from '@/components/agent-media-logo';
 import { Home2CTAButton } from '@/components/home2-cta-button';
+import { MARKETING_URL } from '@/lib/marketing';
 
 const Aurora = dynamic(() => import('@/components/Aurora'), { ssr: false });
 
@@ -38,7 +39,7 @@ export default function LoginPage() {
       {/* Top nav - just a back link */}
       <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:py-8">
         <Link
-          href="/"
+          href={MARKETING_URL}
           className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80"
           style={{
             color: 'var(--cryptix-text)',
@@ -51,7 +52,7 @@ export default function LoginPage() {
           <ArrowLeft className="h-4 w-4" />
           Home
         </Link>
-        <Link href="/" className="inline-flex items-center gap-2.5">
+        <Link href={MARKETING_URL} className="inline-flex items-center gap-2.5">
           <AgentMediaLogo size={26} />
           <span
             className="text-base font-semibold"

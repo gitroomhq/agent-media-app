@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { goToMarketingSite, MARKETING_URL } from '@/lib/marketing';
 
 export default function AuthLayout({
   children,
@@ -29,8 +30,7 @@ export default function AuthLayout({
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    goToMarketingSite();
   }
 
   if (ownLayout) {
@@ -46,7 +46,7 @@ export default function AuthLayout({
       <div className={`relative z-10 w-full ${darkFrame ? '' : 'max-w-5xl'}`}>
         <div className="mx-auto mb-4 flex w-full max-w-[1120px] items-center justify-between px-5">
           <Link
-            href="/"
+            href={MARKETING_URL}
             className={`text-lg font-bold tracking-tight ${darkFrame ? 'text-white' : 'text-[#121212]'}`}
           >
             agent-media

@@ -28,6 +28,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Check, AlertCircle, LogOut } from 'lucide-react';
 import { AgentMediaLogo } from '@/components/agent-media-logo';
 import { createClient } from '@/lib/supabase/client';
+import { goToMarketingSite } from '@/lib/marketing';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
 import { useOnboardingEvent, logOnboardingEvent } from '@/components/onboarding/use-onboarding-event';
 
@@ -92,8 +93,7 @@ export default function OnboardingPlanPage() {
     setSigningOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/');
-    router.refresh();
+    goToMarketingSite();
   }
 
   // Capture the dub.co affiliate click id once on mount (the analytics

@@ -29,6 +29,7 @@ import { useEffect, useState } from 'react';
 import { Home, Palette, Images, LogOut, Loader2, LifeBuoy, BookOpen, Sparkles, ListChecks, KeyRound, Share2, ShieldCheck, Bot } from 'lucide-react';
 import { AgentMediaLogo } from '@/components/agent-media-logo';
 import { createClient } from '@/lib/supabase/client';
+import { goToMarketingSite } from '@/lib/marketing';
 import { isAdminEmail } from '@/lib/admin-allowlist';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
 import { SupportModal } from '@/components/support-modal';
@@ -98,8 +99,8 @@ export default function DashboardDarkLayout({
     setSigningOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/');
-    router.refresh();
+    // `/` on this host bounces a signed-out visitor straight back to /login.
+    goToMarketingSite();
   }
 
   const navItems = isAdminEmail(email)

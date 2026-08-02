@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { LogOut, Settings, User } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { goToMarketingSite } from '@/lib/marketing';
 
 export function UserMenu() {
   const router = useRouter();
@@ -52,8 +53,9 @@ export function UserMenu() {
     setLoggingOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    // Leaves for the marketing site, not /login, and clears the parent-domain
+    // session hint on the way out. See lib/marketing.ts.
+    goToMarketingSite();
   }
 
   return (

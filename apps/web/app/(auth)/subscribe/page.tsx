@@ -57,15 +57,20 @@ const PLANS: PlanOption[] = [
     badge: '',
     price: 39,
     credits: '3,900 credits / month',
-    // "200+ AI actors" was here and is gone: /v1/actors returns exactly 200,
-    // so the "+" was false, and the actor library is not what a make_ugc
-    // subscriber uses anyway — that pipeline builds the person from a
-    // description, a photo, or a saved character. Claiming it on the paywall
-    // sold something the product does not do.
+    // Two claims were removed from this card.
+    //
+    // "200+ AI actors": /v1/actors returns exactly 200, so the "+" was false —
+    // and the actor library is not what a make_ugc subscriber uses anyway, as
+    // that pipeline builds the person from a description, a photo, or a saved
+    // character.
+    //
+    // "17 animated caption styles": the 17 in V2_SUBTITLE_STYLES are reachable
+    // through make_subtitles, but make_ugc's caption_style enum offers three
+    // (hormozi, tiktok, minimal). Selling 17 on the plan that generates videos
+    // promises a choice the generator does not expose.
     features: [
       'Up to 10s videos',
       'Full UGC generation pipeline',
-      '17 animated caption styles',
       'CLI, MCP, REST API & SDKs',
     ],
   },
