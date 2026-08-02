@@ -50,7 +50,7 @@ const STEP_LABEL: Record<string, string> = {
   compose: 'Compose', broll_overlay: 'Compose', subtitles: 'Captions',
 };
 const SKILL_LABEL: Record<string, string> = {
-  make_ugc: 'Agent-Media UGC Video',
+  make_ugc: 'UGC video',
   make_portrait: 'Portrait', make_character_sheet: 'Character sheet', make_wireframe: 'Storyboard',
   make_simple_selfie: 'Talking-head clip', make_lip_sync: 'Lip-sync clip', make_subtitles: 'Captions',
   make_ugc_video: 'UGC video', make_broll_talking_head: 'B-roll talking-head', make_product_in_hands: 'Product video',

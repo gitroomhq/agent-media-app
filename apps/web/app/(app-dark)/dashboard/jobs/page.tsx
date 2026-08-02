@@ -37,7 +37,7 @@ const PRETTY: Record<string, string> = {
   wireframe_gpt2: 'Wireframe',
   lip_sync: 'Lip Sync',
   make_ugc_video: 'UGC Video',
-  make_ugc: 'Agent-Media UGC Video',
+  make_ugc: 'UGC video',
   make_podcast: 'Podcast',
 };
 
