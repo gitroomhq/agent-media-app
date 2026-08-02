@@ -11,7 +11,6 @@
     "_shared/rate-limit.ts": "./_shared/rate-limit.ts",
     "_shared/security-headers.ts": "./_shared/security-headers.ts",
     "_shared/validation.ts": "./_shared/validation.ts",
-    "generate/models.ts": "./generate/models.ts",
     "upload-url/index.ts": "./upload-url/index.ts",
     "webhook-provider/index.ts": "./webhook-provider/index.ts",
     "auto-topup/index.ts": "./auto-topup/index.ts",
