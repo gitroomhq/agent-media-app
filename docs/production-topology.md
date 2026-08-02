@@ -7,11 +7,24 @@ Every date and version below was read from the platform, not inferred.
 
 ## The short answer
 
-"We run on open source" is true of **one** of six deployable surfaces.
+**As of 2026-08-02, four of five surfaces we build are sourced from this repo**
+and deploy automatically on push. One is not: `media-worker-v2`, held back
+deliberately — see step 4.
 
-`apps/web` — the dashboard on `app.agent-media.ai` — is served from
-`gitroomhq/agent-media-app` and is current. Everything else is deployed from
-the private repo, and most of it has not been deployed in days.
+Ask production what it is running:
+
+```
+$ curl -s https://api.agent-media.ai/health
+{ "status": "ok",
+  "release": "f036ee8db04038b0e78812ca2175672a96e64a1e",
+  "source": "gitroomhq/agent-media-app",
+  "environment": "production" }
+```
+
+A null `source` there means someone deployed from a laptop rather than the
+repo. That is not hypothetical — until today `api-v2` had **no repo connected
+at all**, which is how production came to run three days behind `main` with
+nothing to show for it from the outside.
 
 ---
 
@@ -21,12 +34,20 @@ the private repo, and most of it has not been deployed in days.
 |---|---|---|---|
 | Dashboard (`apps/web`) | Vercel `app.agent-media.ai` | **`gitroomhq/agent-media-app`** | current |
 | Marketing site | Vercel `agent-media.ai` | `gitroomhq/agent-media-website` (private) | current |
-| `api-v2` | Railway | private / manual | 2026-08-02 13:20 |
-| `primitive-worker-vnext` | Railway | private / manual | 2026-08-02 13:21 |
-| `media-worker-v2` | Railway | private / manual | 2026-07-28 22:58 |
+| `api-v2` | Railway | **`gitroomhq/agent-media-app`** | 2026-08-02 18:09, auto |
+| `primitive-worker-vnext` | Railway | **`gitroomhq/agent-media-app`** | 2026-08-02 18:04 |
+| Brand extractor | Railway | **`gitroomhq/agent-media-app`** | 2026-08-02 18:04 |
+| `media-worker-v2` | Railway | *no repo — manual only* | 2026-07-28 22:58 |
 | `temporal-worker` | Railway | *not our code* | 2026-07-25 03:48 |
-| Brand extractor | Railway | private / manual | 2026-08-02 11:19 |
 | 29 Supabase edge functions | Supabase | manual / CI-on-change | 2026-06-12, +2 on 2026-08-02 |
+
+### Watch patterns
+
+`api-v2` and `primitive-worker-vnext` both compile `@agentmedia/schema` into
+their image, and the take planner lives there — quote/run parity depends on the
+two moving together. So both watch `packages/schema/**` and the lockfile as well
+as their own directory. Watching only a service's own path would mean a planner
+change deploys neither, which is the drift this exercise exists to end.
 
 `media-worker-v2` has one commit since its last deploy, and that commit says
 itself that it is a no-op in production (`S3_ENDPOINT` is unset on every Railway
@@ -36,14 +57,15 @@ planner. It does not need a deploy.
 `temporal-worker` has no source directory in this repo — it is the Temporal
 cluster, not a service we build.
 
-Two mechanisms are missing, not broken:
+**Railway deploys are now automatic** for the three connected services —
+verified, not assumed: commit `f036ee8` was pushed to this repo and Railway
+built and released it with nobody triggering anything. Before today, `api-v2`
+had no repo attached and `deploy.yml` covered only Supabase edge functions
+(gated on `supabase/functions/**`, so it had skipped every push for weeks).
 
-- **Nothing in either repo's CI deploys Railway.** `deploy.yml` covers Supabase
-  edge functions only, and is gated on `supabase/functions/**` changing — it has
-  skipped every push for weeks. Railway deploys happen by hand.
-- **The edge functions are ~7 weeks old.** Most last shipped 2026-06-09/12,
-  three date from February. 29 are deployed against 27 directories in the repo,
-  so at least two are orphans of functions that no longer exist here.
+Still outstanding: **the edge functions are ~7 weeks old.** Most last shipped
+2026-06-09/12, three date from February. 29 are deployed against 27 directories
+in the repo, so at least two are orphans of functions that no longer exist here.
 
 ---
 
@@ -89,17 +111,13 @@ running the whole 27-function loop, which would have redeployed `checkout` and
 
 ## What is left, in order
 
-**1. ~~Deploy what is already merged.~~** Done 2026-08-02 — see above.
+**1. ~~Deploy what is already merged.~~** Done 2026-08-02.
 
-**2. Wire Railway to deploy at all.** Every service is a manual `railway up`
-today, which is why the drift happened silently. Either a deploy job in CI or
-Railway's git integration per service, with watch paths so a marketing-only
-commit does not rebuild five containers.
+**2. ~~Wire Railway to deploy at all.~~** Done — git integration per service
+with watch paths, so a docs-only commit does not rebuild containers.
 
-**3. Repoint each Railway service to `gitroomhq/agent-media-app`.** The backend
-in this repo is now byte-identical to private except for the items in step 4 —
-`diff -rq services/` shows only a package.json script, a Dockerfile fix, and
-generated `dist/` noise.
+**3. ~~Repoint the Railway services to `gitroomhq/agent-media-app`.~~** Done for
+`api-v2`, `primitive-worker-vnext` and the brand extractor.
 
 **4. Resolve the one real divergence before repointing `media-worker-v2`.**
 This repo replaces the direct Evolink/BytePlus clients with a provider registry
@@ -136,3 +154,21 @@ apex would deindex the domain.
 
 Supabase Auth, Stripe, R2 and the Temporal cluster are managed services. The
 functions that talk to them are here; the accounts are not.
+
+---
+
+## Monitoring
+
+Sentry is initialised in `api-v2` and `primitive-worker-vnext` (`[sentry] api-v2
+initialised` on boot) and the DSN accepts events — verified by posting an
+envelope directly and getting a `200` with an event id back, and by the
+`/_debug/sentry` route returning `500` through the Express error handler.
+
+Connecting the repo fixed release tracking as a side effect.
+`instrument.ts` sets `release` from `RAILWAY_GIT_COMMIT_SHA`, which Railway
+injects **only for git-sourced deploys**. While `api-v2` had no repo attached
+that variable was unset, so every event it ever sent had no release — you could
+see that something broke but not which build broke it. It is now populated;
+`/health` echoes the same sha so an alert can be tied to a deploy.
+
+`environment` comes from `RAILWAY_ENVIRONMENT_NAME` and reads `production`.
