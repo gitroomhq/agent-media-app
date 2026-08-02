@@ -1070,6 +1070,9 @@ async function routeEvent(
       return true;
 
     case "checkout.session.completed":
+    // Delayed payment methods complete the session later; same object
+    // shape, and crediting is idempotent, so the same handler applies.
+    case "checkout.session.async_payment_succeeded":
       await handleCheckoutSessionCompleted(db, obj);
       return true;
 
