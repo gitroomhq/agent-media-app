@@ -21,12 +21,20 @@ the private repo, and most of it has not been deployed in days.
 |---|---|---|---|
 | Dashboard (`apps/web`) | Vercel `app.agent-media.ai` | **`gitroomhq/agent-media-app`** | current |
 | Marketing site | Vercel `agent-media.ai` | `gitroomhq/agent-media-website` (private) | current |
-| `api-v2` | Railway | private / manual | **2026-07-30 21:15** |
-| `primitive-worker-vnext` | Railway | private / manual | **2026-07-30 16:42** |
-| `media-worker-v2` | Railway | private / manual | **2026-07-28 22:58** |
-| `temporal-worker` | Railway | private / manual | **2026-07-25 03:48** |
+| `api-v2` | Railway | private / manual | 2026-08-02 13:20 |
+| `primitive-worker-vnext` | Railway | private / manual | 2026-08-02 13:21 |
+| `media-worker-v2` | Railway | private / manual | 2026-07-28 22:58 |
+| `temporal-worker` | Railway | *not our code* | 2026-07-25 03:48 |
 | Brand extractor | Railway | private / manual | 2026-08-02 11:19 |
-| 29 Supabase edge functions | Supabase | manual / CI-on-change | **2026-06-12** |
+| 29 Supabase edge functions | Supabase | manual / CI-on-change | 2026-06-12, +2 on 2026-08-02 |
+
+`media-worker-v2` has one commit since its last deploy, and that commit says
+itself that it is a no-op in production (`S3_ENDPOINT` is unset on every Railway
+service, so every branch resolves as before). It does not import the take
+planner. It does not need a deploy.
+
+`temporal-worker` has no source directory in this repo — it is the Temporal
+cluster, not a service we build.
 
 Two mechanisms are missing, not broken:
 
@@ -39,35 +47,49 @@ Two mechanisms are missing, not broken:
 
 ---
 
-## The consequence: fixes that are merged but not running
+## The consequence: fixes that were merged but not running
 
-The api-v2 in production predates every backend change of the last three days.
-Directly observable — the live schema still has no top-level `type`:
+**Resolved 2026-08-02 13:20/13:21** by deploying `api-v2` and
+`primitive-worker-vnext`, one minute apart so quote and run could not disagree
+about take planning for longer than that.
+
+Before the deploy, api-v2 predated every backend change of the last three days —
+directly observable, because the live schema had no top-level `type`:
 
 ```
 $ curl -s .../v1/skills | jq '.skills[0].input_schema.type'
-null
+null          # before
+"object"      # after
 ```
 
-So none of these are live, regardless of being green in `main`:
+Merged-but-not-running, now live: the concurrency gate capping renders at 3 in
+flight; the rate-limiter fix moving chat CRUD off the generate tier; the
+subtitle re-host that stops charging for a job that cannot run; the
+`/v1/skills` schema fix; and the take-planner fix, which lands in **both**
+`api-v2` and `primitive-worker-vnext` — both were three days stale, so a 34-word
+script produced a take the renderer refuses, after charging for it.
 
-- the concurrency gate that caps renders at 3 in flight
-- the rate-limiter fix that moved chat CRUD off the generate tier
-- the subtitle re-host that stops charging for a job that cannot run
-- the `/v1/skills` schema fix
-- the take-planner fix for over-long takes — which lands in **both** `api-v2`
-  and `primitive-worker-vnext`, and both are three days stale
+Verified against production by quoting scripts at every boundary. The 34-word
+row is the fix:
 
-A worker that renders a 34-word take today still produces one the renderer
-refuses, because the worker running in production has not picked up the change.
+| Words | Credits |
+|---|---|
+| 9, 11 | 140 |
+| 12, 22 | 280 |
+| 23, 33 | 420 |
+| 34, 37 | **560** (was 420 for one unrenderable take) |
+
+Two edge functions also shipped — `webhook-provider` (v55→56) and
+`schedule-runner` (v12→13), both adding permissive-until-configured inbound
+auth that had sat undeployed since 2026-07-28. Deployed individually rather than
+running the whole 27-function loop, which would have redeployed `checkout` and
+`webhook-stripe` for no reason.
 
 ---
 
 ## What is left, in order
 
-**1. Deploy what is already merged.** Independent of the open-source question,
-`api-v2` and the three workers are 3–8 days behind and the edge functions are
-seven weeks behind. This is the step that makes the fixes real.
+**1. ~~Deploy what is already merged.~~** Done 2026-08-02 — see above.
 
 **2. Wire Railway to deploy at all.** Every service is a manual `railway up`
 today, which is why the drift happened silently. Either a deploy job in CI or
