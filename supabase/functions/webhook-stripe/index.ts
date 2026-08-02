@@ -678,85 +678,115 @@ async function handleSubscriptionDeleted(
 }
 
 /**
+ * Resolve how many credits a PAYG purchase is worth from Stripe metadata.
+ *
+ * The same metadata shape is attached to both the Checkout Session and the
+ * PaymentIntent, and both events credit, so this lives in one place:
+ *   1. Dynamic flow stores `credits` directly in metadata.
+ *   2. Legacy fixed-pack flow stores `pack_id` → PAYG_PACKS lookup.
+ *
+ * Returns `null` when the metadata describes something that is not a PAYG
+ * credit purchase (e.g. a subscription payment).  Throws when the metadata
+ * is present but malformed — we would rather Stripe retry than credit a
+ * wrong amount.
+ */
+function resolvePaygCredits(
+  metadata: Record<string, string> | undefined,
+): { amount: number; source: "dynamic" | "pack"; description: string } | null {
+  const packId = metadata?.pack_id ?? metadata?.payg_pack_id;
+  const rawCredits = metadata?.credits;
+
+  if (rawCredits) {
+    const parsed = parseInt(rawCredits, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1_000_000) {
+      throw new Error(`invalid credits metadata "${rawCredits}"`);
+    }
+    return {
+      amount: parsed,
+      source: "dynamic",
+      description:
+        `PAYG credit purchase: ${parsed} credits (dynamic, $${(parsed / 100).toFixed(2)})`,
+    };
+  }
+
+  if (packId) {
+    const pack = PAYG_PACKS[packId];
+    if (!pack) {
+      throw new Error(`Unknown pack_id in metadata: ${packId}`);
+    }
+    return {
+      amount: pack.credits,
+      source: "pack",
+      description: `PAYG credit purchase: ${pack.credits} credits (${packId})`,
+    };
+  }
+
+  return null;
+}
+
+/**
  * payment_intent.succeeded
  *
- * Fired when a one-time payment succeeds.  For PAYG credit purchases,
- * the payment intent metadata contains `pack_id` identifying which
- * credit pack was purchased.  We add the credits to the user's
- * purchased_balance and record a credit_transaction.
+ * Fired when a one-time payment succeeds.  Credits are also applied from
+ * checkout.session.completed; add_purchased_credits is idempotent on the
+ * PaymentIntent ID so whichever event arrives first wins.
  */
 async function handlePaymentIntentSucceeded(
   db: ReturnType<typeof supabaseAdmin>,
   paymentIntent: Record<string, unknown>,
 ): Promise<void> {
   const metadata = paymentIntent.metadata as Record<string, string> | undefined;
-  const packId = metadata?.pack_id ?? metadata?.payg_pack_id;
-  const rawCredits = metadata?.credits;
 
-  // Resolve credit amount:
-  //   1. New dynamic flow stores `credits` directly in metadata.
-  //   2. Legacy fixed-pack flow stores `pack_id` → PAYG_PACKS lookup.
-  let credits: number | null = null;
-  let source: "dynamic" | "pack" | null = null;
-
-  if (rawCredits) {
-    const parsed = parseInt(rawCredits, 10);
-    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1_000_000) {
-      throw new Error(
-        `payment_intent.succeeded: invalid credits metadata "${rawCredits}"`,
-      );
-    }
-    credits = parsed;
-    source = "dynamic";
-  } else if (packId) {
-    const pack = PAYG_PACKS[packId];
-    if (!pack) {
-      throw new Error(`Unknown pack_id in payment intent metadata: ${packId}`);
-    }
-    credits = pack.credits;
-    source = "pack";
-  } else {
+  const resolved = resolvePaygCredits(metadata);
+  if (!resolved) {
     // Not a PAYG purchase (could be a subscription payment).
     console.log(
       "payment_intent.succeeded: no credits or pack_id in metadata, skipping",
     );
     return;
   }
+  const credits = resolved.amount;
+  const source = resolved.source;
 
   const stripeCustomerId = paymentIntent.customer as string | null;
-  if (!stripeCustomerId) {
-    throw new Error("payment_intent.succeeded: missing customer ID");
-  }
-
   const paymentIntentId = paymentIntent.id as string;
 
-  // Look up user by Stripe customer ID
-  const { data: subscription, error: subError } = await db
-    .from("subscriptions")
-    .select("user_id")
-    .eq("stripe_customer_id", stripeCustomerId)
-    .maybeSingle();
+  // Resolve the user.  Prefer the `user_id` we put in the PaymentIntent
+  // metadata at checkout time — it is authoritative and works for buyers
+  // who have no subscriptions row at all (pure PAYG).  Fall back to the
+  // Stripe customer ID for legacy intents created before we set metadata.
+  let userId = metadata?.user_id ?? null;
 
-  if (subError || !subscription) {
-    throw new Error(
-      `No subscription found for customer ${stripeCustomerId}: ${subError?.message ?? "not found"}`,
-    );
+  if (!userId) {
+    if (!stripeCustomerId) {
+      throw new Error(
+        "payment_intent.succeeded: no user_id metadata and no customer ID",
+      );
+    }
+
+    const { data: subscription, error: subError } = await db
+      .from("subscriptions")
+      .select("user_id")
+      .eq("stripe_customer_id", stripeCustomerId)
+      .maybeSingle();
+
+    if (subError || !subscription) {
+      throw new Error(
+        `No subscription found for customer ${stripeCustomerId}: ${subError?.message ?? "not found"}`,
+      );
+    }
+
+    userId = subscription.user_id as string;
   }
 
-  const userId = subscription.user_id as string;
-
   // Add credits atomically via RPC (handles upsert + ledger in one transaction)
-  const description = source === "pack"
-    ? `PAYG credit purchase: ${credits} credits (${packId})`
-    : `PAYG credit purchase: ${credits} credits (dynamic, $${(credits / 100).toFixed(2)})`;
-
-  const { data: rpcResult, error: rpcError } = await db.rpc(
+  const { error: rpcError } = await db.rpc(
     "add_purchased_credits",
     {
       p_user_id: userId,
       p_amount: credits,
       p_payment_intent_id: paymentIntentId,
-      p_description: description,
+      p_description: resolved.description,
     },
   );
 
@@ -933,12 +963,14 @@ async function handleCheckoutSessionCompleted(
       }
     }
   } else if (mode === "payment" && userId) {
-    // One-time payment (PAYG) -- credit allocation is handled by
-    // payment_intent.succeeded to avoid double-crediting.
-    console.log(
-      `checkout.session.completed: PAYG checkout for user ${userId}, ` +
-        `credits will be allocated by payment_intent.succeeded`,
-    );
+    // One-time payment (PAYG credit top-up).
+    //
+    // We credit here rather than waiting for payment_intent.succeeded.
+    // Both events can safely credit: add_purchased_credits is idempotent
+    // on the Stripe PaymentIntent ID, so whichever arrives first wins and
+    // the other is a no-op.  Relying on payment_intent.succeeded alone is
+    // fragile — the endpoint has to be subscribed to that event type, and
+    // if it isn't, the customer is charged and never credited. (2026-08-02)
 
     // Ensure the customer ID is linked
     const { error: updateError } = await db
@@ -953,6 +985,52 @@ async function handleCheckoutSessionCompleted(
         updateError.message,
       );
     }
+
+    const paymentStatus = session.payment_status as string | undefined;
+    if (paymentStatus !== "paid") {
+      // Async payment methods complete later via
+      // checkout.session.async_payment_succeeded / payment_intent.succeeded.
+      console.log(
+        `checkout.session.completed: PAYG session for user ${userId} is ` +
+          `payment_status=${paymentStatus}, not crediting yet`,
+      );
+      return;
+    }
+
+    const paymentIntentId = session.payment_intent as string | null;
+    if (!paymentIntentId) {
+      throw new Error(
+        `checkout.session.completed: paid PAYG session for user ${userId} has no payment_intent`,
+      );
+    }
+
+    const credits = resolvePaygCredits(metadata);
+    if (credits === null) {
+      console.log(
+        `checkout.session.completed: PAYG session for user ${userId} has no ` +
+          `credits/pack_id metadata, skipping`,
+      );
+      return;
+    }
+
+    const { error: rpcError } = await db.rpc("add_purchased_credits", {
+      p_user_id: userId,
+      p_amount: credits.amount,
+      p_payment_intent_id: paymentIntentId,
+      p_description: credits.description,
+    });
+
+    if (rpcError) {
+      throw new Error(
+        `add_purchased_credits RPC failed for user ${userId} ` +
+          `(PI: ${paymentIntentId}): ${rpcError.message}`,
+      );
+    }
+
+    console.log(
+      `checkout.session.completed: credited ${credits.amount} credits to ` +
+        `user ${userId} (${credits.source}, PI: ${paymentIntentId})`,
+    );
   } else {
     console.log(
       `checkout.session.completed: mode=${mode}, no action required`,
