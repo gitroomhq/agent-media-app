@@ -11,6 +11,7 @@ import { withTimeout } from '../../orchestrator/temporal/timeout.js';
 import { uploadUserImageBase64, uploadUserImageFromUrl, uploadUserVideoFromUrl } from '../../lib/r2-upload.js';
 import { ModerationError } from '../../lib/image-moderation.js';
 import { quoteSkillCredits, quoteInFlightPrimitiveRun } from '../../skills/credit-quotes.js';
+import { checkPlanDurationLimit, MAX_WORDS_FOR_TEN_SECONDS } from '../../skills/plan-limits.js';
 import { decideMakeUgcRoute, type MakeUgcProps } from '../../skills/make-ugc-router.js';
 
 /**
@@ -491,6 +492,23 @@ export async function runSkillRoute(req: Request, res: Response): Promise<void> 
         return;
       }
     }
+  }
+
+  // Plan gate. The paywall sells clip length as the tier difference and this
+  // path — the one the MCP server, CLI and dashboard agent all use — never
+  // enforced it. Runs BEFORE the credit check so a capped user is told why
+  // rather than being quoted a price they are not allowed to pay.
+  const planLimit = await checkPlanDurationLimit(userId, activityInputBody);
+  if (planLimit) {
+    res.status(403).json({
+      error: 'plan_limit',
+      skill: slug,
+      error_description: `Your plan (${planLimit.tier}) supports up to ${planLimit.maxSeconds}s clips. This script needs ${planLimit.requestedSeconds}s — shorten it to ${MAX_WORDS_FOR_TEN_SECONDS} words or fewer, or upgrade.`,
+      tier: planLimit.tier,
+      requested_seconds: planLimit.requestedSeconds,
+      max_seconds: planLimit.maxSeconds,
+    });
+    return;
   }
 
   // Pre-flight credit check — return 402 immediately so the caller
