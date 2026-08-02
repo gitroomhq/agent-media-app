@@ -172,3 +172,28 @@ see that something broke but not which build broke it. It is now populated;
 `/health` echoes the same sha so an alert can be tied to a deploy.
 
 `environment` comes from `RAILWAY_ENVIRONMENT_NAME` and reads `production`.
+
+### One Sentry project for three services
+
+Confirmed by the alert the `/_debug/sentry` probe produced: it filed as
+**`AGENT-MEDIA-WEB-6`, project `agent-media-web`**. But the error came from
+`api-v2`. Both backend services point at the same DSN project id
+(`4511496330543104`) as the dashboard, so API errors, worker errors and
+front-end errors land in one bucket.
+
+The cost is triage. At 3am "is this the API or the dashboard?" should be
+answered by which project alerted, not by reading a stack trace. Ownership,
+alert rules and issue counts are all mixed, and a noisy front-end release
+buries a real backend regression.
+
+Fix: create a Sentry project per service (`agent-media-api`,
+`agent-media-worker`) and set each service's `SENTRY_DSN` to its own. No code
+change — `instrument.ts` already reads the DSN from the environment.
+
+Release tagging, by contrast, now works: that same alert reads *"regression in
+61bbe5538e32"*, which is the exact commit deployed at 18:03. Before the repo
+was connected there was no sha to report.
+
+The marketing site has no Sentry at all — no `sentry.*.config.*` in
+`gitroomhq/agent-media-website`. It is the one surface where a white screen
+would go unreported.
