@@ -45,6 +45,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Runs before lint because it needs no build and its failure mode is the
+      # expensive one: an npm version is immutable, so a bad spec that reaches
+      # the registry can only be fixed by burning another version.
+      - name: Check publishable packages
+        run: node scripts/check-publishable.mjs
+
       - name: Lint
         run: pnpm lint
 

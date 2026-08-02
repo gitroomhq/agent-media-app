@@ -122,9 +122,20 @@ export const MakeUgcSkillInputSchema = z
       .regex(/^https:\/\//, 'broll_url must use https')
       .describe('A b-roll / gameplay / product video overlaid on the lower half while the person narrates.')
       .optional(),
+    // Honest description. It used to read "Set only to force a short clip",
+    // which was not true of any path that has a `script`: decideMakeUgcRoute
+    // overwrites duration with fitDuration(script) on all three of them, so an
+    // agent that asked for 5s on a 12-word line silently got — and was billed
+    // for — 10s. It is not a bug in the router: a take's script must land in
+    // [duration, round(duration * 2.2)] or the renderer rejects it, so a
+    // caller-supplied duration that disagrees with the word count cannot be
+    // honoured. Length follows the script, and the way to get a short clip is
+    // to write a short line.
     duration: z
       .union([z.literal(5), z.literal(10), z.literal(15), z.literal(20), z.literal(25), z.literal(30)])
-      .describe('Leave blank — length is inferred from the script. Set only to force a short clip.')
+      .describe(
+        'IGNORED when `script` is set — length is derived from the word count (≤11 words → 5s, ≤22 → 10s, else 15s) because the renderer requires the script to fit the take. To get a shorter clip, write a shorter script. Only used for a silent `scene_action` clip, which has no words to measure.',
+      )
       .optional(),
     captions: z
       .boolean()

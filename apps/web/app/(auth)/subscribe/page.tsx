@@ -56,11 +56,15 @@ const PLANS: PlanOption[] = [
     description: 'For creators shipping UGC content consistently.',
     badge: '',
     price: 39,
-    credits: '≈ 3,900 credits / month',
+    credits: '3,900 credits / month',
+    // "200+ AI actors" was here and is gone: /v1/actors returns exactly 200,
+    // so the "+" was false, and the actor library is not what a make_ugc
+    // subscriber uses anyway — that pipeline builds the person from a
+    // description, a photo, or a saved character. Claiming it on the paywall
+    // sold something the product does not do.
     features: [
       'Up to 10s videos',
       'Full UGC generation pipeline',
-      '200+ AI actors',
       '17 animated caption styles',
       'CLI, MCP, REST API & SDKs',
     ],
@@ -72,7 +76,7 @@ const PLANS: PlanOption[] = [
     description: 'For professionals running production-scale content pipelines.',
     badge: 'Most popular',
     price: 69,
-    credits: '≈ 6,900 credits / month',
+    credits: '6,900 credits / month',
     features: [
       'Up to 15s videos',
       'Batch generation via CLI or API',
@@ -88,10 +92,10 @@ const PLANS: PlanOption[] = [
     description: 'For high-volume teams and agencies.',
     badge: '',
     price: 129,
-    credits: '≈ 12,900 credits / month',
+    credits: '12,900 credits / month',
     features: [
       'Up to 15s videos',
-      'Early access to improved UGC tools',
+      'Early access to newest models and higher quality',
       'Batch generation via CLI or API',
       'Auto-publishing to social channels',
       '1080p exports with no watermark',
@@ -262,8 +266,13 @@ export default function SubscribePage() {
         ))}
       </div>
 
+      {/* The per-video cost estimate that used to sit here is gone. It read
+          "~300 credits per 10s video (~$3)", which is only true of a
+          single-take 10s clip with no captions — a real job is often several
+          takes, so the number understated what people would actually spend and
+          set up a complaint on the first invoice. */}
       <p className="mt-6 text-[14px]/[150%] text-white/50">
-        Cancel anytime · No contracts · ~300 credits per 10s video (~$3)
+        Cancel anytime · No contracts
       </p>
     </section>
   );
