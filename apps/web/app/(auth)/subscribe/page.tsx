@@ -3,91 +3,99 @@
 'use client';
 
 /**
- * Subscription wall -- shown when an authenticated user has no active
- * subscription. Beautiful, welcoming page with plan cards, social proof,
- * feature highlights, and FAQ.
+ * Subscription wall — shown when an authenticated user has no active
+ * subscription.
+ *
+ * This is the marketing site's pricing card, ported from
+ * agent-media-website/src/components/Section/PricingHeroSection, and nothing
+ * else. What it replaced was a light-themed two-column layout with a hero, a
+ * video marquee and an FAQ: the marquee rendered as six empty grey rectangles
+ * because nothing populated it, and the page sat on a #ededed frame while the
+ * rest of the product is black. A paying customer's first sight of the paywall
+ * looked like a broken page from a different company.
+ *
+ * ONE CONVERSION MATTERS. The site's root font is fluid (1rem = 10px at
+ * 1440px); this app uses the browser default of 16px. Every rem in the original
+ * is written here as its computed pixel value — the site's `text-[5rem]` is
+ * `text-[50px]`, `p-[2rem]` is `p-[20px]`. Copying the rem values across
+ * verbatim would render everything 1.6x too large.
  */
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Loader2, Zap, ChevronDown } from 'lucide-react';
+import Image from 'next/image';
+import { ChevronRight, Loader2, Plus } from 'lucide-react';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
 import { createClient } from '@/lib/supabase/client';
 import { analytics } from '@/lib/analytics';
-import { VideoMarquee } from '@/components/video-marquee';
 
 interface PlanOption {
+  /** Plan tier id sent to the Supabase `checkout` function. */
   tier: string;
-  name: string;
-  priceMonthly: number;
-  credits: number;
-  videoEstimate: string;
-  desc: string;
+  bgImg: string;
+  title: string;
+  description: string;
+  badge: string;
+  price: number;
+  credits: string;
   features: string[];
-  popular?: boolean;
 }
 
+/**
+ * Copy is the site's, with one deliberate reordering: the site leads on
+ * capability ("Full UGC generation pipeline"), which is right for a visitor
+ * deciding whether to sign up at all. Someone already signed in and looking at
+ * a paywall is choosing between three tiers, so the line that actually differs
+ * between them — clip length — comes first.
+ */
 const PLANS: PlanOption[] = [
   {
     tier: 'starter',
-    name: 'Creator',
-    priceMonthly: 39,
-    credits: 3900,
-    videoEstimate: '~13 videos',
-    desc: 'For creators shipping UGC content consistently.',
+    bgImg: '/assets/pricing/bg/1.png',
+    title: 'Creator',
+    description: 'For creators shipping UGC content consistently.',
+    badge: '',
+    price: 39,
+    credits: '≈ 3,900 credits / month',
     features: [
-      '3,900 credits/month',
       'Up to 10s videos',
+      'Full UGC generation pipeline',
+      '200+ AI actors',
+      '17 animated caption styles',
+      'CLI, MCP, REST API & SDKs',
     ],
   },
   {
     tier: 'creator',
-    name: 'Pro',
-    priceMonthly: 69,
-    credits: 6900,
-    videoEstimate: '~23 videos',
-    desc: 'For professionals running production-scale pipelines.',
-    popular: true,
+    bgImg: '/assets/pricing/bg/2.png',
+    title: 'Pro',
+    description: 'For professionals running production-scale content pipelines.',
+    badge: 'Most popular',
+    price: 69,
+    credits: '≈ 6,900 credits / month',
     features: [
-      '6,900 credits/month',
       'Up to 15s videos',
+      'Batch generation via CLI or API',
+      'Persistent characters for campaigns',
+      'Auto-publishing to social channels',
+      '1080p exports with no watermark',
     ],
   },
   {
     tier: 'pro_plus',
-    name: 'Pro Plus',
-    priceMonthly: 129,
-    credits: 12900,
-    videoEstimate: '~43 videos',
-    desc: 'For high-volume teams and agencies.',
+    bgImg: '/assets/pricing/bg/3.png',
+    title: 'Pro Plus',
+    description: 'For high-volume teams and agencies.',
+    badge: '',
+    price: 129,
+    credits: '≈ 12,900 credits / month',
     features: [
-      '12,900 credits/month',
       'Up to 15s videos',
       'Early access to improved UGC tools',
+      'Batch generation via CLI or API',
+      'Auto-publishing to social channels',
+      '1080p exports with no watermark',
     ],
-  },
-];
-
-const FAQ = [
-  {
-    q: 'How many videos do I get per month?',
-    a: 'At 10s per video: ~13 on Creator, ~23 on Pro, ~43 on Pro Plus. Credits are billed per second at 30 credits/sec. Creator supports up to 10s; Pro and Pro Plus up to 15s.',
-  },
-  {
-    q: 'Do credits roll over?',
-    a: 'Monthly plan credits reset each billing cycle. Purchased credit packs never expire while your account is active.',
-  },
-  {
-    q: 'Can I switch or cancel anytime?',
-    a: 'Yes. Upgrade, downgrade, or cancel anytime from your dashboard. Changes take effect on your next billing cycle. No contracts, no commitment.',
-  },
-  {
-    q: 'What happens if I run out of credits?',
-    a: 'You can buy a 3,900 credit pack for $39 at any time, or upgrade your plan for more monthly credits.',
-  },
-  {
-    q: 'Are all models included in every plan?',
-    a: 'Yes. Every paid plan gives you access to all AI models and the full UGC pipeline. No per-model surcharges.',
   },
 ];
 
@@ -95,19 +103,15 @@ export default function SubscribePage() {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // We do NOT block the UI on this. Middleware already guarantees
-  // anyone who lands here is unsubscribed, so the pricing UI renders
-  // immediately. The background check below is only there to catch
-  // the edge case where someone bookmarked /subscribe and has since
-  // paid - in that case we silently redirect them to /gallery.
-  const [checking, setChecking] = useState(false);
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   useEffect(() => {
     analytics.init();
     analytics.trackEvent('subscribe_page_viewed');
   }, []);
 
+  // Middleware already guarantees anyone landing here is unsubscribed, so the
+  // pricing renders immediately and this never blocks the UI. It exists only to
+  // catch someone who bookmarked /subscribe and has since paid.
   useEffect(() => {
     let cancelled = false;
 
@@ -119,9 +123,7 @@ export default function SubscribePage() {
         } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data, error: fnError } = await invokeFn('credits-check', {
-          method: 'GET',
-        });
+        const { data, error: fnError } = await invokeFn('credits-check', { method: 'GET' });
         if (fnError) {
           console.error('credits-check error:', fnError.message);
           return;
@@ -148,20 +150,15 @@ export default function SubscribePage() {
     analytics.trackEvent('plan_selected', { tier });
 
     try {
-      // Capture dub.co affiliate click ID from cookie (set by analytics script)
+      // dub.co affiliate click id, set as a cookie by the analytics script.
       const dubId = document.cookie.match(/(?:^|;\s*)dub_id=([^;]*)/)?.[1] || undefined;
 
       const { data, error: fnError } = await invokeFn('checkout', {
         body: { plan_tier: tier, ...(dubId ? { dub_id: dubId } : {}) },
       });
 
-      if (fnError) {
-        throw new Error(fnError.message || 'Checkout failed');
-      }
-
-      if (data?.checkout_url) {
-        window.location.href = data.checkout_url;
-      }
+      if (fnError) throw new Error(fnError.message || 'Checkout failed');
+      if (data?.checkout_url) window.location.href = data.checkout_url;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Checkout failed');
     } finally {
@@ -169,148 +166,105 @@ export default function SubscribePage() {
     }
   }
 
-  // Note: the "Checking subscription..." spinner branch was removed
-  // intentionally - middleware already guarantees the user is
-  // unsubscribed before letting them onto /subscribe, so blocking the
-  // UI on a redundant client-side check just felt like a stall.
-
   return (
-    <div className="w-full">
-      {/* ── ReddGrow-style 2-column hero ────────────────────────────────
-          Left: welcome line + headline + plan list (compact).
-          Right: infinite-scrolling marquee of real generated videos. */}
-      <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-2 lg:gap-16">
-        {/* ── Left column ───────────────────────────────────────────── */}
-        <div className="flex flex-col">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-purple-600">
-            Welcome
-          </p>
-          <h1 className="mt-3 text-4xl font-extrabold leading-[1.1] tracking-tight text-[#121212] sm:text-5xl">
-            Fastest Ad UGC creator <em className="italic font-normal text-[#121212]/80">on Autopilot</em>
-          </h1>
-          <p className="mt-4 text-base text-[#6b6b76]">
-            Pick a plan to generate AI UGC videos and auto-post to your socials. Cancel any time.
-          </p>
+    <section className="mx-auto w-full max-w-[1120px] px-5 pb-16 pt-6">
+      {error && (
+        <div
+          role="alert"
+          className="mb-6 rounded-[16px] border border-red-500/30 bg-red-500/10 px-5 py-4 text-[14px] text-red-300"
+        >
+          {error}
+        </div>
+      )}
 
-          {error && (
-            <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-              <p className="text-sm text-red-600">{error}</p>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {PLANS.map(({ tier, bgImg, title, badge, price, description, features, credits }, index) => (
+          // h-full + flex so the three cards are the same height and their CTAs
+          // share a baseline. The site's version doesn't need this because its
+          // plan descriptions happen to wrap to the same number of lines; ours
+          // don't, and a staggered row of buttons reads as broken.
+          <div key={tier} className="relative flex h-full flex-col overflow-hidden rounded-[20px] p-5">
+            {/* Decorative card art. alt="" — the plan is fully described in text. */}
+            <div className="absolute inset-0">
+              <Image
+                src={bgImg}
+                width={363}
+                height={490}
+                quality={100}
+                priority
+                alt=""
+                className="h-full w-full object-cover"
+              />
             </div>
-          )}
+            <div className="pointer-events-none absolute inset-0 rounded-[inherit] border-gradient border-gradient-card-secondary" />
 
-          {/* Plan cards stacked vertically, ReddGrow style */}
-          <div className="mt-6 space-y-3">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.tier}
-                className={`relative flex flex-col rounded-2xl border p-5 transition-all sm:flex-row sm:items-center sm:gap-5 ${
-                  plan.popular
-                    ? 'border-purple-500 bg-white shadow-[0_0_0_3px_rgba(168,85,247,0.15)]'
-                    : 'border-[#e5e5e5] bg-white hover:border-[#bdbdbd]'
-                }`}
-              >
-                {plan.popular && (
-                  <span className="absolute -top-2.5 left-5 rounded-full bg-purple-600 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
-                    Most popular
-                  </span>
+            <div className="relative flex flex-1 flex-col">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[16px]/[150%] font-bold text-white">{title}</h2>
+                {badge && (
+                  <div className="absolute right-0 rounded-full bg-gradient-to-b from-white to-white/80 px-2 py-0.5 text-[16px]/[150%] font-medium tracking-[-0.02em] text-black">
+                    {badge}
+                  </div>
                 )}
+              </div>
 
-                <div className="flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[#6b6b76]">
-                      {plan.name}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold text-[#121212]">
-                      ${plan.priceMonthly}
-                    </span>
-                    <span className="text-sm text-[#6b6b76]">/mo</span>
-                  </div>
-                  <ul className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-xs text-[#6b6b76] sm:grid-cols-2">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-1.5">
-                        <Check className="mt-0.5 h-3 w-3 shrink-0 text-green-500" />
-                        <span className="truncate">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <div className="mt-1 text-[50px]/[108%] font-bold tracking-[-0.05em] text-white">
+                ${price} <span className="text-[16px]/[150%] tracking-normal">/mo</span>
+              </div>
 
+              <div className="mt-3 text-pretty text-[16px]/[150%] font-medium tracking-[-0.02em] text-white/85 lg:text-[20px]/[140%]">
+                {description}
+              </div>
+
+              <div className="mt-5 flex flex-col gap-2">
+                {features.map((feature) => (
+                  <div
+                    key={feature}
+                    className="grid grid-cols-[20px_auto] gap-2 text-[14px]/[143%] font-medium tracking-[-0.02em] text-white/85"
+                  >
+                    <Plus className="h-5 w-5 opacity-50" aria-hidden="true" />
+                    <span>{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* mt-auto: the divider down is the card's footer, pinned to the
+                  bottom so credits and CTA line up across all three. */}
+              <div className="mt-auto pt-7" />
+              <div className="mb-5 border-t border-white opacity-10" />
+
+              <div className="text-[24px]/[117%] font-bold tracking-[-0.04em] text-white">
+                {credits}
+              </div>
+
+              <div className="mt-5">
                 <button
+                  type="button"
                   disabled={!!loading}
-                  onClick={() => handleSubscribe(plan.tier)}
-                  className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-all sm:mt-0 sm:w-auto ${
-                    plan.popular
-                      ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.45)] hover:bg-purple-700'
-                      : 'bg-[#121212] text-white hover:bg-[#333]'
-                  } disabled:opacity-50`}
-                  aria-label={`Subscribe to ${plan.name} plan at $${plan.priceMonthly} per month`}
+                  onClick={() => handleSubscribe(tier)}
+                  aria-label={`Subscribe to ${title} at $${price} per month`}
+                  className={`inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-full text-[16px] font-bold transition-opacity hover:opacity-90 disabled:opacity-50 ${
+                    index % 2
+                      ? 'bg-white text-black'
+                      : 'bg-[#9162FF] text-white shadow-[0_0_28px_rgba(145,98,255,0.45)]'
+                  }`}
                 >
-                  {loading === plan.tier ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Processing…
-                    </>
+                  {loading === tier ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <>
-                      <Zap className="h-4 w-4" />
-                      Get started
-                    </>
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   )}
+                  {loading === tier ? 'Starting checkout…' : 'Get Started'}
                 </button>
               </div>
-            ))}
-          </div>
-
-          <p className="mt-5 text-xs text-[#6b6b76]">
-            Cancel anytime · No contracts · ~300 credits per 10s video (~$3)
-          </p>
-
-          {/* ── FAQ (left column, below pricing) ──────────────────── */}
-          <div className="mt-12">
-            <h2 className="text-xl font-bold text-[#121212]">
-              Frequently asked questions
-            </h2>
-            <div className="mt-5 space-y-2">
-              {FAQ.map((item, i) => (
-                <div
-                  key={item.q}
-                  className="rounded-xl border border-[#d4d4d4] bg-white transition-all"
-                >
-                  <button
-                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                    className="flex w-full items-center justify-between px-5 py-4 text-left text-sm font-medium text-[#121212] transition-colors hover:text-[#6b6b76]"
-                  >
-                    {item.q}
-                    <ChevronDown
-                      className={`ml-3 h-4 w-4 shrink-0 text-[#6b6b76] transition-transform ${
-                        openFaq === i ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-                  {openFaq === i && (
-                    <div className="border-t border-[#d4d4d4] px-5 py-4 text-sm leading-relaxed text-[#6b6b76]">
-                      {item.a}
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
-        </div>
-
-        {/* ── Right column: infinite video marquee (sticky on desktop) ── */}
-        <div className="hidden lg:sticky lg:top-6 lg:block lg:max-h-[calc(100vh-3rem)] lg:self-start">
-          <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.2em] text-purple-600">
-            Real community creations
-          </p>
-          <VideoMarquee />
-        </div>
+        ))}
       </div>
 
-      {/* ── Bottom spacer ─────────────────────────────────────────────── */}
-      <div className="h-12" />
-    </div>
+      <p className="mt-6 text-[14px]/[150%] text-white/50">
+        Cancel anytime · No contracts · ~300 credits per 10s video (~$3)
+      </p>
+    </section>
   );
 }

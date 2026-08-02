@@ -285,3 +285,36 @@ body {
   transform: scale(1);
   animation: home2FlowPopIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+/* ── Marketing card border, ported verbatim from the site ──────────────────
+ * agent-media-website/src/app/globals.css. The masked-border trick is what
+ * makes a card read as the site's rather than as a plain 1px rule: a
+ * transparent border filled by a gradient background, with the content box
+ * masked out so only the border shows.
+ *
+ * Copied rather than approximated because /subscribe now renders the site's
+ * own pricing cards, and an approximation would drift the moment either side
+ * is touched. */
+@utility border-gradient {
+  border: 1px transparent solid;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
+@utility border-gradient-card-secondary {
+  background:
+    radial-gradient(
+      31.6% 8.35% at 2.43% 14.83%,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0) 100%
+    )
+    border-box,
+    linear-gradient(
+      358.3deg,
+      rgba(210, 225, 255, 0.3) 14.5%,
+      rgba(255, 255, 255, 0.05) 51.06%
+    )
+    border-box;
+}
