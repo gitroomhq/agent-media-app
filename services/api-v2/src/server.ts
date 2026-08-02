@@ -426,6 +426,20 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     service: 'api-v2',
     generators: GENERATOR_IDS,
+    // Which build is actually answering. Added after production ran three days
+    // behind main with no way to tell from the outside: the only reason anyone
+    // noticed was a behavioural probe of an unrelated endpoint. A commit sha on
+    // /health turns "is the fix deployed?" into one request.
+    //
+    // RAILWAY_GIT_COMMIT_SHA is injected by Railway for git-sourced deploys, so
+    // it is also a live check that this service is building from the repo
+    // rather than from someone's laptop — it is absent on a `railway up`.
+    release: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
+    source:
+      process.env.RAILWAY_GIT_REPO_OWNER && process.env.RAILWAY_GIT_REPO_NAME
+        ? `${process.env.RAILWAY_GIT_REPO_OWNER}/${process.env.RAILWAY_GIT_REPO_NAME}`
+        : null,
+    environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV ?? null,
   });
 });
 
