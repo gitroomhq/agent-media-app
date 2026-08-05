@@ -69,7 +69,7 @@ const PLANS: PlanOption[] = [
     // (hormozi, tiktok, minimal). Selling 17 on the plan that generates videos
     // promises a choice the generator does not expose.
     features: [
-      'Up to 10s videos',
+      'Up to 15s videos',
       'Full UGC generation pipeline',
       'CLI, MCP, REST API & SDKs',
     ],

@@ -701,17 +701,9 @@ async function handleUGC(req: Request, _origin: string): Promise<Response> {
     );
   }
 
-  // Creator-tier plans (starter, newby) are limited to 10s max duration
-  const isCreatorTier = userTier === "starter" || userTier === "newby";
-  if (isCreatorTier && body.target_duration && body.target_duration > 10) {
-    return corsRes(
-      {
-        error: "plan_limit",
-        error_description: `Your plan (${userTier}) supports up to 10s videos. Upgrade to Pro ($69/mo) or Pro Plus ($129/mo) for 15s videos.`,
-      },
-      { status: 403 },
-    );
-  }
+  // No clip-length cap. Billing is per second at a flat rate on every tier,
+  // so a 15s clip already costs 3× a 5s one — the length a customer can
+  // afford is the only limit there is. (2026-08-02)
 
   // ═══════════════════════════════════════════════════════════════════════
   // STEP 4: ESTIMATE DURATION & CALCULATE CREDIT COST (per-second billing)

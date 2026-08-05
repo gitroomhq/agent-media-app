@@ -1400,11 +1400,9 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const isCreatorTier = userTier === 'starter' || userTier === 'newby';
-  if (isCreatorTier && body.target_duration && body.target_duration > 10) {
-    res.status(403).json({ error: 'plan_limit', error_description: `Your plan (${userTier}) supports up to 10s videos. Upgrade for 15s.` });
-    return;
-  }
+  // No clip-length cap. Billing is per second at a flat rate on every tier,
+  // so a 15s clip already costs 3× a 5s one — the length a customer can
+  // afford is the only limit there is. (2026-08-02)
 
   // ── Duration + pacing ──────────────────────────────────────────────────
   const targetDuration = body.target_duration ?? null;
