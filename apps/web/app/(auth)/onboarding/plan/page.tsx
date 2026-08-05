@@ -50,7 +50,7 @@ const PLANS: Plan[] = [
     credits: 3900,
     tagline: 'For creators shipping UGC consistently.',
     features: [
-      'Up to 10s videos',
+      'Up to 15s videos',
       'All AI models + presets',
     ],
   },

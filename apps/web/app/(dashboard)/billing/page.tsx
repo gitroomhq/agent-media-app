@@ -108,7 +108,7 @@ const PLAN_DISPLAY: PlanDisplay[] = [
     creditsLabel: '/month',
     features: [
       '3,900 credits/month',
-      'Up to 10s videos',
+      'Up to 15s videos',
     ],
   },
   {

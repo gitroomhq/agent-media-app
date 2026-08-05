@@ -57,7 +57,7 @@ const PLANS: Plan[] = [
     name: 'Creator',
     priceMonthly: 39,
     credits: 3900,
-    features: ['3,900 credits / month', 'Up to 10s videos'],
+    features: ['3,900 credits / month', 'Up to 15s videos'],
   },
   {
     tier: 'creator',

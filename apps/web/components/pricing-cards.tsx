@@ -14,7 +14,7 @@ export const plans = [
     desc: 'For creators shipping UGC content consistently.',
     features: [
       '3,900 credits/month',
-      'Up to 10s videos',
+      'Up to 15s videos',
     ],
     popular: false,
     cta: 'Get Started',
