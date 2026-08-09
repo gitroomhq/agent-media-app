@@ -202,8 +202,12 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
       'trending sounds in their editor. Pick a look preset (bug-eyed-shock, jaw-drop, ' +
       'unhinged-grin, …) or pass "custom:<text>"; omit `look` and the worker picks one at random. The expression is DYNAMIC \u2014 the face morphs through randomized silent beats (brow pops, mouth drops, eye darts, head tilts); `chaos` (0\u20131, default 0.6) sets how wild the evolution gets ' +
       'so repeated calls with the same caption produce varied reactions — the format is a volume ' +
-      'play: same hook, many looks, one recurring character. Use a saved character (--character) ' +
-      'for a consistent face across the series. Output: an mp4 hosted on R2.',
+      'play: same hook, many looks, one recurring character. `framing` rotates crop levels ' +
+      '(full-face, eyes-only, mouth-only, nose-up, medium) and is sampled per job when omitted; ' +
+      'warm looks (sweet-smile, giggle-fit) give contrast beats between the shocked faces. ' +
+      'A SERIES MUST START WITH A CHARACTER SHEET: run character_create first — the saved sheet ' +
+      '+ pinned seed keeps the SAME face on every clip. Inline description invents a NEW person ' +
+      'per clip; use it only for a one-off test. Output: an mp4 hosted on R2.',
     inputSchema: CrazyLookSchema,
     output: 'video_url',
 
