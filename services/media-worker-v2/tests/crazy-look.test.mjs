@@ -65,24 +65,31 @@ test('buildActionArc: chaos scales the number of sampled beats (1 at 0, 4 at 1)'
   const first = () => 0; // deterministic sampler
   const calm = buildActionArc(brief, 0, first);
   const wild = buildActionArc(brief, 1, first);
-  assert.equal((calm.match(/Beat \d/g) ?? []).length, 1);
-  assert.equal((wild.match(/Beat \d/g) ?? []).length, 4);
+  assert.equal((calm.match(/Then /g) ?? []).length, 1);
+  assert.equal((wild.match(/Then /g) ?? []).length, 4);
   assert.ok(calm.includes('smooth and gradual'));
   assert.ok(wild.includes('unhinged'));
+});
+
+test('buildActionArc: never uses panel-inviting labels like "Beat N"', () => {
+  const brief = resolveLook('bug-eyed-shock');
+  const arc = buildActionArc(brief, 1, () => 0);
+  assert.ok(!/Beat \d/.test(arc), 'numbered beat labels read as panels to the video model');
+  assert.ok(arc.includes('single continuous shot'));
 });
 
 test('buildActionArc: always opens on the look pose, closes on its action, never static', () => {
   const brief = resolveLook('deadpan-stare');
   const arc = buildActionArc(brief, 0.6);
   assert.ok(arc.includes('NEVER static'));
-  assert.ok(arc.includes(`Opens on: ${brief.pose}`));
-  assert.ok(arc.includes(`Closes on: ${brief.action}`));
+  assert.ok(arc.includes(`She opens on: ${brief.pose}`));
+  assert.ok(arc.includes(`She ends on: ${brief.action}`));
 });
 
 test('buildActionArc: clamps out-of-range chaos instead of throwing', () => {
   const brief = resolveLook('unhinged-grin');
-  assert.equal((buildActionArc(brief, 9, () => 0).match(/Beat \d/g) ?? []).length, 4);
-  assert.equal((buildActionArc(brief, -3, () => 0).match(/Beat \d/g) ?? []).length, 1);
+  assert.equal((buildActionArc(brief, 9, () => 0).match(/Then /g) ?? []).length, 4);
+  assert.equal((buildActionArc(brief, -3, () => 0).match(/Then /g) ?? []).length, 1);
   assert.ok(buildActionArc(brief, NaN).includes('punchy beats')); // NaN -> default 0.6
 });
 

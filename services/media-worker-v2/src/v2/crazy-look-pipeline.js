@@ -164,10 +164,10 @@ export function buildActionArc(brief, chaos = 0.6, rand = Math.random) {
     : c < 0.67 ? 'The changes land as distinct, punchy beats.'
     : 'The changes are fast, jittery and unhinged — almost too much.';
   return [
-    'The expression is NEVER static — the face keeps morphing the whole clip.',
-    `Opens on: ${brief.pose}.`,
-    ...beats.map((b, i) => `Beat ${i + 2}: ${b}.`),
-    `Closes on: ${brief.action}.`,
+    'The expression is NEVER static — it keeps changing, one moment after another IN TIME, all within the same single continuous shot.',
+    `She opens on: ${brief.pose}.`,
+    ...beats.map((b) => `Then ${b}.`),
+    `She ends on: ${brief.action}.`,
     tempo,
   ].join(' ');
 }
@@ -286,7 +286,8 @@ function buildWireframePrompt({ pose, duration }) {
 
 function buildCrazyLookVideoPrompt({ arc, duration }) {
   return [
-    `Handheld vertical iPhone front-camera clip, ${duration} seconds, tight close-up with the face in the lower two-thirds of the frame and headroom above, camera nearly static.`,
+    `ONE continuous unbroken handheld vertical iPhone front-camera shot of ONE person, ${duration} seconds, tight close-up with the face in the lower two-thirds of the frame and headroom above, camera nearly static.`,
+    'The frame is a single full-bleed shot at all times — absolutely NO split-screen, NO grid, NO collage, NO side-by-side panels, NO picture-in-picture, NO montage cuts.',
     `The person never speaks real words — any mouth movement is silent mouthing, gasping or grimacing. ${arc}`,
     'Audio: natural ambient room tone only. No music, no dialogue, no voiceover.',
   ].join(' ');
