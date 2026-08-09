@@ -10,6 +10,7 @@
  *
  * Routes:
  *   POST /v2/selfie       — enqueue + run a Selfie generation
+ *   POST /v2/crazy-look   — enqueue + run a Crazy Look generation
  *
  * Each route returns 202 immediately with { accepted, job_id } and
  * fires a callback to the caller-supplied callback_url on completion
@@ -20,6 +21,7 @@
 import { processSelfie } from './selfie-adapter.js';
 import { processCharacterCreate } from './character-create-pipeline.js';
 import { processSubtitle } from './subtitle-pipeline.js';
+import { processCrazyLook } from './crazy-look-pipeline.js';
 import { classifyError } from '../error-classifier.js';
 
 // ── Per-user FIFO queue, isolated from v1 ─────────────────────────────────
@@ -82,6 +84,7 @@ function runJob(key, jobEnvelope) {
   if (pipeline === 'selfie') runner = processSelfie;
   else if (pipeline === 'character-create') runner = processCharacterCreate;
   else if (pipeline === 'subtitle') runner = processSubtitle;
+  else if (pipeline === 'crazy-look') runner = processCrazyLook;
   else runner = null;
   if (!runner) {
     console.error(`[v2:${pipeline}:${job_id}] unknown pipeline`);
@@ -247,6 +250,82 @@ export function registerV2Routes(app, verifySecret) {
     runJob(key, envelope);
   });
 
+  // ── POST /v2/crazy-look ───────────────────────────────────────────
+  app.post('/v2/crazy-look', verifySecret, async (req, res) => {
+    const body = req.body ?? {};
+    const {
+      job_id,
+      user_id,
+      character_id,
+      photo_url,
+      description,
+      caption,
+      look,
+      duration,
+      polish,
+      seed,
+      callback_url,
+    } = body;
+
+    if (!job_id) {
+      return res.status(400).json({ error: 'missing required field: job_id' });
+    }
+    if (!caption || !String(caption).trim()) {
+      return res.status(400).json({ error: 'missing required field: caption' });
+    }
+    const hasCharacter = !!character_id;
+    const hasDescription = !!description;
+    // Same valid input shapes as /v2/selfie:
+    //   1. character_id alone
+    //   2. description alone (text-to-image portrait)
+    //   3. description + photo_url (image-to-image reference)
+    if (!hasCharacter && !hasDescription) {
+      return res.status(400).json({
+        error:
+          'provide either character_id, OR description (with optional photo_url)',
+      });
+    }
+    if (hasCharacter && (photo_url || description)) {
+      return res.status(400).json({
+        error: 'use character_id OR description (+ optional photo_url), not both',
+      });
+    }
+    if (photo_url && !description) {
+      return res.status(400).json({
+        error: 'photo_url requires description',
+      });
+    }
+
+    const { key, q } = getQueue(user_id);
+    const envelope = {
+      pipeline: 'crazy-look',
+      params: {
+        job_id,
+        user_id,
+        character_id,
+        photo_url,
+        description,
+        caption,
+        look,
+        duration,
+        polish,
+        seed,
+        callback_url,
+      },
+    };
+
+    if (q.running) {
+      q.queue.push(envelope);
+      return res
+        .status(202)
+        .json({ accepted: true, job_id, queued: true, position: q.queue.length });
+    }
+
+    res.status(202).json({ accepted: true, job_id });
+    q.running = true;
+    runJob(key, envelope);
+  });
+
   // ── POST /v2/characters ───────────────────────────────────────────
   app.post('/v2/characters', verifySecret, async (req, res) => {
     const body = req.body ?? {};
@@ -342,5 +421,5 @@ export function registerV2Routes(app, verifySecret) {
     runJob(key, envelope);
   });
 
-  console.log('[v2 routes] registered: POST /v2/selfie, POST /v2/characters, POST /v2/subtitle');
+  console.log('[v2 routes] registered: POST /v2/selfie, POST /v2/crazy-look, POST /v2/characters, POST /v2/subtitle');
 }

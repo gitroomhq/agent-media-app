@@ -12,4 +12,5 @@
 export * from './selfie.js';
 export * from './character.js';
 export * from './subtitle.js';
+export * from './crazy-look.js';
 export * from './generators.js';

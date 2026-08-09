@@ -19,6 +19,7 @@ import type { z } from 'zod';
 import { SelfieSchema } from './selfie.js';
 import { CharacterCreateSchema } from './character.js';
 import { SubtitleSchema } from './subtitle.js';
+import { CrazyLookSchema } from './crazy-look.js';
 
 // ── Record shape ──────────────────────────────────────────────────────────
 
@@ -187,6 +188,48 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
     // webhook, dashboard) now quotes the same number — and there is no phantom
     // reconciliation step to implement.
     pricing: { basis: 'one_shot', baseCredits: 15 },
+  },
+
+  crazy_look: {
+    id: 'crazy_look',
+    status: 'beta',
+    summary: 'Silent extreme close-up reaction clip with a static caption overlay ("the crazy look").',
+    description:
+      'Generate a 5–10s vertical 9:16 reaction clip: one character, extreme close-up (face fills ' +
+      'most of the frame), an exaggerated silent expression held straight into the lens, and a ' +
+      'static caption burned over the full clip. No speech, no lip-sync, no TTS — the caption is ' +
+      'the hook, the face is the reaction. Ambient room tone is kept (no music); creators add ' +
+      'trending sounds in their editor. Pick a look preset (bug-eyed-shock, jaw-drop, ' +
+      'unhinged-grin, …) or pass "custom:<text>"; omit `look` and the worker picks one at random ' +
+      'so repeated calls with the same caption produce varied reactions — the format is a volume ' +
+      'play: same hook, many looks, one recurring character. Use a saved character (--character) ' +
+      'for a consistent face across the series. Output: an mp4 hosted on R2.',
+    inputSchema: CrazyLookSchema,
+    output: 'video_url',
+
+    cli: {
+      command: 'crazy-look',
+      fileFields: ['photo_url'],
+      examples: [
+        // The volume workflow — saved character, random look each call.
+        'agent-media crazy-look --character char_8x2vqp --caption "WAIT there\'s an app that LOCKS your phone until you PRAY???"',
+        // Pin a specific look + longer hold.
+        'agent-media crazy-look --character char_8x2vqp --caption "how do you pray so consistently???" --look bug-eyed-shock --duration 10',
+        // Inline character (no saved character yet) + freetext look.
+        'agent-media crazy-look --description "21yo woman, long brown wavy hair, argyle cardigan" --caption "it took me 21 years to realize this" --look "custom:slowly raises one eyebrow, then breaks into a huge grin"',
+      ],
+    },
+    mcp: { toolName: 'create_crazy_look' },
+    rest: { method: 'POST', path: '/v2/crazy-look' },
+
+    // Cost math, following selfie's basis (list price, 70% margin floor):
+    // same Seedance per-second burn, but NO orchestrator LLM call and NO
+    // TTS/Whisper — the preset + caption fully determine every stage. In
+    // saved-character mode only 1 gpt-image-2 call (wireframe) runs, in
+    // inline mode 3. The caption burn is ffmpeg, rounding error.
+    //   5s  = ~$0.55 cost → 200 credits ($2.00)
+    //   10s = ~$1.00 cost → 350 credits ($3.50)
+    pricing: { basis: 'per_clip', baseCredits: 50, perSecondCredits: 30 },
   },
 } as const;
 
