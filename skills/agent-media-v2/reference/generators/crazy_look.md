@@ -10,7 +10,7 @@ Silent extreme close-up reaction clip with a static caption overlay ("the crazy 
 
 ## When to use
 
-Generate a 5–10s vertical 9:16 reaction clip: one character, extreme close-up (face fills most of the frame), an exaggerated silent expression held straight into the lens, and a static caption burned over the full clip. No speech, no lip-sync, no TTS — the caption is the hook, the face is the reaction. Ambient room tone is kept (no music); creators add trending sounds in their editor. Pick a look preset (bug-eyed-shock, jaw-drop, unhinged-grin, …) or pass "custom:<text>"; omit `look` and the worker picks one at random so repeated calls with the same caption produce varied reactions — the format is a volume play: same hook, many looks, one recurring character. Use a saved character (--character) for a consistent face across the series. Output: an mp4 hosted on R2.
+Generate a 5–10s vertical 9:16 reaction clip: one character, extreme close-up (face fills most of the frame), an exaggerated silent expression held straight into the lens, and a static caption burned over the full clip. No speech, no lip-sync, no TTS — the caption is the hook, the face is the reaction. Ambient room tone is kept (no music); creators add trending sounds in their editor. Pick a look preset (bug-eyed-shock, jaw-drop, unhinged-grin, …) or pass "custom:<text>"; omit `look` and the worker picks one at random. The expression is DYNAMIC — the face morphs through randomized silent beats (brow pops, mouth drops, eye darts, head tilts); `chaos` (0–1, default 0.6) sets how wild the evolution gets so repeated calls with the same caption produce varied reactions — the format is a volume play: same hook, many looks, one recurring character. Use a saved character (--character) for a consistent face across the series. Output: an mp4 hosted on R2.
 
 ## CLI
 
@@ -62,6 +62,11 @@ agent-media crazy-look --description "21yo woman, long brown wavy hair, argyle c
         10
       ],
       "default": 5
+    },
+    "chaos": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
     },
     "polish": {
       "type": "string",

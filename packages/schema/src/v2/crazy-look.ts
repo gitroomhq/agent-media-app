@@ -92,6 +92,13 @@ export const CrazyLookSchema = z
       .union([z.literal(5), z.literal(10)])
       .default(5),
 
+    // Freedom parameter: how much the expression MOVES during the clip.
+    // 0 = one held look with subtle escalation; 1 = fast, jittery,
+    // unhinged morphing through many beats (brows, mouth, eyes, head).
+    // The beat sequence is sampled per job, so repeated calls with the
+    // same caption + look still come out different. Default 0.6.
+    chaos: z.number().min(0).max(1).optional(),
+
     // Post-Seedance polish pass (grain + warm grade + vignette). The
     // lo-fi look is load-bearing for this format, so default stays on.
     polish: z.enum(V2_POLISH_INTENSITIES).optional(),

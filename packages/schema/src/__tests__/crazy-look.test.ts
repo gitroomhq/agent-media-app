@@ -131,6 +131,15 @@ describe('CrazyLookSchema · duration & polish', () => {
     expect(accepts({ ...CHAR, duration: 0 })).toBe(false);
   });
 
+  it('accepts chaos in [0,1] and rejects out-of-range or non-numeric', () => {
+    for (const c of [0, 0.35, 0.6, 1]) {
+      expect(accepts({ ...CHAR, chaos: c })).toBe(true);
+    }
+    expect(accepts({ ...CHAR, chaos: -0.1 })).toBe(false);
+    expect(accepts({ ...CHAR, chaos: 1.5 })).toBe(false);
+    expect(accepts({ ...CHAR, chaos: '0.5' })).toBe(false);
+  });
+
   it('accepts the shared polish intensities and rejects junk', () => {
     for (const p of ['off', 'default', 'heavy']) {
       expect(accepts({ ...CHAR, polish: p })).toBe(true);

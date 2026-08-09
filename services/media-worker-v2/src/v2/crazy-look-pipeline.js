@@ -127,6 +127,51 @@ const LOOK_BRIEFS = {
 
 const LOOK_KEYS = Object.keys(LOOK_BRIEFS);
 
+// ── Beat pool ─────────────────────────────────────────────────────────────
+// Micro-actions sampled per job to keep the expression MOVING. The look
+// preset anchors the open and close of the arc; chaos decides how many
+// of these get woven in between, and how frantically.
+const BEAT_POOL = [
+  'both eyebrows pop up, then knit together hard',
+  'mouth drops open, snaps shut, then opens again even wider',
+  'silently mouths a wordless "WHAT" with exaggerated lips',
+  'eyes dart left, then right, then snap back to the lens',
+  'head tilts sharply to one side, then slowly straightens',
+  'a hand flies up to the cheek, fingers spread',
+  'leans suddenly closer to the lens, then eases back',
+  'blinks twice fast, then holds the eyes open even wider',
+  'nose scrunches and the upper lip curls in disbelief',
+  'a slow head shake builds into a fast little shake',
+  'presses lips together fighting a grin that breaks through anyway',
+  'chin drops and the eyes look up into the lens',
+];
+
+/**
+ * Build the dynamic expression arc for the Seedance prompt.
+ * chaos 0..1: 0 = one extra beat, gradual; 1 = four extra beats, frantic.
+ * `rand` is injectable for tests.
+ */
+export function buildActionArc(brief, chaos = 0.6, rand = Math.random) {
+  const c = Math.min(1, Math.max(0, Number.isFinite(chaos) ? chaos : 0.6));
+  const beatCount = 1 + Math.round(c * 3); // 1..4 sampled beats
+  const pool = [...BEAT_POOL];
+  const beats = [];
+  for (let i = 0; i < beatCount && pool.length > 0; i++) {
+    beats.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+  }
+  const tempo =
+    c < 0.34 ? 'The changes are smooth and gradual.'
+    : c < 0.67 ? 'The changes land as distinct, punchy beats.'
+    : 'The changes are fast, jittery and unhinged — almost too much.';
+  return [
+    'The expression is NEVER static — the face keeps morphing the whole clip.',
+    `Opens on: ${brief.pose}.`,
+    ...beats.map((b, i) => `Beat ${i + 2}: ${b}.`),
+    `Closes on: ${brief.action}.`,
+    tempo,
+  ].join(' ');
+}
+
 /**
  * Resolve the `look` input to a {key, pose, action} brief.
  *   - registered preset key → its brief
@@ -239,10 +284,10 @@ function buildWireframePrompt({ pose, duration }) {
   ].join('\n');
 }
 
-function buildCrazyLookVideoPrompt({ action, duration }) {
+function buildCrazyLookVideoPrompt({ arc, duration }) {
   return [
     `Handheld vertical iPhone front-camera clip, ${duration} seconds, tight close-up with the face in the lower two-thirds of the frame and headroom above, camera nearly static.`,
-    `The person does NOT speak — the mouth never forms words. ${action}.`,
+    `The person never speaks real words — any mouth movement is silent mouthing, gasping or grimacing. ${arc}`,
     'Audio: natural ambient room tone only. No music, no dialogue, no voiceover.',
   ].join(' ');
 }
@@ -259,6 +304,7 @@ function buildCrazyLookVideoPrompt({ action, duration }) {
  * @param {string} params.caption         — the hook text, burned over the full clip
  * @param {string} [params.look]          — preset key | "custom:<text>" | omitted ⇒ random
  * @param {number} [params.duration]      — 5 | 10 (seconds)
+ * @param {number} [params.chaos]         — 0..1 freedom: how wildly the expression evolves (default 0.6)
  * @param {string} [params.polish]        — off | default | heavy
  * @param {number} [params.seed]          — pinned integer; falls back to the character's seed
  * @param {(stage: string, meta?: object) => void} [params.onProgress]
@@ -282,6 +328,7 @@ export async function processCrazyLook(params) {
     caption,
     look,
     duration = 5,
+    chaos,
     polish = DEFAULT_POLISH_INTENSITY,
     seed: callerSeed,
     onProgress = () => {},
@@ -382,7 +429,7 @@ export async function processCrazyLook(params) {
   // means no speech, not a dead audio track. Music is excluded via the
   // prompt; creators layer trending sounds on top themselves.
   onProgress('D', { stage: 'seedance' });
-  prompts.video = buildCrazyLookVideoPrompt({ action: brief.action, duration });
+  prompts.video = buildCrazyLookVideoPrompt({ arc: buildActionArc(brief, chaos), duration });
   console.log(`[crazy-look:${job_id}] [D] Seedance prompt: ${prompts.video}`);
   console.log(`[crazy-look:${job_id}] [D] Seedance 2.0 (seed=${seed}, ${duration}s)…`);
   const providerUrl = await runGeneration(

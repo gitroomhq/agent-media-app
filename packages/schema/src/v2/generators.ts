@@ -200,7 +200,7 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
       'static caption burned over the full clip. No speech, no lip-sync, no TTS — the caption is ' +
       'the hook, the face is the reaction. Ambient room tone is kept (no music); creators add ' +
       'trending sounds in their editor. Pick a look preset (bug-eyed-shock, jaw-drop, ' +
-      'unhinged-grin, …) or pass "custom:<text>"; omit `look` and the worker picks one at random ' +
+      'unhinged-grin, …) or pass "custom:<text>"; omit `look` and the worker picks one at random. The expression is DYNAMIC \u2014 the face morphs through randomized silent beats (brow pops, mouth drops, eye darts, head tilts); `chaos` (0\u20131, default 0.6) sets how wild the evolution gets ' +
       'so repeated calls with the same caption produce varied reactions — the format is a volume ' +
       'play: same hook, many looks, one recurring character. Use a saved character (--character) ' +
       'for a consistent face across the series. Output: an mp4 hosted on R2.',
