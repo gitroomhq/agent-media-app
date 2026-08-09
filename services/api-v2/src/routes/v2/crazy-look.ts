@@ -126,7 +126,7 @@ export async function crazyLookRoute(req: Request, res: Response): Promise<void>
   const { error: jobErr } = await supabase.from('generation_jobs').insert({
     id: jobId,
     user_id: userId,
-    model_slug: 'seedance-2.0-crazy-look',
+    model_slug: 'seedance-2.0-selfie', // same underlying model; operation='crazy_look' distinguishes the product. FK requires an existing models row.
     operation: 'crazy_look',
     status: 'submitted',
     prompt: input.caption,
