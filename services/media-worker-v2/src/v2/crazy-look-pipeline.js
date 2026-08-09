@@ -275,6 +275,20 @@ function escapeAss(text) {
 }
 
 /**
+ * Strip emoji and pictographs from caption text. The burn font
+ * (Liberation Sans) has no emoji coverage, so every 😭💛 rendered as an
+ * empty tofu box in production captions (caught by an agent QA pass on
+ * 2026-08-09). Removing them beats shipping boxes; a color-emoji
+ * fallback font in the worker image can lift this later.
+ */
+export function stripUnrenderableGlyphs(text) {
+  return text
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/ {2,}/g, ' ')
+    .replace(/[ \t]+$/gm, '');
+}
+
+/**
  * Build an ASS file with ONE dialogue event spanning the whole clip —
  * the TikTok-style static hook caption. White, black outline + soft
  * shadow, wrapped, sitting in the upper-middle of the 9:16 frame
@@ -288,7 +302,7 @@ function escapeAss(text) {
  * @returns {string} ASS file contents
  */
 export function buildStaticCaptionAss(caption, durationSec) {
-  const text = escapeAss(caption).replace(/\r?\n/g, '\\N');
+  const text = escapeAss(stripUnrenderableGlyphs(caption)).replace(/\r?\n/g, '\\N');
   return [
     '[Script Info]',
     'ScriptType: v4.00+',

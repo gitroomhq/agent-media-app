@@ -66,12 +66,43 @@ export function enqueueV2Job(envelope) {
   const { key, q } = getQueue(envelope?.params?.user_id);
   if (q.running) {
     q.queue.push(envelope);
-    return { queued: true, position: q.queue.length };
+    const position = q.queue.length;
+    // Queued jobs MUST phone home immediately: api-v2's submitted
+    // fast-path reaper fails any job whose webhook_checkpoint is still
+    // 'none' after ~5 minutes — which is exactly what a batch of N
+    // submissions looks like when only job 1 is running. The reaped
+    // jobs then still generate (the queue doesn't know) → refunded
+    // AND delivered. One 'queued' callback flips the checkpoint.
+    sendCallback(envelope.params.callback_url, {
+      job_id: envelope.params.job_id,
+      status: 'processing',
+      stage: 'queued',
+      message: `queued behind ${position} job(s)`,
+    }).catch(() => {});
+    return { queued: true, position };
   }
   q.running = true;
   runJob(key, envelope);
   return { queued: false };
 }
+
+// Long queue waits also need periodic heartbeats so the 15-minute
+// processing reaper doesn't eat position 4 of 5 (a 5-clip batch is
+// ~40 minutes of legitimate waiting on a serial queue).
+const QUEUE_HEARTBEAT_MS = 4 * 60_000;
+const queueHeartbeat = setInterval(() => {
+  for (const [, q] of v2UserQueues) {
+    q.queue.forEach((envelope, i) => {
+      sendCallback(envelope.params.callback_url, {
+        job_id: envelope.params.job_id,
+        status: 'processing',
+        stage: 'queued',
+        message: `still queued at position ${i + 1}`,
+      }).catch(() => {});
+    });
+  }
+}, QUEUE_HEARTBEAT_MS);
+if (typeof queueHeartbeat.unref === 'function') queueHeartbeat.unref();
 
 function runNext(key) {
   const q = v2UserQueues.get(key);
@@ -116,6 +147,34 @@ function runJob(key, jobEnvelope) {
     return;
   }
 
+  // Hard ceiling: Seedance's own 30-min timeout failed to release the
+  // queue at least once (job wedged >40 min, everything behind it
+  // starved). Whatever a provider client does, the queue advances.
+  const HARD_JOB_TIMEOUT_MS = 45 * 60_000;
+  let settled = false;
+  const settle = (fn) => {
+    if (settled) return false;
+    settled = true;
+    clearTimeout(hardTimer);
+    Promise.resolve()
+      .then(fn)
+      .catch(() => {})
+      .finally(() => runNext(key));
+    return true;
+  };
+  const hardTimer = setTimeout(() => {
+    console.error(`[v2:${pipeline}:${job_id}] HARD TIMEOUT after ${HARD_JOB_TIMEOUT_MS / 60_000} min — failing job and releasing the queue`);
+    settle(() =>
+      sendCallback(callback_url, {
+        job_id,
+        status: 'failed',
+        error: `worker hard timeout after ${HARD_JOB_TIMEOUT_MS / 60_000} minutes`,
+        error_code: 'WORKER_JOB_TIMEOUT',
+      }),
+    );
+  }, HARD_JOB_TIMEOUT_MS);
+  if (typeof hardTimer.unref === 'function') hardTimer.unref();
+
   runner({
     ...params,
     onProgress: (stage, meta) =>
@@ -153,7 +212,9 @@ function runJob(key, jobEnvelope) {
           seed: result.seed,
         };
       }
-      return sendCallback(callback_url, payload);
+      if (!settle(() => sendCallback(callback_url, payload))) {
+        console.warn(`[v2:${pipeline}:${job_id}] completed AFTER hard timeout — result dropped (job already failed + refunded)`);
+      }
     })
     .catch((err) => {
       // Classify the cause so an actionable code (e.g. CONTENT_POLICY_BLOCKED)
@@ -162,14 +223,17 @@ function runJob(key, jobEnvelope) {
       const { code, message } = classifyError(err);
       const errorCode = code === 'PROVIDER_FAILURE' ? 'V2_PIPELINE_FAILED' : code;
       console.error(`[v2:${pipeline}:${job_id}] fatal (${errorCode}):`, message);
-      return sendCallback(callback_url, {
-        job_id,
-        status: 'failed',
-        error: message,
-        error_code: errorCode,
-      }).catch(() => {});
-    })
-    .finally(() => runNext(key));
+      if (!settle(() =>
+        sendCallback(callback_url, {
+          job_id,
+          status: 'failed',
+          error: message,
+          error_code: errorCode,
+        }),
+      )) {
+        console.warn(`[v2:${pipeline}:${job_id}] failed AFTER hard timeout — already settled`);
+      }
+    });
 }
 
 /**
@@ -232,7 +296,6 @@ export function registerV2Routes(app, verifySecret) {
       });
     }
 
-    const { key, q } = getQueue(user_id);
     const envelope = {
       pipeline: 'selfie',
       params: {
@@ -256,16 +319,12 @@ export function registerV2Routes(app, verifySecret) {
       },
     };
 
-    if (q.running) {
-      q.queue.push(envelope);
-      return res
-        .status(202)
-        .json({ accepted: true, job_id, queued: true, position: q.queue.length });
-    }
-
-    res.status(202).json({ accepted: true, job_id });
-    q.running = true;
-    runJob(key, envelope);
+    const enq = enqueueV2Job(envelope);
+    res.status(202).json({
+      accepted: true,
+      job_id,
+      ...(enq.queued ? { queued: true, position: enq.position } : {}),
+    });
   });
 
   // ── POST /v2/crazy-look ───────────────────────────────────────────
@@ -316,7 +375,6 @@ export function registerV2Routes(app, verifySecret) {
       });
     }
 
-    const { key, q } = getQueue(user_id);
     const envelope = {
       pipeline: 'crazy-look',
       params: {
@@ -336,16 +394,12 @@ export function registerV2Routes(app, verifySecret) {
       },
     };
 
-    if (q.running) {
-      q.queue.push(envelope);
-      return res
-        .status(202)
-        .json({ accepted: true, job_id, queued: true, position: q.queue.length });
-    }
-
-    res.status(202).json({ accepted: true, job_id });
-    q.running = true;
-    runJob(key, envelope);
+    const enq = enqueueV2Job(envelope);
+    res.status(202).json({
+      accepted: true,
+      job_id,
+      ...(enq.queued ? { queued: true, position: enq.position } : {}),
+    });
   });
 
   // ── POST /v2/characters ───────────────────────────────────────────
@@ -371,7 +425,6 @@ export function registerV2Routes(app, verifySecret) {
       });
     }
 
-    const { key, q } = getQueue(user_id);
     const envelope = {
       pipeline: 'character-create',
       params: {
@@ -386,16 +439,12 @@ export function registerV2Routes(app, verifySecret) {
       },
     };
 
-    if (q.running) {
-      q.queue.push(envelope);
-      return res
-        .status(202)
-        .json({ accepted: true, job_id, queued: true, position: q.queue.length });
-    }
-
-    res.status(202).json({ accepted: true, job_id });
-    q.running = true;
-    runJob(key, envelope);
+    const enq = enqueueV2Job(envelope);
+    res.status(202).json({
+      accepted: true,
+      job_id,
+      ...(enq.queued ? { queued: true, position: enq.position } : {}),
+    });
   });
 
   // ── POST /v2/subtitle ─────────────────────────────────────────────
@@ -417,7 +466,6 @@ export function registerV2Routes(app, verifySecret) {
         .json({ error: 'missing required fields (job_id, video_url)' });
     }
 
-    const { key, q } = getQueue(user_id);
     const envelope = {
       pipeline: 'subtitle',
       params: {
@@ -431,16 +479,12 @@ export function registerV2Routes(app, verifySecret) {
       },
     };
 
-    if (q.running) {
-      q.queue.push(envelope);
-      return res
-        .status(202)
-        .json({ accepted: true, job_id, queued: true, position: q.queue.length });
-    }
-
-    res.status(202).json({ accepted: true, job_id });
-    q.running = true;
-    runJob(key, envelope);
+    const enq = enqueueV2Job(envelope);
+    res.status(202).json({
+      accepted: true,
+      job_id,
+      ...(enq.queued ? { queued: true, position: enq.position } : {}),
+    });
   });
 
   console.log('[v2 routes] registered: POST /v2/selfie, POST /v2/crazy-look, POST /v2/characters, POST /v2/subtitle');

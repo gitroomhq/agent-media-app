@@ -20,7 +20,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { resolveLook, buildStaticCaptionAss, buildActionArc, resolveFraming } from '../src/v2/crazy-look-pipeline.js';
+import { resolveLook, buildStaticCaptionAss, buildActionArc, resolveFraming, stripUnrenderableGlyphs } from '../src/v2/crazy-look-pipeline.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -140,6 +140,24 @@ test('buildStaticCaptionAss: override braces cannot be injected via the caption'
   const dialogue = ass.split('\n').find((l) => l.startsWith('Dialogue:'));
   assert.ok(dialogue.includes('\\{'), 'braces must be escaped');
   assert.ok(!dialogue.includes('{\\pos'), 'raw ASS override must not survive');
+});
+
+// ── stripUnrenderableGlyphs ───────────────────────────────────────────────
+
+test('emoji never reach the burn font (they render as tofu boxes)', () => {
+  assert.equal(
+    stripUnrenderableGlyphs('wait for the end it\u2019s so cute\u{1F62D}\u{1F49B}'),
+    'wait for the end it\u2019s so cute',
+  );
+  const ass = buildStaticCaptionAss('finally found a way to pray \u{1F62D}\u{1F49B} consistently', 5);
+  const dialogue = ass.split('\n').find((l) => l.startsWith('Dialogue:'));
+  assert.ok(!/[\u{1F000}-\u{1FAFF}]/u.test(dialogue), 'emoji leaked into the ASS dialogue');
+  assert.ok(dialogue.includes('finally found a way to pray consistently'));
+});
+
+test('glyph stripping keeps ordinary punctuation, accents and typos intact', () => {
+  const caption = "WAIT there's an app that LOCKS you phone yntil you PRAY??? — cafe\u0301";
+  assert.equal(stripUnrenderableGlyphs(caption), caption);
 });
 
 // ── Real burn (integration; skipped without ffmpeg) ───────────────────────
