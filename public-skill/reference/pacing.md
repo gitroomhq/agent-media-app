@@ -16,7 +16,7 @@ Roughly 2.5 words per second is the natural TikTok talking-head cadence: too few
 
 ## Longer scripts
 
-There is no rejection for a long script. 23–33 words becomes a single 15s take. Past 33 the script is split into several takes stitched together, each priced by the same table — 33 words is the most a 15s take can hold (`round(15 × 2.2)`), so a 34-word script is two takes, not one long one. Call `/quote` first if you want the cost before spending.
+There is no rejection for a long script. Anything past 22 words becomes a 15s take, and a multi-sentence script is split into several takes stitched together — each priced by the same table. Call `/quote` first if you want the cost before spending.
 
 ## Examples
 
