@@ -70,8 +70,11 @@ test('resolveFraming: explicit presets resolve, junk throws, omitted samples', (
   assert.throws(() => resolveFraming('drone-shot'), /unknown framing/);
   assert.equal(resolveFraming(undefined, () => 0).key, 'full-face'); // rand 0 -> heaviest bucket
   const seen = new Set();
-  for (let i = 0; i < 60; i++) seen.add(resolveFraming().key);
+  for (let i = 0; i < 200; i++) seen.add(resolveFraming().key);
   assert.ok(seen.size > 1, 'weighted sampler never varied');
+  for (const macro of ['eyes-only', 'mouth-only', 'nose-up']) {
+    assert.ok(!seen.has(macro), `macro crop "${macro}" must be explicit-only, never sampled`);
+  }
 });
 
 test('resolveFraming: warm looks resolve too (sweet-smile, giggle-fit)', () => {

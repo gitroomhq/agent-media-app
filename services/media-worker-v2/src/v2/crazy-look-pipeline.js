@@ -157,26 +157,30 @@ const BEAT_POOL = [
 // ── Framing rotation ──────────────────────────────────────────────────────
 // Crop levels observed on reference accounts: same identity, rotated
 // framings, so a high-volume series never reads as one repeated video.
-// `weight` drives the omitted-input sampler.
+// `weight` drives the omitted-input sampler. Macro crops (eyes-only,
+// mouth-only, nose-up) are weight 0 — EXPLICIT-ONLY. Sampled onto a
+// fresh face they hide the likeness and the reaction (a 5s giant
+// mouth, learned the hard way on 2026-08-09); they're series spice an
+// operator pins deliberately, not a default.
 const FRAMING_BRIEFS = {
   'full-face': {
-    weight: 40,
+    weight: 70,
     frame: 'Tight selfie framing with HEADROOM: the face sits in the lower two-thirds of the frame (eyes near the vertical midline, clear space above the head for overlay text), filling 50–65% of the frame',
   },
   'eyes-only': {
-    weight: 15,
+    weight: 0,
     frame: 'EXTREME macro crop of the upper face: eyes and eyebrows fill the frame edge to edge, mouth and chin out of frame below, top of the head cropped out',
   },
   'mouth-only': {
-    weight: 15,
+    weight: 0,
     frame: 'EXTREME macro crop of the lower face: mouth, teeth and chin fill the frame edge to edge, the eyes are out of frame above',
   },
   'nose-up': {
-    weight: 10,
+    weight: 0,
     frame: 'Macro crop from the nose upward: eyes centered and huge in the frame, forehead visible, mouth out of frame below',
   },
   'medium': {
-    weight: 20,
+    weight: 30,
     frame: 'Head-and-shoulders selfie framing: face in the upper-middle of the frame with the room clearly visible behind, like a casual FaceTime call',
   },
 };
@@ -196,7 +200,9 @@ export function resolveFraming(framing, rand = Math.random) {
   }
   let roll = rand() * FRAMING_TOTAL_WEIGHT;
   for (const key of FRAMING_KEYS) {
-    roll -= FRAMING_BRIEFS[key].weight;
+    const w = FRAMING_BRIEFS[key].weight;
+    if (w <= 0) continue; // explicit-only framings never sample
+    roll -= w;
     if (roll <= 0) return { key, frame: FRAMING_BRIEFS[key].frame };
   }
   return { key: 'full-face', frame: FRAMING_BRIEFS['full-face'].frame };
