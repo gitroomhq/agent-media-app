@@ -192,8 +192,11 @@ export function buildStaticCaptionAss(caption, durationSec) {
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    // Alignment 8 = top-center; MarginV 560/1920 ≈ 29% down ⇒ upper-middle.
-    'Style: Caption,Liberation Sans,84,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,2,8,90,90,560,1',
+    // Alignment 8 = top-center; MarginV 250/1920 ≈ 13% down ⇒ over the
+    // forehead/background headroom, NEVER the eyes — the crazy eyes ARE
+    // the content. Fontsize 54/1920 ≈ 2.8% per line ≈ TikTok-native
+    // caption scale (measured off reference accounts), light outline.
+    'Style: Caption,Liberation Sans,54,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,8,110,110,250,1',
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
@@ -228,7 +231,7 @@ async function burnStaticCaption(inputPath, outputPath, caption, durationSec, wo
 function buildWireframePrompt({ pose, duration }) {
   return [
     'Compose a single iPhone front-camera still of the SAME PERSON shown in the reference sheet. ONE frame, vertical 9:16.',
-    `EXTREME close-up: the face fills 70–90% of the frame, eyes locked straight into the lens. Expression: ${pose}.`,
+    `Tight selfie framing with HEADROOM: the face sits in the lower two-thirds of the frame (eyes near the vertical midline, clear space above the head for overlay text), filling 50–65% of the frame, eyes locked straight into the lens. Expression: ${pose}.`,
     'Ordinary home setting barely visible behind them (bedroom, hallway, or living room), everyday indoor lighting, slight amateur handheld imperfection.',
     `This frame is the FIRST frame of a ${duration}-second silent reaction video.`,
     '',
@@ -238,7 +241,7 @@ function buildWireframePrompt({ pose, duration }) {
 
 function buildCrazyLookVideoPrompt({ action, duration }) {
   return [
-    `Handheld vertical iPhone front-camera clip, ${duration} seconds, extreme close-up on the face, camera nearly static.`,
+    `Handheld vertical iPhone front-camera clip, ${duration} seconds, tight close-up with the face in the lower two-thirds of the frame and headroom above, camera nearly static.`,
     `The person does NOT speak — the mouth never forms words. ${action}.`,
     'Audio: natural ambient room tone only. No music, no dialogue, no voiceover.',
   ].join(' ');
