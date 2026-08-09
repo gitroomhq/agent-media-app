@@ -22,6 +22,7 @@ import { processSelfie } from './selfie-adapter.js';
 import { processCharacterCreate } from './character-create-pipeline.js';
 import { processSubtitle } from './subtitle-pipeline.js';
 import { processCrazyLook } from './crazy-look-pipeline.js';
+import { scheduleOrphanReclaim } from './orphan-reclaimer.js';
 import { classifyError } from '../error-classifier.js';
 
 // ── Per-user FIFO queue, isolated from v1 ─────────────────────────────────
@@ -55,6 +56,23 @@ async function sendCallback(callbackUrl, payload) {
 // completion. Mirrors v1's per-route runner shape but scoped to a single
 // `pipeline` switch within v2 to keep this file the one place new v2
 // pipelines wire in.
+/**
+ * Enqueue a v2 job envelope on its user's FIFO queue, starting the
+ * runner if idle. Shared by the HTTP routes and the boot-time orphan
+ * reclaimer (which re-hydrates the in-memory queue after a deploy swap
+ * killed it — see ./orphan-reclaimer.js).
+ */
+export function enqueueV2Job(envelope) {
+  const { key, q } = getQueue(envelope?.params?.user_id);
+  if (q.running) {
+    q.queue.push(envelope);
+    return { queued: true, position: q.queue.length };
+  }
+  q.running = true;
+  runJob(key, envelope);
+  return { queued: false };
+}
+
 function runNext(key) {
   const q = v2UserQueues.get(key);
   if (!q) return;
@@ -426,4 +444,7 @@ export function registerV2Routes(app, verifySecret) {
   });
 
   console.log('[v2 routes] registered: POST /v2/selfie, POST /v2/crazy-look, POST /v2/characters, POST /v2/subtitle');
+
+  // Re-hydrate the in-memory queue with jobs a deploy swap orphaned.
+  scheduleOrphanReclaim(enqueueV2Job);
 }

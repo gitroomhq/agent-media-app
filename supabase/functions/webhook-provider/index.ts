@@ -63,6 +63,15 @@ interface ProviderWebhookEvent {
    */
   errorCode?: string;
   metadata?: Record<string, unknown>;
+  /**
+   * Non-media completion artifacts (character-create). A completed event
+   * with no mediaUrl previously fell through EVERY branch of the state
+   * machine, leaving the job "processing" forever — the pipeline had
+   * finished (portrait + sheet on R2, user_characters row usable) but
+   * nothing ever flipped the generation_jobs row. (2026-08-09)
+   */
+  characterSheetUrl?: string;
+  portraitUrl?: string;
 }
 
 /** Shape of a generation_jobs row we need for processing. */
@@ -171,6 +180,10 @@ interface RailwayWebhookPayload {
   stage?: string;
   progress_pct?: number;
   message?: string;
+  /** Character-create completions carry these instead of output_url. */
+  character_id?: string;
+  sheet_url?: string;
+  portrait_url?: string;
 }
 
 /**
@@ -204,6 +217,8 @@ function parseRailwayWebhook(body: unknown): ProviderWebhookEvent {
     providerJobId: payload.job_id,
     status: normalizedStatus,
     mediaUrl: payload.output_url ?? undefined,
+    characterSheetUrl: payload.sheet_url ?? undefined,
+    portraitUrl: payload.portrait_url ?? undefined,
     error: payload.error ?? undefined,
     errorCode: typeof payload.error_code === "string" ? payload.error_code : undefined,
     metadata: payload.stage != null ? {
@@ -1059,6 +1074,55 @@ async function processWebhook(
         );
       });
     }
+
+    return { status: "completed", jobId };
+  }
+
+  if (event.status === "completed") {
+    // Completed WITHOUT media — character-create (and any future one-shot
+    // v2 op whose artifacts live outside the media path). Before this
+    // branch existed, such events fell through the whole state machine and
+    // the job stayed "processing" forever even though the pipeline had
+    // finished. Complete the row directly; surface the sheet (or portrait)
+    // as the job's visible output so pollers get a URL.
+    const artifactUrl = event.characterSheetUrl ?? event.portraitUrl ?? null;
+
+    const { error: completeError } = await db.rpc("update_job_checkpoint", {
+      p_job_id: jobId,
+      p_checkpoint: "completed",
+      p_status: "completed",
+      ...(artifactUrl ? { p_output_media_url: artifactUrl } : {}),
+    });
+
+    if (completeError) {
+      throw new Error(
+        `update_job_checkpoint(completed, no-media) failed: ${completeError.message}`,
+      );
+    }
+
+    wLog.info("Job completed (no media payload)", {
+      jobId,
+      providerJobId: event.providerJobId,
+      artifactUrl,
+      durationMs: elapsed(),
+    });
+    console.log(
+      `webhook-provider [${provider}]: job ${jobId} completed (no media payload${artifactUrl ? `, artifact ${artifactUrl}` : ""})`,
+    );
+
+    // Fire the user's webhook (best-effort — never block the 200 response).
+    await fireUserWebhook({
+      db,
+      job: jobRecord,
+      event: "job.completed",
+      outputUrl: artifactUrl ?? undefined,
+      thumbnailUrl: null,
+    }).catch((err: unknown) => {
+      console.error(
+        `webhook-provider: fireUserWebhook(completed, no-media) crashed for job ${jobId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    });
 
     return { status: "completed", jobId };
   }
