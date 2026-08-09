@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CrazyLookSchema,
   V2_LOOK_PRESETS,
+  V2_FRAMING_PRESETS,
   V2_CRAZY_LOOK_DURATIONS,
   V2_GENERATORS,
   V2_GENERATOR_IDS,
@@ -131,6 +132,14 @@ describe('CrazyLookSchema · duration & polish', () => {
     expect(accepts({ ...CHAR, duration: 0 })).toBe(false);
   });
 
+  it('accepts every framing preset, rejects junk, and stays optional', () => {
+    for (const f of V2_FRAMING_PRESETS) {
+      expect(accepts({ ...CHAR, framing: f })).toBe(true);
+    }
+    expect(accepts({ ...CHAR, framing: 'drone-shot' })).toBe(false);
+    expect(accepts(CHAR)).toBe(true); // omitted -> worker samples one
+  });
+
   it('accepts chaos in [0,1] and rejects out-of-range or non-numeric', () => {
     for (const c of [0, 0.35, 0.6, 1]) {
       expect(accepts({ ...CHAR, chaos: c })).toBe(true);
@@ -181,6 +190,17 @@ describe('V2_LOOK_PRESETS ↔ worker LOOK_BRIEFS drift gate', () => {
     expect(new Set(V2_LOOK_PRESETS).size).toBe(V2_LOOK_PRESETS.length);
     for (const k of V2_LOOK_PRESETS) {
       expect(k).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+    }
+  });
+
+  it('every schema framing preset has a brief in the worker pipeline', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const workerSource = readFileSync(
+      join(here, '../../../../services/media-worker-v2/src/v2/crazy-look-pipeline.js'),
+      'utf8',
+    );
+    for (const key of V2_FRAMING_PRESETS) {
+      expect(workerSource, `worker FRAMING_BRIEFS is missing "${key}"`).toContain(`'${key}':`);
     }
   });
 

@@ -123,6 +123,14 @@ const LOOK_BRIEFS = {
     pose: 'nearly neutral face with a hint of confusion just starting in the brows',
     action: 'expression morphs slowly from confusion to wide-eyed realization to open-mouthed shock, one hand rises to the side of the head',
   },
+  'sweet-smile': {
+    pose: 'huge warm genuine smile, eyes crinkled with delight, chin slightly tucked',
+    action: 'the smile keeps blooming wider, a happy little shoulder wiggle, eyes stay locked warmly on the lens',
+  },
+  'giggle-fit': {
+    pose: 'mid-laugh with the mouth wide open, eyes squeezed nearly shut, head starting to tip back',
+    action: 'silent laughter shakes the shoulders, head tips back and comes down, wipes the corner of one eye',
+  },
 };
 
 const LOOK_KEYS = Object.keys(LOOK_BRIEFS);
@@ -145,6 +153,54 @@ const BEAT_POOL = [
   'presses lips together fighting a grin that breaks through anyway',
   'chin drops and the eyes look up into the lens',
 ];
+
+// ── Framing rotation ──────────────────────────────────────────────────────
+// Crop levels observed on reference accounts: same identity, rotated
+// framings, so a high-volume series never reads as one repeated video.
+// `weight` drives the omitted-input sampler.
+const FRAMING_BRIEFS = {
+  'full-face': {
+    weight: 40,
+    frame: 'Tight selfie framing with HEADROOM: the face sits in the lower two-thirds of the frame (eyes near the vertical midline, clear space above the head for overlay text), filling 50–65% of the frame',
+  },
+  'eyes-only': {
+    weight: 15,
+    frame: 'EXTREME macro crop of the upper face: eyes and eyebrows fill the frame edge to edge, mouth and chin out of frame below, top of the head cropped out',
+  },
+  'mouth-only': {
+    weight: 15,
+    frame: 'EXTREME macro crop of the lower face: mouth, teeth and chin fill the frame edge to edge, the eyes are out of frame above',
+  },
+  'nose-up': {
+    weight: 10,
+    frame: 'Macro crop from the nose upward: eyes centered and huge in the frame, forehead visible, mouth out of frame below',
+  },
+  'medium': {
+    weight: 20,
+    frame: 'Head-and-shoulders selfie framing: face in the upper-middle of the frame with the room clearly visible behind, like a casual FaceTime call',
+  },
+};
+const FRAMING_KEYS = Object.keys(FRAMING_BRIEFS);
+const FRAMING_TOTAL_WEIGHT = FRAMING_KEYS.reduce((n, k) => n + FRAMING_BRIEFS[k].weight, 0);
+
+/**
+ * Resolve the `framing` input to a {key, frame} brief. Explicit key, or
+ * weighted random when omitted (full-face most likely). `rand`
+ * injectable for tests.
+ */
+export function resolveFraming(framing, rand = Math.random) {
+  if (framing) {
+    const brief = FRAMING_BRIEFS[framing];
+    if (!brief) throw new Error(`unknown framing "${framing}" (one of: ${FRAMING_KEYS.join(', ')})`);
+    return { key: framing, frame: brief.frame };
+  }
+  let roll = rand() * FRAMING_TOTAL_WEIGHT;
+  for (const key of FRAMING_KEYS) {
+    roll -= FRAMING_BRIEFS[key].weight;
+    if (roll <= 0) return { key, frame: FRAMING_BRIEFS[key].frame };
+  }
+  return { key: 'full-face', frame: FRAMING_BRIEFS['full-face'].frame };
+}
 
 /**
  * Build the dynamic expression arc for the Seedance prompt.
@@ -273,10 +329,10 @@ async function burnStaticCaption(inputPath, outputPath, caption, durationSec, wo
 
 // ── Prompt builders ───────────────────────────────────────────────────────
 
-function buildWireframePrompt({ pose, duration }) {
+function buildWireframePrompt({ pose, frame, duration }) {
   return [
     'Compose a single iPhone front-camera still of the SAME PERSON shown in the reference sheet. ONE frame, vertical 9:16.',
-    `Tight selfie framing with HEADROOM: the face sits in the lower two-thirds of the frame (eyes near the vertical midline, clear space above the head for overlay text), filling 50–65% of the frame, eyes locked straight into the lens. Expression: ${pose}.`,
+    `${frame}. Gaze locked straight into the lens. Expression: ${pose}.`,
     'Ordinary home setting barely visible behind them (bedroom, hallway, or living room), everyday indoor lighting, slight amateur handheld imperfection.',
     `This frame is the FIRST frame of a ${duration}-second silent reaction video.`,
     '',
@@ -284,9 +340,9 @@ function buildWireframePrompt({ pose, duration }) {
   ].join('\n');
 }
 
-function buildCrazyLookVideoPrompt({ arc, duration }) {
+function buildCrazyLookVideoPrompt({ arc, frame, duration }) {
   return [
-    `ONE continuous unbroken handheld vertical iPhone front-camera shot of ONE person, ${duration} seconds, tight close-up with the face in the lower two-thirds of the frame and headroom above, camera nearly static.`,
+    `ONE continuous unbroken handheld vertical iPhone front-camera shot of ONE person, ${duration} seconds. ${frame}. Camera nearly static.`,
     'The frame is a single full-bleed shot at all times — absolutely NO split-screen, NO grid, NO collage, NO side-by-side panels, NO picture-in-picture, NO montage cuts.',
     `The person never speaks real words — any mouth movement is silent mouthing, gasping or grimacing. ${arc}`,
     'Audio: natural ambient room tone only. No music, no dialogue, no voiceover.',
@@ -328,6 +384,7 @@ export async function processCrazyLook(params) {
     description,
     caption,
     look,
+    framing,
     duration = 5,
     chaos,
     polish = DEFAULT_POLISH_INTENSITY,
@@ -345,6 +402,7 @@ export async function processCrazyLook(params) {
   }
 
   const brief = resolveLook(look);
+  const framingBrief = resolveFraming(framing);
   const workDir = await mkdtemp(join(tmpdir(), `crazy-look-${job_id}-`));
   const r2Prefix = `crazy-look/${job_id}`;
   const prompts = {};
@@ -413,8 +471,8 @@ export async function processCrazyLook(params) {
   }
 
   // ── Stage C · expression frame (wireframe) ────────────────────────────
-  onProgress('C', { stage: 'wireframe', look: brief.key });
-  prompts.wireframe = buildWireframePrompt({ pose: brief.pose, duration });
+  onProgress('C', { stage: 'wireframe', look: brief.key, framing: framingBrief.key });
+  prompts.wireframe = buildWireframePrompt({ pose: brief.pose, frame: framingBrief.frame, duration });
   console.log(`[crazy-look:${job_id}] [C] expression frame (look=${brief.key})…`);
   const wireBuf = await generateImageEdit({
     prompt: prompts.wireframe,
@@ -430,7 +488,7 @@ export async function processCrazyLook(params) {
   // means no speech, not a dead audio track. Music is excluded via the
   // prompt; creators layer trending sounds on top themselves.
   onProgress('D', { stage: 'seedance' });
-  prompts.video = buildCrazyLookVideoPrompt({ arc: buildActionArc(brief, chaos), duration });
+  prompts.video = buildCrazyLookVideoPrompt({ arc: buildActionArc(brief, chaos), frame: framingBrief.frame, duration });
   console.log(`[crazy-look:${job_id}] [D] Seedance prompt: ${prompts.video}`);
   console.log(`[crazy-look:${job_id}] [D] Seedance 2.0 (seed=${seed}, ${duration}s)…`);
   const providerUrl = await runGeneration(
@@ -482,6 +540,7 @@ export async function processCrazyLook(params) {
     wireframeUrl: wireUrl,
     seed,
     look: brief.key,
+    framing: framingBrief.key,
     prompts,
   };
 }

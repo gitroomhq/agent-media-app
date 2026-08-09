@@ -68,6 +68,16 @@ agent-media crazy-look --description "21yo woman, long brown wavy hair, argyle c
       "minimum": 0,
       "maximum": 1
     },
+    "framing": {
+      "type": "string",
+      "enum": [
+        "full-face",
+        "eyes-only",
+        "mouth-only",
+        "nose-up",
+        "medium"
+      ]
+    },
     "polish": {
       "type": "string",
       "enum": [

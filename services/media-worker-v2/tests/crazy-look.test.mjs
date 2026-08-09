@@ -20,7 +20,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { resolveLook, buildStaticCaptionAss, buildActionArc } from '../src/v2/crazy-look-pipeline.js';
+import { resolveLook, buildStaticCaptionAss, buildActionArc, resolveFraming } from '../src/v2/crazy-look-pipeline.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -31,6 +31,7 @@ test('resolveLook: every registered preset resolves to a pose + action brief', (
     'bug-eyed-shock', 'jaw-drop', 'unhinged-grin', 'deadpan-stare',
     'eyes-rolled-up', 'suspicious-squint', 'crying-smile',
     'lean-in-conspiracy', 'guilty-pout', 'slow-realization',
+    'sweet-smile', 'giggle-fit',
   ];
   for (const key of presets) {
     const brief = resolveLook(key);
@@ -56,6 +57,29 @@ test('resolveLook: omitted look picks a registered preset at random', () => {
 
 test('resolveLook: unknown looks throw instead of silently degrading', () => {
   assert.throws(() => resolveLook('confused-dog'), /unknown look/);
+});
+
+// ── resolveFraming ────────────────────────────────────────────────────────
+
+test('resolveFraming: explicit presets resolve, junk throws, omitted samples', () => {
+  for (const key of ['full-face', 'eyes-only', 'mouth-only', 'nose-up', 'medium']) {
+    const brief = resolveFraming(key);
+    assert.equal(brief.key, key);
+    assert.ok(brief.frame.length > 30, `${key} frame brief too thin`);
+  }
+  assert.throws(() => resolveFraming('drone-shot'), /unknown framing/);
+  assert.equal(resolveFraming(undefined, () => 0).key, 'full-face'); // rand 0 -> heaviest bucket
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) seen.add(resolveFraming().key);
+  assert.ok(seen.size > 1, 'weighted sampler never varied');
+});
+
+test('resolveFraming: warm looks resolve too (sweet-smile, giggle-fit)', () => {
+  for (const key of ['sweet-smile', 'giggle-fit']) {
+    const brief = resolveLook(key);
+    assert.equal(brief.key, key);
+    assert.ok(brief.pose.length > 20 && brief.action.length > 20);
+  }
 });
 
 // ── buildActionArc ────────────────────────────────────────────────────────

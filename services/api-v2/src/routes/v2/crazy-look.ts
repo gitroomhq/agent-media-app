@@ -141,6 +141,7 @@ export async function crazyLookRoute(req: Request, res: Response): Promise<void>
       ...(input.look ? { look: input.look } : {}),
       duration,
       ...(input.chaos !== undefined ? { chaos: input.chaos } : {}),
+      ...(input.framing ? { framing: input.framing } : {}),
       ...(input.polish ? { polish: input.polish } : {}),
     },
   });
@@ -184,6 +185,7 @@ export async function crazyLookRoute(req: Request, res: Response): Promise<void>
         ...(input.look ? { look: input.look } : {}),
         duration,
         ...(input.chaos !== undefined ? { chaos: input.chaos } : {}),
+        ...(input.framing ? { framing: input.framing } : {}),
         ...(input.polish ? { polish: input.polish } : {}),
         callback_url: buildCallbackUrl(jobId),
       }),

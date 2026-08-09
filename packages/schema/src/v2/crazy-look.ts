@@ -46,8 +46,26 @@ export const V2_LOOK_PRESETS = [
   'lean-in-conspiracy',
   'guilty-pout',
   'slow-realization',
+  // Warm contrast beats — the reference feeds mix sweet smiles and
+  // laughing fits between the shocked faces so the feed never reads
+  // as one note.
+  'sweet-smile',
+  'giggle-fit',
 ] as const;
 export type V2LookPreset = (typeof V2_LOOK_PRESETS)[number];
+
+// Framing rotation — the second variety axis. Reference accounts
+// rotate crop levels (mouth-only macros, eyes-only crops, standard
+// close-ups, medium shots) so one identity feels like many videos.
+// Omitted ⇒ the worker samples one (full-face weighted highest).
+export const V2_FRAMING_PRESETS = [
+  'full-face',
+  'eyes-only',
+  'mouth-only',
+  'nose-up',
+  'medium',
+] as const;
+export type V2FramingPreset = (typeof V2_FRAMING_PRESETS)[number];
 
 export const V2_CRAZY_LOOK_DURATIONS = [5, 10] as const;
 export type V2CrazyLookDuration = (typeof V2_CRAZY_LOOK_DURATIONS)[number];
@@ -98,6 +116,10 @@ export const CrazyLookSchema = z
     // The beat sequence is sampled per job, so repeated calls with the
     // same caption + look still come out different. Default 0.6.
     chaos: z.number().min(0).max(1).optional(),
+
+    // Crop level. Omitted ⇒ sampled per job (weighted toward
+    // full-face) so a series naturally rotates framings.
+    framing: z.enum(V2_FRAMING_PRESETS).optional(),
 
     // Post-Seedance polish pass (grain + warm grade + vignette). The
     // lo-fi look is load-bearing for this format, so default stays on.
