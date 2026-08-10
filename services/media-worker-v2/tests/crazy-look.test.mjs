@@ -20,7 +20,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { resolveLook, buildStaticCaptionAss, buildActionArc, resolveFraming, stripUnrenderableGlyphs } from '../src/v2/crazy-look-pipeline.js';
+import { resolveLook, buildStaticCaptionAss, buildActionArc, resolveFraming, stripUnrenderableGlyphs, signatureLookFor } from '../src/v2/crazy-look-pipeline.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -57,6 +57,62 @@ test('resolveLook: omitted look picks a registered preset at random', () => {
 
 test('resolveLook: unknown looks throw instead of silently degrading', () => {
   assert.throws(() => resolveLook('confused-dog'), /unknown look/);
+});
+
+// ── Signature look (per-character identity) ───────────────────────────────
+
+test('a character always gets the SAME look — that identity is the format', () => {
+  const id = 'char_01JD7KS871';
+  const first = resolveLook(undefined, id);
+  for (let i = 0; i < 50; i++) {
+    assert.equal(resolveLook(undefined, id).key, first.key, 'signature look drifted between clips');
+  }
+  assert.equal(first.signature, true);
+  assert.equal(signatureLookFor(id), first.key);
+});
+
+test('different characters get different signature looks (not all one preset)', () => {
+  const keys = new Set(
+    ['char_01JD7KS871', 'char_L5NC1ZD837', 'char_E4K074PK8V', 'char_SDQXPEC65V', 'char_Y1HFF0R4J6', 'char_8x2vqpAb12']
+      .map((id) => signatureLookFor(id)),
+  );
+  assert.ok(keys.size > 1, 'every character hashed to the same look');
+});
+
+test('explicit look overrides the signature, and no character still randomizes', () => {
+  const pinned = resolveLook('giggle-fit', 'char_01JD7KS871');
+  assert.equal(pinned.key, 'giggle-fit');
+  assert.ok(!pinned.signature);
+  assert.ok(resolveLook(undefined, undefined).key);
+});
+
+test('every look preset is peak-at-frame-one — no pose starts neutral', () => {
+  const presets = [
+    'bug-eyed-shock', 'jaw-drop', 'unhinged-grin', 'deadpan-stare',
+    'eyes-rolled-up', 'suspicious-squint', 'crying-smile',
+    'lean-in-conspiracy', 'guilty-pout', 'slow-realization',
+    'sweet-smile', 'giggle-fit',
+  ];
+  for (const key of presets) {
+    const { pose } = resolveLook(key);
+    assert.ok(
+      !/\b(nearly neutral|neutral face|calm|relaxed|starting in the brows|just starting)\b/i.test(pose),
+      `"${key}" opens on a non-peak pose ("${pose}") — it would render a calm first frame`,
+    );
+  }
+});
+
+// ── First frame is the peak ───────────────────────────────────────────────
+
+test('the arc opens AT peak intensity — no build-up, no neutral start', () => {
+  const brief = resolveLook('bug-eyed-shock');
+  const arc = buildActionArc(brief, 0.8);
+  assert.ok(arc.startsWith('FRAME ONE IS ALREADY THE FULL EXPRESSION'), 'peak must be stated first, before any beat');
+  assert.ok(arc.includes('0.0 seconds'));
+  assert.ok(/NO build-up/.test(arc) && /NO neutral opening/.test(arc));
+  assert.ok(arc.includes('NEVER relaxes back to a neutral'));
+  // the old phrasing let the model ease in mid-clip
+  assert.ok(!/She opens on/.test(arc));
 });
 
 // ── resolveFraming ────────────────────────────────────────────────────────
@@ -105,12 +161,12 @@ test('buildActionArc: never uses panel-inviting labels like "Beat N"', () => {
   assert.ok(arc.includes('single continuous shot'));
 });
 
-test('buildActionArc: always opens on the look pose, closes on its action, never static', () => {
+test('buildActionArc: frame one carries the pose, the action runs throughout', () => {
   const brief = resolveLook('deadpan-stare');
   const arc = buildActionArc(brief, 0.6);
-  assert.ok(arc.includes('NEVER static'));
-  assert.ok(arc.includes(`She opens on: ${brief.pose}`));
-  assert.ok(arc.includes(`She ends on: ${brief.action}`));
+  assert.ok(arc.includes(brief.pose), 'the look pose must be in the opening sentence');
+  assert.ok(arc.includes(`Throughout, ${brief.action}`));
+  assert.ok(arc.includes('keeps CHANGING'));
 });
 
 test('buildActionArc: clamps out-of-range chaos instead of throwing', () => {

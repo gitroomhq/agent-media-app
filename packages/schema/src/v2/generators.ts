@@ -205,6 +205,7 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
       'play: same hook, many looks, one recurring character. `framing` rotates crop levels ' +
       '(full-face, eyes-only, mouth-only, nose-up, medium) and is sampled per job when omitted; ' +
       'warm looks (sweet-smile, giggle-fit) give contrast beats between the shocked faces. ' +
+      'THE FIRST FRAME IS THE LOOK: at 0.0s the face is already at peak expression (no build-up), and a saved character keeps the SAME signature look on every clip unless `look` is passed explicitly — that recurring face is what makes a feed recognisable. ' +
       'A SERIES MUST START WITH A CHARACTER SHEET: run character_create first — the saved sheet ' +
       '+ pinned seed keeps the SAME face on every clip. Inline description invents a NEW person ' +
       'per clip; use it only for a one-off test. Output: an mp4 hosted on R2.',

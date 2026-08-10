@@ -120,8 +120,10 @@ const LOOK_BRIEFS = {
     action: 'holds the pout, slow shrug with both palms turned up, bites lower lip fighting back a smile',
   },
   'slow-realization': {
-    pose: 'nearly neutral face with a hint of confusion just starting in the brows',
-    action: 'expression morphs slowly from confusion to wide-eyed realization to open-mouthed shock, one hand rises to the side of the head',
+    // Pose must be a PEAK — it is literally frame one. The morph lives in
+    // the action, not in a calm opening frame.
+    pose: 'eyes flying wide in dawning realization, brows shot up, mouth falling open mid-gasp, one hand rising toward the side of the head',
+    action: 'the realization keeps deepening — eyes widen further, the hand reaches the head, the mouth opens more',
   },
   'sweet-smile': {
     pose: 'huge warm genuine smile, eyes crinkled with delight, chin slightly tucked',
@@ -226,22 +228,47 @@ export function buildActionArc(brief, chaos = 0.6, rand = Math.random) {
     : c < 0.67 ? 'The changes land as distinct, punchy beats.'
     : 'The changes are fast, jittery and unhinged — almost too much.';
   return [
-    'The expression is NEVER static — it keeps changing, one moment after another IN TIME, all within the same single continuous shot.',
-    `She opens on: ${brief.pose}.`,
+    `FRAME ONE IS ALREADY THE FULL EXPRESSION: ${brief.pose} — at 0.0 seconds, before any motion, the face is already at maximum intensity, exactly as in the reference image. There is NO build-up, NO neutral opening, NO easing into it, NO calm first beat.`,
+    'From that peak the expression keeps CHANGING, one moment after another IN TIME, within the same single continuous shot — but it NEVER relaxes back to a neutral or resting face.',
     ...beats.map((b) => `Then ${b}.`),
-    `She ends on: ${brief.action}.`,
+    `Throughout, ${brief.action}.`,
     tempo,
   ].join(' ');
+}
+
+/**
+ * The character's SIGNATURE look — deterministic from character_id, so
+ * every clip of that person opens on the same face. This is the format's
+ * whole identity: the reference account is recognisable in-feed because
+ * the same human makes the same bug-eyed face every single time. A
+ * per-clip random look destroyed that (a saved character came out
+ * shocked, then pouting, then giggling — three different personas).
+ *
+ * Derived, not stored, so it needs no migration and never drifts out of
+ * sync with the row. Explicit `look` always wins.
+ */
+export function signatureLookFor(characterId) {
+  let h = 2166136261;
+  for (let i = 0; i < characterId.length; i++) {
+    h ^= characterId.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return LOOK_KEYS[Math.abs(h) % LOOK_KEYS.length];
 }
 
 /**
  * Resolve the `look` input to a {key, pose, action} brief.
  *   - registered preset key → its brief
  *   - "custom:<text>"       → freetext used for both pose and action
- *   - undefined/null        → random preset (the volume use case: same
- *                             caption, different look every call)
+ *   - omitted + character_id → that character's SIGNATURE look (stable
+ *                              across every clip of them, forever)
+ *   - omitted + no character → random preset (one-off tests only)
  */
-export function resolveLook(look) {
+export function resolveLook(look, characterId) {
+  if (!look && characterId) {
+    const key = signatureLookFor(characterId);
+    return { key, signature: true, ...LOOK_BRIEFS[key] };
+  }
   if (!look) {
     const key = LOOK_KEYS[Math.floor(Math.random() * LOOK_KEYS.length)];
     return { key, ...LOOK_BRIEFS[key] };
@@ -353,8 +380,9 @@ function buildWireframePrompt({ pose, frame, duration }) {
   return [
     'Compose a single iPhone front-camera still of the SAME PERSON shown in the reference sheet. ONE frame, vertical 9:16.',
     `${frame}. Gaze locked straight into the lens. Expression: ${pose}.`,
+    'CRITICAL: the expression is ALREADY AT ITS ABSOLUTE PEAK in this frame — maximum intensity, fully committed, as extreme as it gets. NOT a neutral face, NOT a calm face, NOT the beginning of a reaction. The peak IS the starting point.',
     'Ordinary home setting barely visible behind them (bedroom, hallway, or living room), everyday indoor lighting, slight amateur handheld imperfection.',
-    `This frame is the FIRST frame of a ${duration}-second silent reaction video.`,
+    `This frame is the VERY FIRST frame of a ${duration}-second silent reaction video — the viewer sees this exact face at 0.0 seconds.`,
     '',
     REALISM_RUBRIC,
   ].join('\n');
@@ -421,7 +449,7 @@ export async function processCrazyLook(params) {
     throw new Error('processCrazyLook: provide character_id, OR description (with optional photo_url)');
   }
 
-  const brief = resolveLook(look);
+  const brief = resolveLook(look, character_id);
   const framingBrief = resolveFraming(framing);
   const workDir = await mkdtemp(join(tmpdir(), `crazy-look-${job_id}-`));
   const r2Prefix = `crazy-look/${job_id}`;
@@ -491,7 +519,7 @@ export async function processCrazyLook(params) {
   }
 
   // ── Stage C · expression frame (wireframe) ────────────────────────────
-  onProgress('C', { stage: 'wireframe', look: brief.key, framing: framingBrief.key });
+  onProgress('C', { stage: 'wireframe', look: brief.key, signature_look: brief.signature === true, framing: framingBrief.key });
   prompts.wireframe = buildWireframePrompt({ pose: brief.pose, frame: framingBrief.frame, duration });
   console.log(`[crazy-look:${job_id}] [C] expression frame (look=${brief.key})…`);
   const wireBuf = await generateImageEdit({
@@ -560,6 +588,7 @@ export async function processCrazyLook(params) {
     wireframeUrl: wireUrl,
     seed,
     look: brief.key,
+    signatureLook: brief.signature === true,
     framing: framingBrief.key,
     prompts,
   };
