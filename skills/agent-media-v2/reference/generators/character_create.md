@@ -77,6 +77,9 @@ agent-media character create --name "sofia" --description "..." --photo me.png
         "salon-mirror-result",
         "travel-hotel-room-review"
       ]
+    },
+    "signature_look": {
+      "type": "string"
     }
   },
   "required": [

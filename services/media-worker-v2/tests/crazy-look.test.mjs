@@ -102,6 +102,25 @@ test('every look preset is peak-at-frame-one — no pose starts neutral', () => 
   }
 });
 
+test('a PINNED signature_look overrides the derived one, explicit look still wins', () => {
+  const id = 'char_01JD7KS871';
+  const derived = resolveLook(undefined, id);
+  const pinned = resolveLook(undefined, id, 'bug-eyed-shock');
+  assert.equal(pinned.key, 'bug-eyed-shock');
+  assert.equal(pinned.signature, true);
+  assert.equal(pinned.pinned, true);
+  assert.ok(pinned.pose.length > 20, 'pinned brief must carry a real pose');
+  assert.notEqual(derived.key, 'bug-eyed-shock', 'fixture assumes this id derives to something else');
+  // an explicit per-job look beats the pin
+  assert.equal(resolveLook('giggle-fit', id, 'bug-eyed-shock').key, 'giggle-fit');
+});
+
+test('a pinned custom:<text> signature resolves to a freetext brief', () => {
+  const pinned = resolveLook(undefined, 'char_X', 'custom:eyes bulging out of his head');
+  assert.ok(pinned.pose.includes('eyes bulging out of his head'));
+  assert.equal(pinned.signature, true);
+});
+
 // ── First frame is the peak ───────────────────────────────────────────────
 
 test('the arc opens AT peak intensity — no build-up, no neutral start', () => {

@@ -79,6 +79,7 @@ export async function characterCreateRoute(req: Request, res: Response): Promise
       description: input.description,
       ...(input.voice_brief ? { voice_brief: input.voice_brief } : {}),
       ...(input.preset_default ? { preset_default: input.preset_default } : {}),
+      ...(input.signature_look ? { signature_look: input.signature_look } : {}),
     },
   });
   if (jobErr) {
@@ -113,6 +114,7 @@ export async function characterCreateRoute(req: Request, res: Response): Promise
     description: input.description,
     ...(input.voice_brief ? { voice_brief: input.voice_brief } : {}),
     ...(input.preset_default ? { preset_default: input.preset_default } : {}),
+    ...(input.signature_look ? { signature_look: input.signature_look } : {}),
     callback_url: buildCallbackUrl(jobId),
   };
 

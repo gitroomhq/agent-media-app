@@ -65,6 +65,7 @@ function makePublicId() {
  * @param {string} params.description
  * @param {string} [params.voice_brief]
  * @param {string} [params.preset_default]
+ * @param {string} [params.signature_look]  — expression this character opens every crazy-look clip on
  * @param {(stage: string, meta?: object) => void} [params.onProgress]
  * @returns {Promise<{
  *   character_id: string,         // "char_xxxxxxxxxx"
@@ -83,6 +84,7 @@ export async function processCharacterCreate(params) {
     description,
     voice_brief,
     preset_default,
+    signature_look,
     onProgress = () => {},
   } = params;
 
@@ -191,6 +193,7 @@ export async function processCharacterCreate(params) {
         seedance_seed: seedanceSeed,
         voice_brief: voice_brief ?? null,
         preset_default: preset_default ?? null,
+        ...(signature_look ? { signature_look } : {}),
         public_id: publicId,
         sheet_job_id: job_id,
         persona_brief: personaBrief,

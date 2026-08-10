@@ -56,12 +56,26 @@ function db() {
  * Load a saved v2 character by its public id ("char_xxxxxxxxxx").
  * Same contract as the Selfie pipeline's loader.
  */
+const CHARACTER_COLUMNS = 'id, public_id, portrait_url, character_sheet_url, seedance_seed, archived_at';
+
 async function loadCharacter(publicId) {
-  const { data, error } = await db()
+  // signature_look lands in 20260809140000_character_signature_look.sql.
+  // Until that migration is applied the column doesn't exist and
+  // PostgREST 400s the whole select, so fall back rather than break
+  // every generation on an un-migrated database.
+  let { data, error } = await db()
     .from('user_characters')
-    .select('id, public_id, portrait_url, character_sheet_url, seedance_seed, archived_at')
+    .select(`${CHARACTER_COLUMNS}, signature_look`)
     .eq('public_id', publicId)
     .maybeSingle();
+  if (error && /signature_look/.test(error.message ?? '')) {
+    console.warn('[crazy-look] signature_look column missing — run the migration; using derived signature');
+    ({ data, error } = await db()
+      .from('user_characters')
+      .select(CHARACTER_COLUMNS)
+      .eq('public_id', publicId)
+      .maybeSingle());
+  }
   if (error) throw new Error(`character lookup failed: ${error.message}`);
   if (!data) throw new Error(`character not found: ${publicId}`);
   if (data.archived_at) throw new Error(`character archived: ${publicId}`);
@@ -264,7 +278,14 @@ export function signatureLookFor(characterId) {
  *                              across every clip of them, forever)
  *   - omitted + no character → random preset (one-off tests only)
  */
-export function resolveLook(look, characterId) {
+export function resolveLook(look, characterId, storedSignature) {
+  // Precedence: explicit per-job look > the character's PINNED
+  // signature (operator's choice, persisted on the row) > a signature
+  // derived from the id > random (one-off, no character).
+  if (!look && storedSignature) {
+    const brief = resolveLook(storedSignature);
+    return { ...brief, signature: true, pinned: true };
+  }
   if (!look && characterId) {
     const key = signatureLookFor(characterId);
     return { key, signature: true, ...LOOK_BRIEFS[key] };
@@ -449,7 +470,7 @@ export async function processCrazyLook(params) {
     throw new Error('processCrazyLook: provide character_id, OR description (with optional photo_url)');
   }
 
-  const brief = resolveLook(look, character_id);
+  let brief = resolveLook(look, character_id); // refined after the character row loads
   const framingBrief = resolveFraming(framing);
   const workDir = await mkdtemp(join(tmpdir(), `crazy-look-${job_id}-`));
   const r2Prefix = `crazy-look/${job_id}`;
@@ -470,7 +491,11 @@ export async function processCrazyLook(params) {
     sheetUrl = char.character_sheet_url;
     seed = callerSeed ?? Number(char.seedance_seed);
     sheetBuf = await fetchToBuffer(sheetUrl);
-    console.log(`[crazy-look:${job_id}] [load] ✓ sheet=${sheetUrl} seed=${seed}`);
+    if (!look && char.signature_look) {
+      brief = resolveLook(look, character_id, char.signature_look);
+      console.log(`[crazy-look:${job_id}] [load] pinned signature look: ${brief.key}`);
+    }
+    console.log(`[crazy-look:${job_id}] [load] ✓ sheet=${sheetUrl} seed=${seed} look=${brief.key}`);
   } else {
     seed = callerSeed ?? Math.floor(Math.random() * 2_147_483_647);
 
