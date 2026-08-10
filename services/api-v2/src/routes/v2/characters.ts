@@ -21,6 +21,7 @@
 import type { Request, Response } from 'express';
 import {
   CharacterCreateSchema,
+  CharacterUpdateSchema,
   V2_GENERATORS,
   quoteV2Credits,
 } from '@agentmedia/schema/v2';
@@ -158,7 +159,7 @@ export async function listCharactersRoute(req: Request, res: Response): Promise<
   // separately (it is also entangled with the R2 bucket/host 404 diagnosis).
   const { data, error } = await supabase
     .from('user_characters')
-    .select('public_id, name, description, portrait_url, voice_brief, preset_default, created_at')
+    .select('public_id, name, description, portrait_url, voice_brief, preset_default, signature_look, created_at')
     .eq('user_id', userId)
     .is('archived_at', null)
     .not('public_id', 'is', null)
@@ -180,8 +181,95 @@ export async function listCharactersRoute(req: Request, res: Response): Promise<
       portrait_url: c.portrait_url,
       voice_brief: c.voice_brief,
       preset_default: c.preset_default,
+      signature_look: c.signature_look ?? null,
       created_at: c.created_at,
     })),
   });
 }
 
+/**
+ * PATCH /v2/characters/:characterId
+ *
+ * Update mutable properties of a saved character. Today that is
+ * `signature_look` — the expression this person opens EVERY crazy-look
+ * clip on. Without this route a pin could only be set at create time,
+ * so changing a character's look meant creating a second character:
+ * a new face, a new pinned seed, and the series identity broken —
+ * exactly what the signature exists to prevent.
+ *
+ * Identity fields (portrait, sheet, seed) are deliberately immutable;
+ * they ARE the character.
+ */
+export async function updateCharacterRoute(req: Request, res: Response): Promise<void> {
+  const userId = (req as any).userId as string;
+  if (!userId) {
+    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Auth required' } });
+    return;
+  }
+
+  const characterId = String(req.params.characterId ?? '');
+  if (!/^char_[A-Za-z0-9]{10,}$/.test(characterId)) {
+    res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'characterId must look like char_XXXXXXXXXX' },
+    });
+    return;
+  }
+
+  const parsed = CharacterUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Invalid request', issues: parsed.error.issues },
+    });
+    return;
+  }
+  const patch = parsed.data;
+  if (Object.keys(patch).length === 0) {
+    res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'No updatable fields provided' },
+    });
+    return;
+  }
+
+  // null clears the pin (back to the id-derived signature).
+  const update: Record<string, unknown> = {};
+  if ('signature_look' in patch) update.signature_look = patch.signature_look ?? null;
+  if ('voice_brief' in patch) update.voice_brief = patch.voice_brief ?? null;
+  if ('preset_default' in patch) update.preset_default = patch.preset_default ?? null;
+
+  const { data, error } = await supabase
+    .from('user_characters')
+    .update(update)
+    .eq('public_id', characterId)
+    .eq('user_id', userId)
+    .is('archived_at', null)
+    .select('public_id, name, voice_brief, preset_default, signature_look')
+    .maybeSingle();
+
+  if (error) {
+    if (/signature_look/.test(error.message)) {
+      console.error(`[v2 characters patch] signature_look column missing: ${error.message}`);
+      res.status(503).json({
+        error: {
+          code: 'MIGRATION_REQUIRED',
+          message: 'signature_look is not available yet — apply migration 20260809140000_character_signature_look.sql',
+        },
+      });
+      return;
+    }
+    console.error(`[v2 characters patch] ${error.message}`);
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: 'Failed to update character' } });
+    return;
+  }
+  if (!data) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: `No character ${characterId}` } });
+    return;
+  }
+
+  res.status(200).json({
+    character_id: data.public_id,
+    display_name: data.name,
+    voice_brief: data.voice_brief,
+    preset_default: data.preset_default,
+    signature_look: data.signature_look ?? null,
+  });
+}

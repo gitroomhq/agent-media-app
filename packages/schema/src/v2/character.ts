@@ -53,3 +53,26 @@ export const CharacterCreateSchema = z.object({
 });
 
 export type CharacterCreateInput = z.infer<typeof CharacterCreateSchema>;
+
+/**
+ * PATCH /v2/characters/:id — mutable character properties.
+ *
+ * Every field is optional; `null` clears it. Identity (portrait,
+ * sheet, seed) is immutable by design — it IS the character.
+ */
+export const CharacterUpdateSchema = z.object({
+  signature_look: z
+    .string()
+    .refine(
+      (v) =>
+        (V2_LOOK_PRESETS as readonly string[]).includes(v) ||
+        (v.startsWith('custom:') && v.length > 'custom:'.length + 3),
+      { message: 'signature_look must be a look preset, or "custom:<text>"' },
+    )
+    .nullable()
+    .optional(),
+  voice_brief: z.string().min(4).max(240).nullable().optional(),
+  preset_default: z.enum(V2_SHOT_PRESETS).nullable().optional(),
+});
+
+export type CharacterUpdateInput = z.infer<typeof CharacterUpdateSchema>;

@@ -38,7 +38,7 @@ import { schedulePreviewRoute } from './routes/schedule-preview.js';
 import { internalGptImageRoute } from './routes/internal/gpt-image.js';
 import { selfieRoute } from './routes/v2/selfie.js';
 import { crazyLookRoute } from './routes/v2/crazy-look.js';
-import { characterCreateRoute, listCharactersRoute } from './routes/v2/characters.js';
+import { characterCreateRoute, listCharactersRoute, updateCharacterRoute } from './routes/v2/characters.js';
 import { listMyCharactersRoute } from './routes/v1/characters.js';
 import { subtitleRoute } from './routes/v2/subtitle.js';
 import { jobStreamRoute } from './routes/v2/job-stream.js';
@@ -785,6 +785,7 @@ app.post('/v2/selfie',     generateLimiter, authMiddleware, videoConcurrencyGate
 app.post('/v2/crazy-look', generateLimiter, authMiddleware, videoConcurrencyGate, crazyLookRoute);
 app.post('/v2/characters', generateLimiter, authMiddleware, videoConcurrencyGate, characterCreateRoute);
 app.get('/v2/characters',  readLimiter,     authMiddleware, listCharactersRoute);
+app.patch('/v2/characters/:characterId', generateLimiter, authMiddleware, updateCharacterRoute);
 app.post('/v2/subtitle',   generateLimiter, authMiddleware, videoConcurrencyGate, subtitleRoute);
 app.get('/v2/jobs/:jobId/stream', readLimiter, authMiddleware, jobStreamRoute);
 
