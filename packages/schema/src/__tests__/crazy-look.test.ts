@@ -16,6 +16,8 @@ import {
   CrazyLookSchema,
   V2_LOOK_PRESETS,
   V2_FRAMING_PRESETS,
+  V2_VIDEO_ENGINES,
+  V2_DEFAULT_ENGINE,
   V2_CRAZY_LOOK_DURATIONS,
   V2_GENERATORS,
   V2_GENERATOR_IDS,
@@ -154,6 +156,45 @@ describe('CrazyLookSchema · duration & polish', () => {
       expect(accepts({ ...CHAR, polish: p })).toBe(true);
     }
     expect(accepts({ ...CHAR, polish: 'maximum' })).toBe(false);
+  });
+});
+
+// ── Engine choice + tiered pricing ─────────────────────────────────────────
+
+describe('video engine', () => {
+  it('defaults to Seedance 2.0 — the cheap one — when the caller says nothing', () => {
+    expect(V2_DEFAULT_ENGINE).toBe('seedance-2.0');
+    expect(CrazyLookSchema.parse(CHAR).engine).toBe('seedance-2.0');
+  });
+
+  it('accepts an explicit 2.5 opt-in and rejects anything else', () => {
+    for (const e of V2_VIDEO_ENGINES) {
+      expect(accepts({ ...CHAR, engine: e }), e).toBe(true);
+    }
+    expect(accepts({ ...CHAR, engine: 'sora' })).toBe(false);
+  });
+
+  it('prices 2.5 at its real cost and leaves the 2.0 price untouched', () => {
+    // 2.0 must still quote exactly what it did before the engine existed.
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5 })).toBe(200);
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'seedance-2.0' })).toBe(200);
+    expect(quoteV2Credits('selfie', { durationSeconds: 10 })).toBe(375);
+
+    // 2.5 costs ~3x per second at 720p with image refs.
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'seedance-2.5' })).toBe(545);
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 10, engine: 'seedance-2.5' })).toBe(1040);
+    expect(quoteV2Credits('selfie', { durationSeconds: 15, engine: 'seedance-2.5' })).toBe(1560);
+  });
+
+  it('an unknown engine falls back to the default rate instead of throwing', () => {
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'nope' })).toBe(200);
+  });
+
+  it('2.5 is always more expensive than 2.0 — never quote the upgrade cheaper', () => {
+    for (const d of [5, 10]) {
+      expect(quoteV2Credits('crazy_look', { durationSeconds: d, engine: 'seedance-2.5' }))
+        .toBeGreaterThan(quoteV2Credits('crazy_look', { durationSeconds: d }));
+    }
   });
 });
 

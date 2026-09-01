@@ -87,7 +87,20 @@ async function loadCharacter(publicId) {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const R2_BUCKET = 'generation-outputs';
-const SEEDANCE_MODEL = process.env.SEEDANCE_V2_MODEL || 'seedance-2.5-reference-to-video';
+// Video engine → EvoLink model id. 2.0 is the default because 2.5 at 720p
+// with IMAGE references bills at the text-to-video rate (~3x); callers opt
+// into 2.5 explicitly and are quoted for it. SEEDANCE_V2_MODEL still pins
+// an override for a rollback without a deploy.
+const ENGINE_MODELS = {
+  'seedance-2.0': 'seedance-2.0-reference-to-video',
+  'seedance-2.5': 'seedance-2.5-reference-to-video',
+};
+const DEFAULT_ENGINE = 'seedance-2.0';
+
+function resolveSeedanceModel(engine) {
+  if (process.env.SEEDANCE_V2_MODEL) return process.env.SEEDANCE_V2_MODEL;
+  return ENGINE_MODELS[engine] ?? ENGINE_MODELS[DEFAULT_ENGINE];
+}
 const DEFAULT_QUALITY = '720p';
 const DEFAULT_ASPECT = '9:16';
 
@@ -430,6 +443,7 @@ function buildCrazyLookVideoPrompt({ arc, frame, duration }) {
  * @param {string} params.caption         — the hook text, burned over the full clip
  * @param {string} [params.look]          — preset key | "custom:<text>" | omitted ⇒ random
  * @param {number} [params.duration]      — 5 | 10 (seconds)
+ * @param {string} [params.engine]         — seedance-2.0 (default) | seedance-2.5
  * @param {number} [params.chaos]         — 0..1 freedom: how wildly the expression evolves (default 0.6)
  * @param {string} [params.polish]        — off | default | heavy
  * @param {number} [params.seed]          — pinned integer; falls back to the character's seed
@@ -454,6 +468,7 @@ export async function processCrazyLook(params) {
     caption,
     look,
     framing,
+    engine,
     duration = 5,
     chaos,
     polish = DEFAULT_POLISH_INTENSITY,
@@ -565,7 +580,7 @@ export async function processCrazyLook(params) {
   console.log(`[crazy-look:${job_id}] [D] Seedance prompt: ${prompts.video}`);
   console.log(`[crazy-look:${job_id}] [D] Seedance 2.0 (seed=${seed}, ${duration}s)…`);
   const providerUrl = await runGeneration(
-    SEEDANCE_MODEL,
+    resolveSeedanceModel(engine),
     {
       prompt: prompts.video,
       image_urls: [sheetUrl, wireUrl],

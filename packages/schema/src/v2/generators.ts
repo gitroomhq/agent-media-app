@@ -65,9 +65,19 @@ export interface V2GeneratorRecord {
     path: string;            // e.g. "/v2/selfie"
   };
 
-  /** Pricing. Single source so dashboard + CLI quoting + webhook agree. */
+  /** Pricing. Single source so dashboard + CLI quoting + webhook agree.
+   *
+   * `engines` overrides the base rate per video engine. Seedance 2.5 costs
+   * ~3x 2.0 per second at 720p with image references, so it cannot share
+   * one price: the default (2.0) keeps the historical rate and 2.5 is
+   * quoted at what it actually costs. */
   pricing?:
-    | { basis: 'per_clip'; baseCredits: number; perSecondCredits: number }
+    | {
+        basis: 'per_clip';
+        baseCredits: number;
+        perSecondCredits: number;
+        engines?: Record<string, { baseCredits: number; perSecondCredits: number }>;
+      }
     | { basis: 'one_shot'; baseCredits: number };
 }
 
@@ -109,7 +119,15 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
     //   15s  = $1.63 cost → 545 credits ($5.45)
     // Linear in duration after a fixed prelude (~$0.13 of gpt-image-2 + R2)
     // so we express as base + per-second.
-    pricing: { basis: 'per_clip', baseCredits: 75, perSecondCredits: 30 },
+    // 2.0 (default) keeps the historical rate. 2.5 at 720p with image refs
+    // bills at EvoLink's text-to-video rate ($0.296/s vs ~$0.10/s), plus the
+    // ~$0.18 image/orchestrator prelude — 99 credits/s holds the 70% floor.
+    pricing: {
+      basis: 'per_clip',
+      baseCredits: 75,
+      perSecondCredits: 30,
+      engines: { 'seedance-2.5': { baseCredits: 75, perSecondCredits: 99 } },
+    },
   },
 
   character_create: {
@@ -234,7 +252,13 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
     // inline mode 3. The caption burn is ffmpeg, rounding error.
     //   5s  = ~$0.55 cost → 200 credits ($2.00)
     //   10s = ~$1.00 cost → 350 credits ($3.50)
-    pricing: { basis: 'per_clip', baseCredits: 50, perSecondCredits: 30 },
+    // Same split as selfie: 2.0 default at today's price, 2.5 at cost.
+    pricing: {
+      basis: 'per_clip',
+      baseCredits: 50,
+      perSecondCredits: 30,
+      engines: { 'seedance-2.5': { baseCredits: 50, perSecondCredits: 99 } },
+    },
   },
 } as const;
 
@@ -245,10 +269,20 @@ export const V2_GENERATOR_IDS = Object.keys(V2_GENERATORS) as V2GeneratorId[];
 /**
  * Pricing helper. Single source for CLI quoting, webhook, dashboard.
  */
-export function quoteV2Credits(id: V2GeneratorId, opts: { durationSeconds?: number } = {}): number {
+export function quoteV2Credits(
+  id: V2GeneratorId,
+  opts: { durationSeconds?: number; engine?: string } = {},
+): number {
   const def = V2_GENERATORS[id];
   if (!def?.pricing) return 0;
   if (def.pricing.basis === 'one_shot') return def.pricing.baseCredits;
   const seconds = opts.durationSeconds ?? 8;
-  return def.pricing.baseCredits + def.pricing.perSecondCredits * seconds;
+  // An unknown engine falls back to the default rate rather than throwing:
+  // a quote must never be the thing that breaks a submit.
+  const tier =
+    (opts.engine && def.pricing.engines?.[opts.engine]) || {
+      baseCredits: def.pricing.baseCredits,
+      perSecondCredits: def.pricing.perSecondCredits,
+    };
+  return tier.baseCredits + tier.perSecondCredits * seconds;
 }

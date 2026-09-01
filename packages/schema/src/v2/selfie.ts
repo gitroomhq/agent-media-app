@@ -57,6 +57,18 @@ export const V2_PHONE_IN_FRAME = ['forbidden', 'optional', 'required'] as const;
 export type V2PhoneInFrame = (typeof V2_PHONE_IN_FRAME)[number];
 
 export const V2_POLISH_INTENSITIES = ['off', 'default', 'heavy'] as const;
+
+/**
+ * Video engine. Seedance 2.5 is a real quality step up, but at 720p with
+ * IMAGE references it bills at EvoLink's text-to-video rate — $0.296/s
+ * against roughly $0.10/s for 2.0, i.e. ~3x. (The cheaper
+ * "reference-to-video" rate only applies to VIDEO references; image refs
+ * get no discount.) So 2.0 stays the default and keeps today's price, and
+ * 2.5 is an explicit opt-in priced at what it actually costs.
+ */
+export const V2_VIDEO_ENGINES = ['seedance-2.0', 'seedance-2.5'] as const;
+export type V2VideoEngine = (typeof V2_VIDEO_ENGINES)[number];
+export const V2_DEFAULT_ENGINE: V2VideoEngine = 'seedance-2.0';
 export type V2PolishIntensity = (typeof V2_POLISH_INTENSITIES)[number];
 
 // shot_preset accepts a registered V2_SHOT_PRESETS key or an escape
@@ -125,6 +137,9 @@ export const SelfieSchema = z
     // Post-Seedance polish pass (ffmpeg grain + warm grade + vignette).
     // Defaults to 'default'. Set to 'off' to bypass entirely.
     polish: z.enum(V2_POLISH_INTENSITIES).optional(),
+
+    // Opt into the newer, sharper (and pricier) engine. Omitted = 2.0.
+    engine: z.enum(V2_VIDEO_ENGINES).default(V2_DEFAULT_ENGINE),
   })
   .superRefine((val, ctx) => {
     const hasSavedCharacter = !!val.character_id;

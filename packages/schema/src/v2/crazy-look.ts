@@ -29,7 +29,7 @@
  */
 
 import { z } from 'zod';
-import { V2_POLISH_INTENSITIES } from './selfie.js';
+import { V2_POLISH_INTENSITIES, V2_VIDEO_ENGINES, V2_DEFAULT_ENGINE } from './selfie.js';
 
 // Expression preset library. Keys only — the prompt briefs (wireframe
 // pose + Seedance motion) live in the worker next to the pipeline, the
@@ -124,6 +124,9 @@ export const CrazyLookSchema = z
     // Post-Seedance polish pass (grain + warm grade + vignette). The
     // lo-fi look is load-bearing for this format, so default stays on.
     polish: z.enum(V2_POLISH_INTENSITIES).optional(),
+
+    // Opt into the newer, sharper (and pricier) engine. Omitted = 2.0.
+    engine: z.enum(V2_VIDEO_ENGINES).default(V2_DEFAULT_ENGINE),
   })
   .superRefine((val, ctx) => {
     const hasSavedCharacter = !!val.character_id;

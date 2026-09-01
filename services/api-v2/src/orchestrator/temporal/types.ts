@@ -5,6 +5,8 @@
  * Keep this JSON-serializable for workflow history safety.
  */
 export interface SelfieDispatchPayload {
+  /** Video engine the worker renders with: seedance-2.0 (default) | seedance-2.5. */
+  video_engine?: string;
   job_id: string;
   user_id: string;
   character_id?: string;

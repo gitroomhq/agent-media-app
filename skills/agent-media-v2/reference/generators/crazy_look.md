@@ -85,6 +85,14 @@ agent-media crazy-look --description "21yo woman, long brown wavy hair, argyle c
         "default",
         "heavy"
       ]
+    },
+    "engine": {
+      "type": "string",
+      "enum": [
+        "seedance-2.0",
+        "seedance-2.5"
+      ],
+      "default": "seedance-2.0"
     }
   },
   "required": [

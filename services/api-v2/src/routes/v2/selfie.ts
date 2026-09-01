@@ -124,7 +124,7 @@ export async function selfieRoute(req: Request, res: Response): Promise<void> {
   const duration = input.duration ?? 10;
 
   // ── 2. Quote credits ──────────────────────────────────────────────
-  const creditCost = quoteV2Credits('selfie', { durationSeconds: duration });
+  const creditCost = quoteV2Credits('selfie', { durationSeconds: duration, engine: input.engine });
   const engine = getOrchestratorEngine();
 
   // ── 3. Worker preflight (HTTP engine only) ────────────────────────
@@ -155,6 +155,7 @@ export async function selfieRoute(req: Request, res: Response): Promise<void> {
       ...(input.scene_action ? { scene_action: input.scene_action } : {}),
       ...(input.background_music !== undefined ? { background_music: input.background_music } : {}),
       duration,
+      engine: input.engine,
       subtitles: input.subtitles,
       ...(input.shot_preset ? { shot_preset: input.shot_preset } : {}),
       ...(input.vibe ? { vibe: input.vibe } : {}),
@@ -200,6 +201,9 @@ export async function selfieRoute(req: Request, res: Response): Promise<void> {
     ...(input.scene_action ? { scene_action: input.scene_action } : {}),
     ...(input.background_music !== undefined ? { background_music: input.background_music } : {}),
     duration,
+    // NB: `engine` (local const) is the ORCHESTRATOR engine (temporal|http).
+    // This one is the VIDEO engine the worker renders with.
+    video_engine: input.engine,
     subtitles: input.subtitles,
     ...(input.shot_preset ? { shot_preset: input.shot_preset } : {}),
     ...(input.vibe ? { vibe: input.vibe } : {}),

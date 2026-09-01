@@ -111,7 +111,7 @@ export async function crazyLookRoute(req: Request, res: Response): Promise<void>
   const duration = input.duration ?? 5;
 
   // ── 2. Quote credits ──────────────────────────────────────────────
-  const creditCost = quoteV2Credits('crazy_look', { durationSeconds: duration });
+  const creditCost = quoteV2Credits('crazy_look', { durationSeconds: duration, engine: input.engine });
 
   // ── 3. Worker preflight ───────────────────────────────────────────
   if (!WORKER_V2_URL || !WORKER_SECRET) {
@@ -140,6 +140,7 @@ export async function crazyLookRoute(req: Request, res: Response): Promise<void>
       caption: input.caption,
       ...(input.look ? { look: input.look } : {}),
       duration,
+      engine: input.engine,
       ...(input.chaos !== undefined ? { chaos: input.chaos } : {}),
       ...(input.framing ? { framing: input.framing } : {}),
       ...(input.polish ? { polish: input.polish } : {}),
@@ -184,6 +185,7 @@ export async function crazyLookRoute(req: Request, res: Response): Promise<void>
         caption: input.caption,
         ...(input.look ? { look: input.look } : {}),
         duration,
+        engine: input.engine,
         ...(input.chaos !== undefined ? { chaos: input.chaos } : {}),
         ...(input.framing ? { framing: input.framing } : {}),
         ...(input.polish ? { polish: input.polish } : {}),

@@ -114,6 +114,14 @@ agent-media selfie --photo me.png --description "25yo creator, casual black tee"
         "default",
         "heavy"
       ]
+    },
+    "engine": {
+      "type": "string",
+      "enum": [
+        "seedance-2.0",
+        "seedance-2.5"
+      ],
+      "default": "seedance-2.0"
     }
   },
   "additionalProperties": false
