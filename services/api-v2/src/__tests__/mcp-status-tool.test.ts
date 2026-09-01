@@ -49,6 +49,19 @@ describe('hosted MCP: run-status tool', () => {
     }
   });
 
+  it('reads artifacts[] — primitive/skill runs return an array, not a scalar url', () => {
+    // A finished product_in_hands run reports {status:'succeeded', artifacts:[{url,kind,mime}]}.
+    // Scalar-only extraction reported success with NO link, which leaves the
+    // agent exactly as stuck as having no status tool at all.
+    expect(source).toContain('Array.isArray(b.artifacts)');
+    expect(source).toContain("a.mime.startsWith('video/')");
+    expect(source).toContain('videoArtifact?.url');
+  });
+
+  it('lists the non-video artifacts too, so a sheet/portrait needs no second call', () => {
+    expect(source).toContain('otherArtifacts');
+  });
+
   it('surfaces the output URL under every name a pipeline uses', () => {
     for (const field of ['video_url', 'output_url', 'result_url', 'output_media_url']) {
       expect(source).toContain(field);

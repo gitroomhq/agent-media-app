@@ -269,14 +269,36 @@ function buildMcpServer(apiKey: string): Server {
 
       const b = result.body ?? {};
       const status = String(b.status ?? 'unknown');
-      // Every pipeline names its output differently; surface whichever exists.
+      // Every pipeline names its output differently. Primitive and skill runs
+      // return artifacts as an ARRAY ([{ url, kind, mime }]) — the scalar-only
+      // lookup below missed it entirely, so a finished run reported
+      // "succeeded" with no link and the agent still could not hand the user
+      // a video. That is the same dead end this tool exists to remove.
+      const artifactList: Array<{ url?: string; kind?: string; mime?: string }> =
+        Array.isArray(b.artifacts)
+          ? b.artifacts
+          : Array.isArray(b.output?.artifacts)
+            ? b.output.artifacts
+            : [];
+      const videoArtifact =
+        artifactList.find((a) => typeof a?.mime === 'string' && a.mime.startsWith('video/')) ??
+        artifactList.find((a) => typeof a?.url === 'string' && /\.(mp4|mov|webm)(\?|$)/i.test(a.url)) ??
+        artifactList[0];
       const url =
         b.video_url ?? b.output_url ?? b.result_url ?? b.output_media_url ??
-        b.artifacts?.video_url ?? b.output?.video_url ?? null;
+        b.artifacts?.video_url ?? b.output?.video_url ?? videoArtifact?.url ?? null;
+      // Surface every other artifact too (portrait, sheet, wireframe): an
+      // agent asked to "show the character sheet" should not need a second
+      // round trip.
+      const otherArtifacts = artifactList
+        .filter((a) => a?.url && a.url !== url)
+        .map((a) => `  - ${a.kind ?? 'artifact'}: ${a.url}`);
       const done = TERMINAL.has(status.toLowerCase());
       const lines = [
         `Run ${runId} — status: ${status}`,
         url ? `Video: ${url}` : null,
+        otherArtifacts.length ? `Other artifacts:\n${otherArtifacts.join('\n')}` : null,
+        typeof b.credits === 'number' ? `Credits: ${b.credits}` : null,
         b.error_message ? `Error: ${b.error_message}` : null,
         b.error_code ? `Error code: ${b.error_code}` : null,
         b.progress_detail?.stage ? `Stage: ${b.progress_detail.stage}` : null,
