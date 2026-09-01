@@ -438,6 +438,8 @@ Claude (web or desktop): Settings → Connectors → Add custom connector. Claud
 
 Over MCP, always call `get_run_status` with the id you were given after submitting — generation is async and the submit response only confirms the job started.
 
+If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
+
 ### Authentication
 
 Every v2 REST request sends `Authorization: Bearer ma_xxx`. Get a key via `agent-media login` (CLI) or the dashboard. (Not needed for the MCP connector above.)

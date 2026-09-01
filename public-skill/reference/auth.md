@@ -14,6 +14,8 @@ https://api.agent-media.ai/mcp
 
 Full guide: <https://agent-media.ai/connect>. After submitting a generation over MCP, call `get_run_status` with the id you were given — generation is async and the submit response only confirms the job started.
 
+If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
+
 ## API key (REST, or the self-hosted MCP server)
 
 agent-media uses a `ma_*` Bearer API key. Get one via the CLI:

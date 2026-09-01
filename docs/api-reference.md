@@ -24,6 +24,8 @@ After submitting a generation over MCP, call `get_run_status` with the id you
 were given to get the finished video URL — generation is asynchronous and the
 submit response only confirms the job started.
 
+If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
+
 The REST reference below is for direct HTTP integrations, where the `ma_` key
 still applies.
 

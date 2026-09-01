@@ -122,6 +122,40 @@ function formatApiError(status: number, data: unknown): string {
   return parts.join('\n');
 }
 
+/**
+ * Every tool handler here re-enters our own public REST surface over the
+ * network (Railway → edge → Railway). Two of those calls carried NO timeout,
+ * so a single stalled hop left the MCP request open until the CLIENT gave
+ * up — which is exactly what "the connector hangs and then fails on every
+ * call" looks like from the other side. A bounded call that fails in 30s with
+ * a sentence the agent can read beats an unbounded one that hangs forever.
+ */
+type FetchResponse = Awaited<ReturnType<typeof fetch>>;
+
+async function apiFetch(
+  url: string,
+  init: RequestInit & { timeoutMs?: number } = {},
+): Promise<FetchResponse> {
+  const { timeoutMs = 30_000, ...rest } = init;
+  return fetch(url, { ...rest, signal: AbortSignal.timeout(timeoutMs) });
+}
+
+/**
+ * Appended to every tool that takes an image. Without it an agent holding a
+ * user's photo has one obvious move — inline the base64 into these arguments
+ * — and the client then renders that multi-megabyte string in the chat, once
+ * per attempt. upload_image makes the bytes cross the wire a single time.
+ */
+const IMAGE_URL_HINT =
+  '\n\nIMAGES: pass an https URL. If you only have raw bytes or a data: URL, call `upload_image` FIRST and pass the URL it returns. Never paste base64 into these arguments — the client prints tool arguments in the conversation, so a base64 image becomes a wall of text for the user and is re-sent on every retry.';
+
+/** Does this tool's JSON schema have an image-ish input worth hinting about? */
+function takesAnImage(schema: unknown): boolean {
+  const props = (schema as { properties?: Record<string, unknown> })?.properties;
+  if (!props) return false;
+  return Object.keys(props).some((k) => /image|photo|portrait|character/i.test(k));
+}
+
 function buildMcpServer(apiKey: string): Server {
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },
@@ -143,6 +177,8 @@ function buildMcpServer(apiKey: string): Server {
         name: `${def.id}_input`,
         $refStrategy: 'none',
       });
+      const inputSchema =
+        (schema as any).definitions?.[`${def.id}_input`] ?? schema;
       return {
         def,
         listEntry: {
@@ -151,9 +187,9 @@ function buildMcpServer(apiKey: string): Server {
             (def.status === 'beta' ? '[beta] ' : '') +
             def.summary +
             '\n\n' +
-            def.description,
-          inputSchema:
-            (schema as any).definitions?.[`${def.id}_input`] ?? schema,
+            def.description +
+            (takesAnImage(inputSchema) ? IMAGE_URL_HINT : ''),
+          inputSchema,
           annotations: generationAnnotations(titleFromSlug(def.mcp!.toolName)),
         },
       };
@@ -180,13 +216,16 @@ function buildMcpServer(apiKey: string): Server {
           name: `${s.slug}_input`,
           $refStrategy: 'none',
         });
+        const inputSchema =
+          (schema as any).definitions?.[`${s.slug}_input`] ?? schema;
         return {
           slug: s.slug,
           listEntry: {
             name: s.slug,
-            description: `${s.name} (v${s.version}) — ${s.description}`,
-            inputSchema:
-              (schema as any).definitions?.[`${s.slug}_input`] ?? schema,
+            description:
+              `${s.name} (v${s.version}) — ${s.description}` +
+              (takesAnImage(inputSchema) ? IMAGE_URL_HINT : ''),
+            inputSchema,
             annotations: generationAnnotations(s.name),
           },
         };
@@ -227,7 +266,7 @@ function buildMcpServer(apiKey: string): Server {
   const getRunStatusTool = {
     name: 'get_run_status',
     description:
-      'Check a generation you already submitted, and get its video URL when it is done. Pass the id ANY agent-media tool returned (run id, skill run id, or job id) — this resolves all of them. Set wait:true to block until the job reaches a terminal state (up to ~2 minutes per call; call again if it is still running). ALWAYS call this after submitting: without it you cannot tell whether the video succeeded, and cannot give the user a link.',
+      'Check a generation you already submitted, and get its video URL when it is done. Pass the id ANY agent-media tool returned (run id, skill run id, or job id) — this resolves all of them. Set wait:true to block until the job reaches a terminal state (up to ~45 seconds per call; if it is still running, just call again — a video usually needs several such calls). ALWAYS call this after submitting: without it you cannot tell whether the video succeeded, and cannot give the user a link.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -240,17 +279,101 @@ function buildMcpServer(apiKey: string): Server {
     annotations: readOnlyAnnotations('Get Run Status'),
   };
 
+  /**
+   * Bytes in, URL out. The one tool that stops an agent from pasting a
+   * base64 image into a generation call — and therefore into the user's
+   * chat transcript, where a real session dumped a megabyte of it as raw
+   * text and then re-sent the whole thing on every retry.
+   *
+   * Not read-only (it writes an object to storage) but it spends no credits
+   * and starts no job, so it is safe to call speculatively.
+   */
+  const uploadImageTool = {
+    name: 'upload_image',
+    description:
+      'Store an image and get back a stable https URL you can pass to any agent-media tool. Costs NO credits. Use this whenever you hold image bytes (a photo the user attached, a data: URL, a generated image): call upload_image ONCE, then pass the returned URL everywhere. Do NOT paste base64 into other tool arguments or into the conversation — the client displays tool arguments to the user, so a base64 image becomes a wall of unreadable text, and every retry re-sends it. You may also pass image_url to re-host an image that lives on someone else\u2019s domain. PNG or JPEG, 10 MB max.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        image_base64: {
+          type: 'string',
+          description: 'The image bytes, base64-encoded. A `data:image/png;base64,...` prefix is accepted and stripped.',
+        },
+        image_url: {
+          type: 'string',
+          description: 'An https URL to fetch and re-host instead. Use this OR image_base64, not both.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      title: 'Upload Image',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  };
+
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
       ...tools.map((t) => t.listEntry),
       ...vnextSkillTools.map((t) => t.listEntry),
       listCharactersTool,
       getRunStatusTool,
+      uploadImageTool,
     ],
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    // Bytes → URL. Forwards to POST /v1/uploads/image.
+    if (name === 'upload_image') {
+      const a = (args ?? {}) as { image_base64?: string; image_url?: string };
+      const b64 = typeof a.image_base64 === 'string' ? a.image_base64.trim() : '';
+      const src = typeof a.image_url === 'string' ? a.image_url.trim() : '';
+      if (!b64 && !src) {
+        return {
+          content: [{ type: 'text', text: 'Provide image_base64 (the bytes) or image_url (an https image to re-host).' }],
+          isError: true,
+        };
+      }
+      let resp: FetchResponse;
+      try {
+        resp = await apiFetch(`${PUBLIC_API_BASE}/v1/uploads/image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(b64 ? { image_base64: b64 } : { image_url: src }),
+          // Generous: a 10 MB upload has to travel and then be moderated.
+          timeoutMs: 60_000,
+        });
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `Upload did not complete in time (${(err as Error).message}). Try once more; if it fails again the image is probably too large — ask the user for a smaller one or a public URL.` }],
+          isError: true,
+        };
+      }
+      const text = await resp.text();
+      let data: unknown;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!resp.ok) {
+        return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
+      }
+      const up = data as { image_url?: string; bytes?: number; mime?: string } | null;
+      return {
+        content: [
+          {
+            type: 'text',
+            text: [
+              `Image stored: ${up?.image_url ?? '(no url returned)'}`,
+              up?.bytes ? `${Math.round(up.bytes / 1024)} KB, ${up.mime}` : null,
+              'Pass this URL to the generation tool. Do not send the base64 again — reuse this URL for every retry.',
+            ].filter(Boolean).join('\n'),
+          },
+        ],
+      };
+    }
 
     // Read-only: resolve a run/job id across all three pipelines.
     if (name === 'get_run_status') {
@@ -271,9 +394,9 @@ function buildMcpServer(apiKey: string): Server {
       async function probe(): Promise<{ found: boolean; body?: any }> {
         for (const path of PATHS) {
           try {
-            const r = await fetch(`${PUBLIC_API_BASE}${path}`, {
+            const r = await apiFetch(`${PUBLIC_API_BASE}${path}`, {
               headers: { Authorization: `Bearer ${apiKey}` },
-              signal: AbortSignal.timeout(20_000),
+              timeoutMs: 20_000,
             });
             if (r.status === 404) continue;
             const t = await r.text();
@@ -288,7 +411,12 @@ function buildMcpServer(apiKey: string): Server {
       }
 
       const TERMINAL = new Set(['completed', 'succeeded', 'failed', 'canceled', 'cancelled', 'error']);
-      const deadline = Date.now() + (wait ? 110_000 : 0);
+      // wait:true used to hold the request for 110s. Connector clients cut a
+      // tool call off well before that (60s is a common ceiling), so the tool
+      // that exists to END the agent's blindness was itself the most likely
+      // call to "hang and then fail". Stay comfortably under: the agent just
+      // calls again, and it is told to.
+      const deadline = Date.now() + (wait ? 45_000 : 0);
       let result = await probe();
       while (
         wait &&
@@ -353,9 +481,18 @@ function buildMcpServer(apiKey: string): Server {
     // Read-only: list saved characters (GET /v1/characters).
     if (name === 'list_characters') {
       const limit = Math.min(Math.max(Number((args as { limit?: number })?.limit) || 50, 1), 100);
-      const resp = await fetch(`${PUBLIC_API_BASE}/v1/characters?limit=${limit}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      let resp: FetchResponse;
+      try {
+        resp = await apiFetch(`${PUBLIC_API_BASE}/v1/characters?limit=${limit}`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          timeoutMs: 20_000,
+        });
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `agent-media did not answer in time (${(err as Error).message}). This is transient — call list_characters again.` }],
+          isError: true,
+        };
+      }
       const text = await resp.text();
       let data: unknown;
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -372,9 +509,9 @@ function buildMcpServer(apiKey: string): Server {
     // vNext skill route — forwards to /v1/skills/:slug/run.
     const skillTool = skillBySlug.get(name);
     if (skillTool) {
-      let resp: Awaited<ReturnType<typeof fetch>>;
+      let resp: FetchResponse;
       try {
-        resp = await fetch(
+        resp = await apiFetch(
           `${PUBLIC_API_BASE}/v1/skills/${skillTool.slug}/run`,
           {
             method: 'POST',
@@ -386,7 +523,7 @@ function buildMcpServer(apiKey: string): Server {
             // Bound the wait so a slow/cold upstream surfaces as a clean tool
             // error instead of a bare hanging connection. No retry: /run is not
             // idempotent without an Idempotency-Key, so a retry could double-submit.
-            signal: AbortSignal.timeout(30_000),
+            timeoutMs: 45_000,
           },
         );
       } catch (err) {
@@ -434,7 +571,7 @@ function buildMcpServer(apiKey: string): Server {
               `Skill submitted: ${sub?.skill ?? skillTool.slug}`,
               jobId ? `Run id: ${jobId}` : null,
               sub?.workflow_id ? `Workflow id: ${sub.workflow_id}` : null,
-              `NEXT STEP: call get_run_status with run_id "${jobId ?? '<id>'}" (add wait:true to block until it finishes) to get the video URL. Do not stop here — the user needs the link.`,
+              `NEXT STEP: call get_run_status with run_id "${jobId ?? '<id>'}" (add wait:true to wait ~45s per call; repeat until it is done) to get the video URL. Do not stop here — the user needs the link.`,
               `(REST equivalent: ${pollUrl})`,
             ]
               .filter(Boolean)
@@ -453,14 +590,23 @@ function buildMcpServer(apiKey: string): Server {
     }
 
     // Forward to the v2 REST endpoint using the caller's API key.
-    const resp = await fetch(`${PUBLIC_API_BASE}${def.rest.path}`, {
-      method: def.rest.method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(args ?? {}),
-    });
+    let resp: FetchResponse;
+    try {
+      resp = await apiFetch(`${PUBLIC_API_BASE}${def.rest.path}`, {
+        method: def.rest.method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(args ?? {}),
+        timeoutMs: 45_000,
+      });
+    } catch (err) {
+      return {
+        content: [{ type: 'text', text: `agent-media did not respond in time (${(err as Error).message}). The job may or may not have started — call list_characters or get_run_status before resubmitting, so the user is not charged twice.` }],
+        isError: true,
+      };
+    }
     const text = await resp.text();
     let data: unknown;
     try {
@@ -488,7 +634,7 @@ function buildMcpServer(apiKey: string): Server {
           text: [
             `Job submitted: ${sub?.job_id ?? '(no job id)'}`,
             sub?.credits_deducted != null ? `Credits: ${sub.credits_deducted}` : null,
-            `NEXT STEP: call get_run_status with run_id "${sub?.job_id ?? '<job_id>'}" (add wait:true to block until it finishes) to get the video URL. Do not stop here — the user needs the link.`,
+            `NEXT STEP: call get_run_status with run_id "${sub?.job_id ?? '<job_id>'}" (add wait:true to wait ~45s per call; repeat until it is done) to get the video URL. Do not stop here — the user needs the link.`,
           ]
             .filter(Boolean)
             .join('\n'),

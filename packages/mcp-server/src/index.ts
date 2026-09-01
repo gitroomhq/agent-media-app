@@ -201,6 +201,17 @@ const tools = [
     },
   },
   {
+    name: 'upload_image',
+    description: 'Store an image and get back a stable https URL you can pass to any agent-media tool. Costs NO credits. Use this whenever you hold image bytes (a photo the user attached, a data: URL, an image you generated): call upload_image ONCE, then pass the returned URL everywhere. Do NOT paste base64 into other tool arguments or into the conversation — the client displays tool arguments to the user, so a base64 image becomes a wall of unreadable text, and every retry re-sends it. You may also pass image_url to re-host an image from another domain. PNG or JPEG, 10 MB max.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        image_base64: { type: 'string', description: 'The image bytes, base64-encoded. A `data:image/png;base64,...` prefix is accepted and stripped.' },
+        image_url: { type: 'string', description: 'An https URL to fetch and re-host instead. Use this OR image_base64, not both.' },
+      },
+    },
+  },
+  {
     name: 'list_characters',
     description: 'List the user\'s saved, reusable characters. Returns each character\'s name + character_sheet_url (pass that back into a video tool to reuse the same identity) + a portrait/thumbnail URL. Use when the user wants to see or reuse one of their saved characters.',
     inputSchema: {
@@ -657,6 +668,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         content: [{
           type: 'text',
           text: `Job: ${data.job_id}\nStatus: ${data.status}\n${data.video_url ? `Video URL: ${data.video_url}` : ''}${data.error_message ? `Error: ${data.error_message}` : ''}`,
+        }],
+      };
+    }
+
+    case 'upload_image': {
+      // Bytes in, URL out — the tool that stops an agent inlining base64 into
+      // a generation call (and therefore into the user's visible transcript).
+      const a = (args ?? {}) as { image_base64?: string; image_url?: string };
+      const b64 = typeof a.image_base64 === 'string' ? a.image_base64.trim() : '';
+      const src = typeof a.image_url === 'string' ? a.image_url.trim() : '';
+      if (!b64 && !src) {
+        return { content: [{ type: 'text', text: 'Provide image_base64 (the bytes) or image_url (an https image to re-host).' }], isError: true };
+      }
+      const { status, data } = await apiCall(
+        'POST',
+        '/v1/uploads/image',
+        b64 ? { image_base64: b64 } : { image_url: src },
+      );
+      if (status !== 200 || !data?.image_url) {
+        return { content: [{ type: 'text', text: `Error (${status}): ${data?.error?.message ?? data?.detail ?? JSON.stringify(data).slice(0, 300)}` }], isError: true };
+      }
+      return {
+        content: [{
+          type: 'text',
+          text: `Image stored: ${data.image_url}\nPass this URL to the generation tool. Do not send the base64 again — reuse this URL for every retry.`,
         }],
       };
     }

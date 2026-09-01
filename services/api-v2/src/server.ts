@@ -40,6 +40,7 @@ import { selfieRoute } from './routes/v2/selfie.js';
 import { crazyLookRoute } from './routes/v2/crazy-look.js';
 import { characterCreateRoute, listCharactersRoute, updateCharacterRoute } from './routes/v2/characters.js';
 import { listMyCharactersRoute } from './routes/v1/characters.js';
+import { uploadImageRoute } from './routes/v1/uploads.js';
 import { subtitleRoute } from './routes/v2/subtitle.js';
 import { jobStreamRoute } from './routes/v2/job-stream.js';
 import { mcpRoute } from './routes/mcp.js';
@@ -866,6 +867,10 @@ if (isPrimitivesRouteEnabled()) {
   app.post('/v1/skills/runs/:skill_run_id/cancel', generateLimiter, authMiddleware, asyncHandler(cancelSkillRunRoute));
   app.get('/v1/me/gallery', readLimiter, authMiddleware, getMyGalleryRoute);
   app.get('/v1/characters', readLimiter, authMiddleware, listMyCharactersRoute);
+  // Bytes → R2 URL. Costs no credits and starts no job, so it sits on the
+  // read limiter: an agent uploading a photo must never be throttled by the
+  // generate ceiling it will need a moment later.
+  app.post('/v1/uploads/image', readLimiter, authMiddleware, uploadImageRoute);
   app.get('/v1/me/api-keys', readLimiter, authMiddleware, listApiKeysRoute);
   app.post('/v1/me/api-keys', generateLimiter, authMiddleware, createApiKeyRoute);
   app.delete('/v1/me/api-keys/:id', generateLimiter, authMiddleware, revokeApiKeyRoute);
