@@ -103,7 +103,7 @@ export const MakeUgcSkillInputSchema = z
       .optional(),
     image: z
       .string()
-      .describe('A photo of the person — public https URL OR base64 data URL / raw base64. The face is locked to it.')
+      .describe('A photo of the person — an https URL. The face is locked to it. If you only hold bytes, call `upload_image` first and pass the URL it returns; base64 is still accepted here but it is printed into the user\u2019s chat and re-sent on every retry.')
       .optional(),
     character: z
       .string()
@@ -112,7 +112,7 @@ export const MakeUgcSkillInputSchema = z
     product_image: z
       .string()
       .describe(
-        'A photo of a PRODUCT to show/hold/wear — public https URL OR base64 data URL / raw base64. Prefer an https URL: base64 travels inside this tool call and eats your context. Turns the video into a product ad; needs a `character` to hold it, and limits `script` to ONE take of at most 15s (~33 words).',
+        'A photo of a PRODUCT to show/hold/wear — an https URL. If you only hold bytes, call `upload_image` first and pass the URL it returns: base64 travels inside this tool call, is printed into the user\u2019s chat, and is re-sent on every retry. Turns the video into a product ad; needs a `character` to hold it, and limits `script` to ONE take of at most 15s (~33 words).',
       )
       .optional(),
     name: z.string().max(80).describe("Name/age/vibe hint, e.g. 'Sophia, 28'.").optional(),
