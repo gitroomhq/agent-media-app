@@ -82,6 +82,46 @@ function titleFromSlug(slug: string): string {
     .join(' ');
 }
 
+/**
+ * Render an API error for an agent.
+ *
+ * The connector used to return a bare `Error (400): invalid_input` and drop
+ * `detail` on the floor. The dropped part is the only actionable half: a real
+ * agent session hit a word-count rejection, saw only "invalid_input", assumed
+ * its product IMAGE was at fault and spent ten turns re-encoding base64 — the
+ * answer ("script should be about 15-33 words for a 15s clip") was in the
+ * response the whole time.
+ */
+function formatApiError(status: number, data: unknown): string {
+  const d = data as
+    | { error?: string | { message?: string; code?: string }; detail?: unknown; skill?: string }
+    | null;
+  const raw = d?.error;
+  const head =
+    typeof raw === 'string' ? raw : (raw?.message ?? raw?.code ?? `HTTP ${status}`);
+  const parts = [`Error (${status}): ${head}`];
+  if (d?.skill) parts.push(`Skill: ${d.skill}`);
+
+  const detail = d?.detail as
+    | { fieldErrors?: Record<string, string[]>; formErrors?: string[] }
+    | string
+    | undefined;
+  if (typeof detail === 'string') {
+    parts.push(detail);
+  } else if (detail && typeof detail === 'object') {
+    // Zod's flatten() shape — the field name plus its message is exactly what
+    // an agent needs to fix the call and retry.
+    for (const [field, msgs] of Object.entries(detail.fieldErrors ?? {})) {
+      for (const m of msgs ?? []) parts.push(`- ${field}: ${m}`);
+    }
+    for (const m of detail.formErrors ?? []) parts.push(`- ${m}`);
+    if (!detail.fieldErrors && !detail.formErrors) {
+      parts.push(JSON.stringify(detail).slice(0, 600));
+    }
+  }
+  return parts.join('\n');
+}
+
 function buildMcpServer(apiKey: string): Server {
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },
@@ -320,8 +360,7 @@ function buildMcpServer(apiKey: string): Server {
       let data: unknown;
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
       if (!resp.ok) {
-        const msg = (data as { error?: { message?: string } } | null)?.error?.message ?? `HTTP ${resp.status}`;
-        return { content: [{ type: 'text', text: `Error (${resp.status}): ${msg}` }], isError: true };
+        return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
       }
       const chars = ((data as { characters?: Array<{ name?: string; character_id?: string | null; character_sheet_url?: string }> } | null)?.characters) ?? [];
       const body = chars.length
@@ -364,11 +403,8 @@ function buildMcpServer(apiKey: string): Server {
         data = text;
       }
       if (!resp.ok) {
-        const msg =
-          (data as { error?: string; detail?: unknown } | null)?.error ??
-          `HTTP ${resp.status}`;
         return {
-          content: [{ type: 'text', text: `Error (${resp.status}): ${msg}` }],
+          content: [{ type: 'text', text: formatApiError(resp.status, data) }],
           isError: true,
         };
       }
@@ -434,13 +470,8 @@ function buildMcpServer(apiKey: string): Server {
     }
 
     if (!resp.ok) {
-      const errMessage =
-        (data as { error?: { message?: string } } | null)?.error?.message ??
-        `HTTP ${resp.status}`;
       return {
-        content: [
-          { type: 'text', text: `Error (${resp.status}): ${errMessage}` },
-        ],
+        content: [{ type: 'text', text: formatApiError(resp.status, data) }],
         isError: true,
       };
     }

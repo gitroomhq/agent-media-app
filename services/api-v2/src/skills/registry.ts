@@ -86,7 +86,7 @@ export const MakeUgcSkillInputSchema = z
       .min(1)
       .max(1200)
       .describe(
-        'What the person SAYS (lip-synced) — any length. A one-liner makes one clip; a full monologue makes the full multi-take video automatically, never trimmed. Usually the only field you set.',
+        'What the person SAYS (lip-synced) — any length. A one-liner makes one clip; a full monologue makes the full multi-take video automatically, never trimmed. Usually the only field you set. EXCEPTION: when you also pass product_image the video is a SINGLE take of at most 15s, so the script must be ~33 words or fewer.',
       )
       .optional(),
     scene_action: z
@@ -112,7 +112,7 @@ export const MakeUgcSkillInputSchema = z
     product_image: z
       .string()
       .describe(
-        'A photo of a PRODUCT to show/hold/wear — public https URL OR base64 data URL / raw base64. Turns the video into a product ad; needs a `character` to hold it.',
+        'A photo of a PRODUCT to show/hold/wear — public https URL OR base64 data URL / raw base64. Prefer an https URL: base64 travels inside this tool call and eats your context. Turns the video into a product ad; needs a `character` to hold it, and limits `script` to ONE take of at most 15s (~33 words).',
       )
       .optional(),
     name: z.string().max(80).describe("Name/age/vibe hint, e.g. 'Sophia, 28'.").optional(),
@@ -216,10 +216,19 @@ export const MakeProductInHandsSkillInputSchema = z
     (d) => {
       if (!d.script) return true;
       const wc = d.script.trim().split(/\s+/).filter(Boolean).length;
-      return wc >= d.duration && wc <= Math.round(d.duration * 2.2);
+      // Upper bound only. The old lower bound (wc >= duration) was
+      // self-contradictory through make_ugc: the router derives duration FROM
+      // the script with fitDuration (<=11 words => 5s), then this rejected the
+      // script for not having at least `duration` words — so ANY script of 1-4
+      // words was impossible to submit, at any duration. A short line is a
+      // pacing choice, not an invalid input; the model handles it.
+      return wc <= Math.round(d.duration * 2.2);
     },
     (d) => ({
-      message: `script should be about ${d.duration}-${Math.round(d.duration * 2.2)} words for a ${d.duration}s clip — keep it short for natural, unhurried pacing (~1.5 words/sec)`,
+      // A product video is ONE take of at most 15s, so ~33 words is a hard
+      // ceiling, not a style note. Say that, and say the fix — this message is
+      // what an agent reads when it retries.
+      message: `script is too long for a product video: max ~${Math.round(d.duration * 2.2)} words for a ${d.duration}s take (~1.5 words/sec). A product video is a SINGLE take of at most 15s (~33 words), so shorten the script — or drop product_image to use the multi-take path, which takes any length.`,
       path: ['script'],
     }),
   );
