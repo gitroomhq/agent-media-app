@@ -189,3 +189,34 @@ describe('token exchange must not mask the upstream OAuth error', () => {
     expect(oauthSource).toContain('rejected upstream');
   });
 });
+
+describe('connector clients must be registered as public (PKCE, no secret)', () => {
+  // Root cause of every failed connector sign-in, from the production logs
+  // on 2026-09-01 (client ef8606e3, real user attempt):
+  //   invalid authentication method: client is registered for
+  //   'client_secret_post' but 'none' was used
+  // claude.ai registers without naming an auth method -> Supabase defaults to
+  // CONFIDENTIAL and issues the secret once, at registration. We are
+  // stateless, so getClient() re-reads the client from the admin API, which
+  // never returns the secret -> the token request carried no client auth.
+  const oauthSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../mcp-oauth.ts'),
+    'utf8',
+  );
+
+  it('overrides clientsStore so registration is not left to the SDK default', () => {
+    expect(oauthSource).toContain('get clientsStore()');
+    expect(oauthSource).toContain('registerClient');
+  });
+
+  it("forces token_endpoint_auth_method to 'none' on every registration", () => {
+    expect(oauthSource).toContain("token_endpoint_auth_method: 'none'");
+    // The forced value must be applied AFTER the spread, or the client's own
+    // (absent or confidential) value would win.
+    expect(oauthSource).toMatch(/\.\.\.client,\s*token_endpoint_auth_method: 'none'/);
+  });
+
+  it('logs a rejected registration instead of swallowing it', () => {
+    expect(oauthSource).toContain('client registration rejected');
+  });
+});

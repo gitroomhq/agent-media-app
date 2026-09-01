@@ -35,6 +35,7 @@ import {
 import type { OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
+import { OAuthClientInformationFullSchema } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { verifyToken } from './auth.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
@@ -183,6 +184,53 @@ const UPSTREAM_ERRORS: Record<string, new (m: string) => Error> = {
  * So: read the body, log it, and re-throw the upstream code.
  */
 class LoggingProxyOAuthServerProvider extends ProxyOAuthServerProvider {
+  /**
+   * Register connector clients as PUBLIC (PKCE, no secret).
+   *
+   * THE BUG THIS FIXES. claude.ai's dynamic registration does not state a
+   * `token_endpoint_auth_method`. Supabase's default for that is a
+   * CONFIDENTIAL client — it registers `client_secret_basic` and returns a
+   * `client_secret` exactly once, in the registration response.
+   *
+   * We are stateless: at token time `getClient()` re-reads the client from
+   * Supabase's admin API, and that endpoint does NOT return the secret (it is
+   * write-once by design — verified against production, the admin GET has no
+   * client_secret field). So `client.client_secret` was always undefined by
+   * then, the token request carried no client authentication, and Supabase
+   * refused it:
+   *
+   *   invalid authentication method: client is registered for
+   *   'client_secret_post' but 'none' was used
+   *
+   * Every connector sign-in failed this way, on the last step, after the user
+   * had already logged in — and the old code reported it as `server_error`,
+   * so it read as "Authorization with the MCP server failed" with no cause.
+   *
+   * A browser-based PKCE client has nowhere safe to keep a secret anyway;
+   * public + S256 is the shape MCP connectors are meant to use. Forcing it at
+   * registration makes the secret we cannot store unnecessary, rather than
+   * bolting on storage for one we would only ever use once.
+   */
+  get clientsStore() {
+    return {
+      getClient,
+      registerClient: async (client: OAuthClientInformationFull): Promise<OAuthClientInformationFull> => {
+        const body = { ...client, token_endpoint_auth_method: 'none' };
+        const response = await supabaseFetch(`${SUPABASE_URL}/auth/v1/oauth/clients/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          console.error(`[mcp-oauth] client registration rejected: HTTP ${response.status} ${text.slice(0, 300)}`);
+          throw new ServerError(`Client registration failed: ${response.status}`);
+        }
+        return OAuthClientInformationFullSchema.parse(JSON.parse(text));
+      },
+    };
+  }
+
   private async postToken(params: URLSearchParams, leg: 'exchange' | 'refresh'): Promise<OAuthTokens> {
     const response = await supabaseFetch(`${SUPABASE_URL}/auth/v1/oauth/token`, {
       method: 'POST',
