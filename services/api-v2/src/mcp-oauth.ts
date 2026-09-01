@@ -23,6 +23,16 @@
 import type { RequestHandler } from 'express';
 import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { ProxyOAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/providers/proxyProvider.js';
+import {
+  InvalidClientError,
+  InvalidGrantError,
+  InvalidRequestError,
+  InvalidTargetError,
+  ServerError,
+  UnauthorizedClientError,
+  UnsupportedGrantTypeError,
+} from '@modelcontextprotocol/sdk/server/auth/errors.js';
+import type { OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { verifyToken } from './auth.js';
@@ -133,8 +143,115 @@ async function getClient(clientId: string): Promise<OAuthClientInformationFull |
  *
  * Mount this BEFORE the application's own routes.
  */
+/**
+ * Map an upstream OAuth error code onto the SDK's error class, so the code
+ * survives the hop instead of collapsing into `server_error`.
+ */
+const UPSTREAM_ERRORS: Record<string, new (m: string) => Error> = {
+  invalid_grant: InvalidGrantError,
+  invalid_client: InvalidClientError,
+  invalid_request: InvalidRequestError,
+  invalid_target: InvalidTargetError,
+  unauthorized_client: UnauthorizedClientError,
+  unsupported_grant_type: UnsupportedGrantTypeError,
+};
+
+/**
+ * ProxyOAuthServerProvider, but the token leg tells the truth.
+ *
+ * WHY. The SDK's implementation does this on any non-2xx from upstream:
+ *
+ *     await response.body?.cancel();
+ *     throw new ServerError(`Token exchange failed: ${response.status}`);
+ *
+ * It cancels the body — the ONLY place the reason lives — and reports
+ * `server_error`. Supabase had answered, precisely:
+ *
+ *     {"error":"invalid_grant","error_description":"Invalid authorization code"}
+ *
+ * and the connecting client saw `server_error`, which claude.ai surfaces as
+ * "Authorization with the MCP server failed" with `mcp_token_exchange_failed`.
+ * Verified against production on 2026-09-01: the same bogus code returns
+ * invalid_grant straight from Supabase and server_error through us.
+ *
+ * That is not a cosmetic difference. `invalid_grant` tells a client its code
+ * is stale and to restart the flow; `server_error` tells it we are broken, so
+ * it neither retries usefully nor reports anything actionable — and nobody on
+ * our side can tell an expired code from a real outage. Every connector
+ * sign-in failure looked identical and unexplained.
+ *
+ * So: read the body, log it, and re-throw the upstream code.
+ */
+class LoggingProxyOAuthServerProvider extends ProxyOAuthServerProvider {
+  private async postToken(params: URLSearchParams, leg: 'exchange' | 'refresh'): Promise<OAuthTokens> {
+    const response = await supabaseFetch(`${SUPABASE_URL}/auth/v1/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      let code = '';
+      let description = '';
+      try {
+        const body = JSON.parse(text) as { error?: string; error_description?: string; msg?: string };
+        code = body.error ?? '';
+        description = body.error_description ?? body.msg ?? '';
+      } catch {
+        description = text.slice(0, 300);
+      }
+      // Server-side, with the client id, so a failed sign-in is greppable.
+      console.error(
+        `[mcp-oauth] token ${leg} rejected upstream: HTTP ${response.status} ` +
+          `error=${code || '(none)'} description=${description || '(none)'} ` +
+          `client_id=${params.get('client_id') ?? '(none)'}`,
+      );
+      const Err = UPSTREAM_ERRORS[code];
+      const message = description || `upstream returned HTTP ${response.status}`;
+      throw Err ? new Err(message) : new ServerError(`${code || 'upstream_error'}: ${message}`);
+    }
+    return JSON.parse(text) as OAuthTokens;
+  }
+
+  async exchangeAuthorizationCode(
+    client: OAuthClientInformationFull,
+    authorizationCode: string,
+    codeVerifier?: string,
+    redirectUri?: string,
+    resource?: URL,
+  ): Promise<OAuthTokens> {
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: client.client_id,
+      code: authorizationCode,
+    });
+    if (client.client_secret) params.append('client_secret', client.client_secret);
+    if (codeVerifier) params.append('code_verifier', codeVerifier);
+    if (redirectUri) params.append('redirect_uri', redirectUri);
+    if (resource) params.append('resource', resource.href);
+    return this.postToken(params, 'exchange');
+  }
+
+  async exchangeRefreshToken(
+    client: OAuthClientInformationFull,
+    refreshToken: string,
+    scopes?: string[],
+    resource?: URL,
+  ): Promise<OAuthTokens> {
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: client.client_id,
+      refresh_token: refreshToken,
+    });
+    if (client.client_secret) params.set('client_secret', client.client_secret);
+    if (scopes?.length) params.set('scope', scopes.join(' '));
+    if (resource) params.set('resource', resource.href);
+    return this.postToken(params, 'refresh');
+  }
+}
+
 export function createMcpOAuthRouter(): RequestHandler {
-  const provider = new ProxyOAuthServerProvider({
+  const provider = new LoggingProxyOAuthServerProvider({
     endpoints: {
       authorizationUrl: `${SUPABASE_URL}/auth/v1/oauth/authorize`,
       tokenUrl: `${SUPABASE_URL}/auth/v1/oauth/token`,

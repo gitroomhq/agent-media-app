@@ -13,6 +13,9 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -142,5 +145,47 @@ describe('MCP connector OAuth', () => {
     const resp = await fetch(`${base}/v1/needs-auth`);
     expect(resp.status).toBe(401);
     expect(resp.headers.get('www-authenticate')).toBeNull();
+  });
+});
+
+describe('token exchange must not mask the upstream OAuth error', () => {
+  // Reproduced against production 2026-09-01: the SAME bogus code returns
+  //   Supabase : {"error":"invalid_grant","error_description":"Invalid authorization code"}
+  //   via us   : {"error":"server_error","error_description":"Token exchange failed: 400"}
+  // claude.ai renders that as "Authorization with the MCP server failed"
+  // (error_code=mcp_token_exchange_failed) with nothing anyone can act on.
+  const oauthSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../mcp-oauth.ts'),
+    'utf8',
+  );
+
+  it('overrides both token legs instead of inheriting the masking ones', () => {
+    expect(oauthSource).toContain('class LoggingProxyOAuthServerProvider extends ProxyOAuthServerProvider');
+    expect(oauthSource).toContain('async exchangeAuthorizationCode');
+    expect(oauthSource).toContain('async exchangeRefreshToken');
+    expect(oauthSource).toContain('new LoggingProxyOAuthServerProvider({');
+  });
+
+  it('reads the upstream body rather than cancelling it', () => {
+    // Cancelling the body is the exact move that threw the reason away, so it
+    // must not appear in CODE (the doc comment above the class quotes it).
+    const code = oauthSource
+      .split('\n')
+      .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l))
+      .join('\n');
+    expect(code).not.toContain('body?.cancel()');
+    expect(code).toContain('await response.text()');
+  });
+
+  it('re-throws the upstream error code, not a blanket server_error', () => {
+    for (const code of ['invalid_grant', 'invalid_client', 'invalid_request', 'unauthorized_client']) {
+      expect(oauthSource).toContain(code);
+    }
+    expect(oauthSource).toContain('UPSTREAM_ERRORS[code]');
+  });
+
+  it('logs the upstream reason server-side so a failed sign-in is greppable', () => {
+    expect(oauthSource).toContain('[mcp-oauth] token ');
+    expect(oauthSource).toContain('rejected upstream');
   });
 });
