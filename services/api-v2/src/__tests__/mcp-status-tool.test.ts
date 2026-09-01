@@ -55,3 +55,31 @@ describe('hosted MCP: run-status tool', () => {
     }
   });
 });
+
+/**
+ * Anthropic's Connectors Directory review rejects any server whose tools
+ * lack a title and the applicable read-only / destructive hint. This gate
+ * fails the build rather than the review queue.
+ */
+describe('hosted MCP: directory submission requirements', () => {
+  it('annotates every tool — read-only tools and generation tools alike', () => {
+    expect(source).toContain('function readOnlyAnnotations');
+    expect(source).toContain('function generationAnnotations');
+    expect(source).toContain("readOnlyAnnotations('List Characters')");
+    expect(source).toContain("readOnlyAnnotations('Get Run Status')");
+    // both generated families carry annotations
+    expect(source).toContain('annotations: generationAnnotations(titleFromSlug(def.mcp!.toolName))');
+    expect(source).toContain('annotations: generationAnnotations(s.name)');
+  });
+
+  it('declares both hints on every annotation shape', () => {
+    for (const hint of ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint']) {
+      expect(source).toContain(hint);
+    }
+  });
+
+  it('never marks a generation tool read-only — they spend credits', () => {
+    const gen = source.slice(source.indexOf('function generationAnnotations'));
+    expect(gen.slice(0, 200)).toContain('readOnlyHint: false');
+  });
+});

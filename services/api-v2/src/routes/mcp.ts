@@ -56,6 +56,32 @@ const PUBLIC_API_BASE =
  * token, so credit debits + auth + rate-limits all flow through the
  * normal path.
  */
+/**
+ * Anthropic's Connectors Directory rejects any server whose tools lack a
+ * `title` and the applicable `readOnlyHint` / `destructiveHint`. Ours had
+ * NO annotations at all, so the whole server was unlistable — and the
+ * hints are useful independently: they tell a client which tools are safe
+ * to call speculatively and which spend the user's credits.
+ *
+ * Nothing here destroys data: generation tools create new media, so they
+ * are writes with destructiveHint:false, and they touch a remote service
+ * so openWorldHint is true.
+ */
+function readOnlyAnnotations(title: string) {
+  return { title, readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+}
+function generationAnnotations(title: string) {
+  return { title, readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+}
+
+/** "make_ugc" -> "Make UGC" style display title. */
+function titleFromSlug(slug: string): string {
+  return slug
+    .split('_')
+    .map((w) => (w === 'ugc' ? 'UGC' : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
 function buildMcpServer(apiKey: string): Server {
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },
@@ -88,6 +114,7 @@ function buildMcpServer(apiKey: string): Server {
             def.description,
           inputSchema:
             (schema as any).definitions?.[`${def.id}_input`] ?? schema,
+          annotations: generationAnnotations(titleFromSlug(def.mcp!.toolName)),
         },
       };
     });
@@ -120,6 +147,7 @@ function buildMcpServer(apiKey: string): Server {
             description: `${s.name} (v${s.version}) — ${s.description}`,
             inputSchema:
               (schema as any).definitions?.[`${s.slug}_input`] ?? schema,
+            annotations: generationAnnotations(s.name),
           },
         };
       })
@@ -141,6 +169,7 @@ function buildMcpServer(apiKey: string): Server {
       },
       additionalProperties: false,
     },
+    annotations: readOnlyAnnotations('List Characters'),
   };
 
   /**
@@ -168,6 +197,7 @@ function buildMcpServer(apiKey: string): Server {
       required: ['run_id'],
       additionalProperties: false,
     },
+    annotations: readOnlyAnnotations('Get Run Status'),
   };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
