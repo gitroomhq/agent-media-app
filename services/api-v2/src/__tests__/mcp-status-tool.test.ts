@@ -49,6 +49,18 @@ describe('hosted MCP: run-status tool', () => {
     }
   });
 
+  it('reads a COMPOSED run: final_output.video_url and steps[].artifacts', () => {
+    // Live production run 8f9a40f1 (make_ugc_video) finished with
+    //   { status: 'succeeded', final_output: { video_url: 'https://…mp4' },
+    //     steps: [{ artifacts: [{ url, kind, mime }] }] }
+    // Nothing in the extractor looked one level down, so the tool reported
+    // "succeeded" and no link — the agent still could not give the user the
+    // video, which is the whole reason this tool exists.
+    expect(source).toContain('b.final_output?.video_url');
+    expect(source).toContain('Array.isArray(b.steps)');
+    expect(source).toContain('stepArtifacts');
+  });
+
   it('reads artifacts[] — primitive/skill runs return an array, not a scalar url', () => {
     // A finished product_in_hands run reports {status:'succeeded', artifacts:[{url,kind,mime}]}.
     // Scalar-only extraction reported success with NO link, which leaves the

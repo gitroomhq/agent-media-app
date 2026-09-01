@@ -442,25 +442,48 @@ function buildMcpServer(apiKey: string): Server {
       // lookup below missed it entirely, so a finished run reported
       // "succeeded" with no link and the agent still could not hand the user
       // a video. That is the same dead end this tool exists to remove.
+      //
+      // A COMPOSED skill run (make_ugc_video — the main product surface) nests
+      // both of these one level down: the link is `final_output.video_url` and
+      // the artifacts hang off `steps[].artifacts`, not the top level. Neither
+      // was read, so a live make_ugc that rendered a video in 3m35s reported
+      // "status: succeeded" with NO link — the agent still could not hand the
+      // user their video, which is the entire complaint this tool exists to
+      // answer. (Reproduced against production on 2026-09-01, run 8f9a40f1.)
+      const stepArtifacts: Array<{ url?: string; kind?: string; mime?: string }> =
+        Array.isArray(b.steps)
+          ? b.steps.flatMap((st: { artifacts?: unknown }) =>
+              Array.isArray(st?.artifacts) ? st.artifacts : [],
+            )
+          : [];
       const artifactList: Array<{ url?: string; kind?: string; mime?: string }> =
         Array.isArray(b.artifacts)
           ? b.artifacts
           : Array.isArray(b.output?.artifacts)
             ? b.output.artifacts
-            : [];
+            : Array.isArray(b.final_output?.artifacts)
+              ? b.final_output.artifacts
+              : stepArtifacts;
       const videoArtifact =
         artifactList.find((a) => typeof a?.mime === 'string' && a.mime.startsWith('video/')) ??
         artifactList.find((a) => typeof a?.url === 'string' && /\.(mp4|mov|webm)(\?|$)/i.test(a.url)) ??
         artifactList[0];
       const url =
         b.video_url ?? b.output_url ?? b.result_url ?? b.output_media_url ??
+        b.final_output?.video_url ?? b.final_output?.output_url ??
         b.artifacts?.video_url ?? b.output?.video_url ?? videoArtifact?.url ?? null;
       // Surface every other artifact too (portrait, sheet, wireframe): an
       // agent asked to "show the character sheet" should not need a second
       // round trip.
-      const otherArtifacts = artifactList
-        .filter((a) => a?.url && a.url !== url)
-        .map((a) => `  - ${a.kind ?? 'artifact'}: ${a.url}`);
+      const namedOutputs = Object.entries(b.final_output ?? {})
+        .filter(([k, v]) => typeof v === 'string' && /^https?:\/\//.test(v) && v !== url && k !== 'video_url')
+        .map(([k, v]) => `  - ${k}: ${v}`);
+      const otherArtifacts = [
+        ...artifactList
+          .filter((a) => a?.url && a.url !== url)
+          .map((a) => `  - ${a.kind ?? 'artifact'}: ${a.url}`),
+        ...namedOutputs,
+      ];
       const done = TERMINAL.has(status.toLowerCase());
       const lines = [
         `Run ${runId} — status: ${status}`,
