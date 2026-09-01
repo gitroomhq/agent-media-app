@@ -754,6 +754,7 @@ function crazyLookBody(): string {
     '- `framing` (optional) — full-face | eyes-only | mouth-only | nose-up | medium. OMIT to rotate crop levels automatically.',
     '- `chaos` (optional, 0-1, default 0.6) — how wildly the expression evolves: 0 = one held look, 1 = fast unhinged morphing.',
     '- `duration` — 5 (default) or 10 seconds.',
+    '- `engine` — `seedance-2.0` (default) or `seedance-2.5`. 2.5 is the newer, sharper model and is a premium tier; only pass it when the user explicitly asks for the best possible quality.',
     '',
     '## The volume workflow',
     '',

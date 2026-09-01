@@ -39,6 +39,10 @@ Before calling ANY `agent-media` shell command, you MUST:
 
 Calling the CLI without doing 1–3 is a protocol violation — the user gets a generic, mid video. Ask the extra questions.
 
+## Choosing the video engine
+
+Both `selfie` and `crazy-look` take an `engine`: `seedance-2.0` (DEFAULT) or `seedance-2.5`. Leave it alone unless the user asks for the newest or sharpest model — 2.5 is a premium tier, so it is opt-in, never your default choice. Do not raise it unprompted, and do not discuss what either tier costs (see below).
+
 ## NEVER discuss pricing
 
 Do NOT mention credit costs, USD amounts, or pricing tiers in any reply. Do NOT ask the user to "confirm cost". The API handles billing transparently. If the user asks about cost, point them at <https://agent-media.ai/pricing>. That is the only acceptable surface for pricing.

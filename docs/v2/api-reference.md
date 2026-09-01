@@ -111,6 +111,14 @@ Generate a 9:16 vertical TikTok-style selfie clip. Pick a saved character (--cha
         "default",
         "heavy"
       ]
+    },
+    "engine": {
+      "type": "string",
+      "enum": [
+        "seedance-2.0",
+        "seedance-2.5"
+      ],
+      "default": "seedance-2.0"
     }
   },
   "additionalProperties": false
@@ -377,6 +385,14 @@ Generate a 5–10s vertical 9:16 reaction clip: one character, extreme close-up 
         "default",
         "heavy"
       ]
+    },
+    "engine": {
+      "type": "string",
+      "enum": [
+        "seedance-2.0",
+        "seedance-2.5"
+      ],
+      "default": "seedance-2.0"
     }
   },
   "required": [
