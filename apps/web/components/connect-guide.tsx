@@ -19,10 +19,26 @@ import { ClaudeIcon, CursorIcon, AnthropicIcon, OpenAIIcon } from '@/components/
  * you run through MCP or the CLI. Its command now lives in CLI step 3, exactly
  * where the public guide puts it.
  */
-type Surface = 'mcp' | 'cli';
+type Surface = 'connector' | 'mcp' | 'cli';
 type Client = 'claude-code' | 'cursor' | 'claude-desktop' | 'codex';
 
-const PATHS: Record<Surface, string> = { mcp: '/mcp', cli: '/cli' };
+const PATHS: Record<Surface, string> = { connector: '/connect', mcp: '/mcp', cli: '/cli' };
+
+/**
+ * The hosted connector: one URL, browser sign-in, no API key. It was
+ * missing from every surface we ship — this guide, the marketing site and
+ * the docs all taught the local npx server plus a `ma_…` key, which a
+ * Claude.ai user cannot run at all.
+ */
+const CONNECTOR_URL = 'https://api.agent-media.ai/mcp';
+const CLAUDE_CODE_HTTP = `claude mcp add --transport http agent-media ${CONNECTOR_URL}`;
+const CURSOR_HTTP_JSON = `{
+  "mcpServers": {
+    "agent-media": { "url": "${CONNECTOR_URL}" }
+  }
+}`;
+const CODEX_HTTP_TOML = `[mcp_servers.agent-media]
+url = "${CONNECTOR_URL}"`;
 const CLIENT_LABEL: Record<Client, string> = { 'claude-code': 'Claude Code', cursor: 'Cursor', 'claude-desktop': 'Claude Desktop', codex: 'Codex' };
 const CLIENT_HERO: Record<Client, string> = { 'claude-code': 'Claude Code', cursor: 'Cursor', 'claude-desktop': 'Claude', codex: 'Codex' };
 
@@ -99,7 +115,7 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   );
 }
 
-export function ConnectGuide({ initialTab = 'mcp', initialClient = 'claude-code', routePaths = true }: { initialTab?: Surface; initialClient?: Client; routePaths?: boolean }) {
+export function ConnectGuide({ initialTab = 'connector', initialClient = 'claude-code', routePaths = true }: { initialTab?: Surface; initialClient?: Client; routePaths?: boolean }) {
   const [surface, setSurface] = useState<Surface>(initialTab);
   const [client, setClient] = useState<Client>(initialClient);
 
@@ -136,7 +152,7 @@ export function ConnectGuide({ initialTab = 'mcp', initialClient = 'claude-code'
     try { window.history.pushState(null, '', `${PATHS.mcp}/${c}`); } catch { /* ignore */ }
   };
 
-  const heroName = surface === 'mcp' ? CLIENT_HERO[client] : 'your agent';
+  const heroName = surface === 'cli' ? 'your agent' : CLIENT_HERO[client];
   const CLIENTS: { id: Client; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; color: string }[] = [
     { id: 'claude-code', label: 'Claude Code', icon: ClaudeIcon, color: '#D97757' },
     { id: 'cursor', label: 'Cursor', icon: CursorIcon, color: '#7DD3FC' },
@@ -160,11 +176,12 @@ export function ConnectGuide({ initialTab = 'mcp', initialClient = 'claude-code'
       {/* Tabs (left) + client selector (right, brand-colored) */}
       <div className="mt-10 flex flex-wrap items-center gap-3">
         <div className="inline-flex p-1" style={{ background: '#08080B', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 8 }}>
-          <Tab active={surface === 'mcp'} onClick={() => pick('mcp')}><Server className="h-3.5 w-3.5" /> MCP</Tab>
+          <Tab active={surface === 'connector'} onClick={() => pick('connector')}><Server className="h-3.5 w-3.5" /> Connector</Tab>
+          <Tab active={surface === 'mcp'} onClick={() => pick('mcp')}><Terminal className="h-3.5 w-3.5" /> Self-hosted</Tab>
           <Tab active={surface === 'cli'} onClick={() => pick('cli')}><Terminal className="h-3.5 w-3.5" /> CLI</Tab>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-3">
-          {surface === 'mcp' && (
+          {surface !== 'cli' && (
             <div className="inline-flex flex-wrap p-1" style={{ background: '#08080B', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 8 }}>
               {CLIENTS.map((c) => {
                 const isActive = client === c.id;
@@ -191,6 +208,21 @@ export function ConnectGuide({ initialTab = 'mcp', initialClient = 'claude-code'
 
       {/* Panel */}
       <div className="mt-4 grid grid-cols-1 gap-7 p-5 sm:p-6 md:grid-cols-3" style={{ background: '#17171D', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12 }}>
+        {surface === 'connector' && (
+          <>
+            <Step n={1} title="Copy the connector URL">One URL. No API key, no local process, nothing to install.<Code text={CONNECTOR_URL} /></Step>
+            {client === 'claude-code' ? (
+              <Step n={2} title="Add it to Claude Code">Streamable HTTP, straight from the terminal:<Code text={CLAUDE_CODE_HTTP} /></Step>
+            ) : client === 'cursor' ? (
+              <Step n={2} title="Add it to ~/.cursor/mcp.json">A remote server needs nothing but the URL:<Code text={CURSOR_HTTP_JSON} /></Step>
+            ) : client === 'codex' ? (
+              <Step n={2} title="Add it to ~/.codex/config.toml"><Code text={CODEX_HTTP_TOML} /></Step>
+            ) : (
+              <Step n={2} title="Add it in Claude">In Claude (web or desktop): <span className="text-white/85">Settings → Connectors → Add custom connector</span>, paste the URL, then <span className="text-white/85">Connect</span>.</Step>
+            )}
+            <Step n={3} title="Sign in, then just ask">A browser window opens — sign in once and you are connected. Then: <span className="text-white/85">&quot;Make me a UGC video with agent-media.&quot;</span> Every tool self-describes, so {CLIENT_LABEL[client]} picks the right one.</Step>
+          </>
+        )}
         {surface === 'cli' && (
           <>
             <Step n={1} title="Install the CLI">One line — auth, uploads, and polling are handled for you.<Code text="npm install -g agent-media-cli" /></Step>

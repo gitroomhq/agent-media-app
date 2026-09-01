@@ -143,16 +143,120 @@ function buildMcpServer(apiKey: string): Server {
     },
   };
 
+  /**
+   * Read-only status tool. Its absence was the single worst hole in this
+   * connector: every generation tool returned "poll GET /v1/... for status"
+   * to an agent that had NO tool able to make that call, so a Claude session
+   * submitted a job and then went permanently blind — it could not tell
+   * success from failure, and could not hand the user a video URL. (Observed
+   * across a full external agent session, 2026.)
+   *
+   * One tool covers all three id shapes because an agent cannot be expected
+   * to know which pipeline its skill ran on: composed skill runs, primitive
+   * runs, and v2 generator jobs are probed in turn.
+   */
+  const getRunStatusTool = {
+    name: 'get_run_status',
+    description:
+      'Check a generation you already submitted, and get its video URL when it is done. Pass the id ANY agent-media tool returned (run id, skill run id, or job id) — this resolves all of them. Set wait:true to block until the job reaches a terminal state (up to ~2 minutes per call; call again if it is still running). ALWAYS call this after submitting: without it you cannot tell whether the video succeeded, and cannot give the user a link.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'The run_id / skill_run_id / job_id returned when you submitted.' },
+        wait: { type: 'boolean', description: 'Block until the run finishes or ~2 minutes elapse (default false).' },
+      },
+      required: ['run_id'],
+      additionalProperties: false,
+    },
+  };
+
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
       ...tools.map((t) => t.listEntry),
       ...vnextSkillTools.map((t) => t.listEntry),
       listCharactersTool,
+      getRunStatusTool,
     ],
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    // Read-only: resolve a run/job id across all three pipelines.
+    if (name === 'get_run_status') {
+      const runId = String((args as { run_id?: string })?.run_id ?? '').trim();
+      const wait = (args as { wait?: boolean })?.wait === true;
+      if (!runId) {
+        return { content: [{ type: 'text', text: 'run_id is required.' }], isError: true };
+      }
+
+      // Composed skill runs, primitive runs and v2 jobs live behind three
+      // different paths; the agent holds one opaque id, so try each.
+      const PATHS = [
+        `/v1/skills/runs/${encodeURIComponent(runId)}`,
+        `/v1/primitives/runs/${encodeURIComponent(runId)}`,
+        `/v1/videos/${encodeURIComponent(runId)}`,
+      ];
+
+      async function probe(): Promise<{ found: boolean; body?: any }> {
+        for (const path of PATHS) {
+          try {
+            const r = await fetch(`${PUBLIC_API_BASE}${path}`, {
+              headers: { Authorization: `Bearer ${apiKey}` },
+              signal: AbortSignal.timeout(20_000),
+            });
+            if (r.status === 404) continue;
+            const t = await r.text();
+            let d: any;
+            try { d = t ? JSON.parse(t) : null; } catch { d = t; }
+            if (r.ok) return { found: true, body: d };
+          } catch {
+            // try the next shape
+          }
+        }
+        return { found: false };
+      }
+
+      const TERMINAL = new Set(['completed', 'succeeded', 'failed', 'canceled', 'cancelled', 'error']);
+      const deadline = Date.now() + (wait ? 110_000 : 0);
+      let result = await probe();
+      while (
+        wait &&
+        result.found &&
+        !TERMINAL.has(String(result.body?.status ?? '').toLowerCase()) &&
+        Date.now() < deadline
+      ) {
+        await new Promise((r) => setTimeout(r, 8_000));
+        result = await probe();
+      }
+
+      if (!result.found) {
+        return {
+          content: [{ type: 'text', text: `No run found for id "${runId}". Check the id you were given at submit time.` }],
+          isError: true,
+        };
+      }
+
+      const b = result.body ?? {};
+      const status = String(b.status ?? 'unknown');
+      // Every pipeline names its output differently; surface whichever exists.
+      const url =
+        b.video_url ?? b.output_url ?? b.result_url ?? b.output_media_url ??
+        b.artifacts?.video_url ?? b.output?.video_url ?? null;
+      const done = TERMINAL.has(status.toLowerCase());
+      const lines = [
+        `Run ${runId} — status: ${status}`,
+        url ? `Video: ${url}` : null,
+        b.error_message ? `Error: ${b.error_message}` : null,
+        b.error_code ? `Error code: ${b.error_code}` : null,
+        b.progress_detail?.stage ? `Stage: ${b.progress_detail.stage}` : null,
+        !done ? 'Still running — call get_run_status again (or with wait:true).' : null,
+      ].filter(Boolean);
+      return {
+        content: [{ type: 'text', text: lines.join('\n') }],
+        isError: /failed|error|canceled|cancelled/i.test(status),
+      };
+    }
 
     // Read-only: list saved characters (GET /v1/characters).
     if (name === 'list_characters') {
@@ -242,7 +346,8 @@ function buildMcpServer(apiKey: string): Server {
               `Skill submitted: ${sub?.skill ?? skillTool.slug}`,
               jobId ? `Run id: ${jobId}` : null,
               sub?.workflow_id ? `Workflow id: ${sub.workflow_id}` : null,
-              `Poll with ${pollUrl} for status + artifacts.`,
+              `NEXT STEP: call get_run_status with run_id "${jobId ?? '<id>'}" (add wait:true to block until it finishes) to get the video URL. Do not stop here — the user needs the link.`,
+              `(REST equivalent: ${pollUrl})`,
             ]
               .filter(Boolean)
               .join('\n'),
@@ -300,7 +405,7 @@ function buildMcpServer(apiKey: string): Server {
           text: [
             `Job submitted: ${sub?.job_id ?? '(no job id)'}`,
             sub?.credits_deducted != null ? `Credits: ${sub.credits_deducted}` : null,
-            'Poll with the get_video_status tool (or GET /v1/videos/<job_id>).',
+            `NEXT STEP: call get_run_status with run_id "${sub?.job_id ?? '<job_id>'}" (add wait:true to block until it finishes) to get the video URL. Do not stop here — the user needs the link.`,
           ]
             .filter(Boolean)
             .join('\n'),

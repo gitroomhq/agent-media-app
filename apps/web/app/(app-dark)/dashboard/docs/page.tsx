@@ -15,5 +15,5 @@
 import { SkillsHub } from '@/components/skills-hub';
 
 export default function DocsPage() {
-  return <SkillsHub initialTab="mcp" internal />;
+  return <SkillsHub initialTab="connector" internal />;
 }
