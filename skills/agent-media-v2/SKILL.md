@@ -13,6 +13,16 @@ description: AI UGC video production via agent-media (selfie, character, subs, p
 
 agent-media is a CLI for AI UGC video generation. This skill tells you how to drive it. **Loaded files are intentionally small** — open the right reference file for the task you have, don't try to memorize everything.
 
+## Not on the CLI? Use the connector instead
+
+This skill drives the local `agent-media` CLI. If the CLI is not installed — or you are Claude on the web, where you cannot run shell commands — connect over the hosted MCP connector instead: one URL, browser sign-in, no API key.
+
+```
+https://api.agent-media.ai/mcp
+```
+
+Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: <https://agent-media.ai/connect>. Over MCP the same 4-gate protocol below still applies, and after submitting you MUST call `get_run_status` to get the finished video URL.
+
 ## 🛑 HARD GATE — read this first, every conversation
 
 Before calling ANY `agent-media` shell command, you MUST:

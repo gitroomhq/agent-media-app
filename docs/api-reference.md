@@ -2,6 +2,31 @@
 
 > Complete reference for the agent-media public REST API. All endpoints require authentication via API key unless otherwise noted.
 
+## Connecting an AI agent (no API key)
+
+If you are wiring agent-media into Claude, Claude Code, Cursor or Codex, you
+do **not** need an API key or anything from this document. Add the hosted MCP
+connector — one URL, browser sign-in:
+
+```
+https://api.agent-media.ai/mcp
+```
+
+- **Claude (web or desktop):** Settings → Connectors → Add custom connector → paste the URL → Connect
+- **Claude Code:** `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`
+- **Cursor** (`~/.cursor/mcp.json`) / **Codex** (`~/.codex/config.toml`): the same URL as a remote server
+
+The server speaks OAuth 2.1 with dynamic client registration, so the agent
+registers itself and the user just signs in. Full guide:
+<https://agent-media.ai/connect>.
+
+After submitting a generation over MCP, call `get_run_status` with the id you
+were given to get the finished video URL — generation is asynchronous and the
+submit response only confirms the job started.
+
+The REST reference below is for direct HTTP integrations, where the `ma_` key
+still applies.
+
 ## Overview
 
 ### Base URL

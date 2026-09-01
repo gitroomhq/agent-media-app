@@ -87,7 +87,7 @@ async function loadCharacter(publicId) {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const R2_BUCKET = 'generation-outputs';
-const SEEDANCE_MODEL = 'seedance-2.0-reference-to-video';
+const SEEDANCE_MODEL = process.env.SEEDANCE_V2_MODEL || 'seedance-2.5-reference-to-video';
 const DEFAULT_QUALITY = '720p';
 const DEFAULT_ASPECT = '9:16';
 

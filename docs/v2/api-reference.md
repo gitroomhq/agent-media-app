@@ -15,6 +15,7 @@ _Public REST surface for v2 generators (Selfie, Character). Auth is a Bearer API
 - [`POST /v2/selfie` — AI UGC selfie video with generated actor, character sheet, storyboard board, and Seedance.](#selfie)
 - [`POST /v2/characters` — Create a reusable AI character from a single photo.](#character_create)
 - [`POST /v2/subtitle` — Burn styled subtitles onto an existing video.](#subtitle)
+- [`POST /v2/crazy-look` — Silent extreme close-up reaction clip with a static caption overlay ("the crazy look").](#crazy_look)
 
 ---
 
@@ -196,6 +197,9 @@ Persists a character so subsequent video calls can reference it by id. Two gpt-i
         "salon-mirror-result",
         "travel-hotel-room-review"
       ]
+    },
+    "signature_look": {
+      "type": "string"
     }
   },
   "required": [
@@ -308,11 +312,119 @@ agent-media subs --video https://r2/clip.mp4 --style hormozi
 agent-media subs --video https://r2/clip.mp4 --transcript "exact script text" --style neon
 ```
 
+---
+
+## crazy_look · _beta_
+
+`POST /v2/crazy-look`
+
+Generate a 5–10s vertical 9:16 reaction clip: one character, extreme close-up (face fills most of the frame), an exaggerated silent expression held straight into the lens, and a static caption burned over the full clip. No speech, no lip-sync, no TTS — the caption is the hook, the face is the reaction. Ambient room tone is kept (no music); creators add trending sounds in their editor. Pick a look preset (bug-eyed-shock, jaw-drop, unhinged-grin, …) or pass "custom:<text>"; omit `look` and the worker picks one at random. The expression is DYNAMIC — the face morphs through randomized silent beats (brow pops, mouth drops, eye darts, head tilts); `chaos` (0–1, default 0.6) sets how wild the evolution gets so repeated calls with the same caption produce varied reactions — the format is a volume play: same hook, many looks, one recurring character. `framing` rotates crop levels (full-face, eyes-only, mouth-only, nose-up, medium) and is sampled per job when omitted; warm looks (sweet-smile, giggle-fit) give contrast beats between the shocked faces. THE FIRST FRAME IS THE LOOK: at 0.0s the face is already at peak expression (no build-up), and a saved character keeps the SAME signature look on every clip unless `look` is passed explicitly — that recurring face is what makes a feed recognisable. A SERIES MUST START WITH A CHARACTER SHEET: run character_create first — the saved sheet + pinned seed keeps the SAME face on every clip. Inline description invents a NEW person per clip; use it only for a one-off test. Output: an mp4 hosted on R2.
+
+### Request body
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "character_id": {
+      "type": "string",
+      "pattern": "^char_[A-Za-z0-9]{10,}$"
+    },
+    "photo_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 400
+    },
+    "caption": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 220
+    },
+    "look": {
+      "type": "string"
+    },
+    "duration": {
+      "type": "number",
+      "enum": [
+        5,
+        10
+      ],
+      "default": 5
+    },
+    "chaos": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "framing": {
+      "type": "string",
+      "enum": [
+        "full-face",
+        "eyes-only",
+        "mouth-only",
+        "nose-up",
+        "medium"
+      ]
+    },
+    "polish": {
+      "type": "string",
+      "enum": [
+        "off",
+        "default",
+        "heavy"
+      ]
+    }
+  },
+  "required": [
+    "caption"
+  ],
+  "additionalProperties": false
+}
+```
+
+### Response
+
+Returns a job submission. Poll `GET /v1/videos/{job_id}` until `status: "completed"`; the final row carries `video_url`.
+
+#### Submission (201)
+
+```json
+{
+  "job_id": "<uuid>",
+  "status": "submitted",
+  "generator": "crazy_look"
+}
+```
+
+### CLI examples
+
+```bash
+agent-media crazy-look --character char_8x2vqp --caption "WAIT there's an app that LOCKS your phone until you PRAY???"
+agent-media crazy-look --character char_8x2vqp --caption "how do you pray so consistently???" --look bug-eyed-shock --duration 10
+agent-media crazy-look --description "21yo woman, long brown wavy hair, argyle cardigan" --caption "it took me 21 years to realize this" --look "custom:slowly raises one eyebrow, then breaks into a huge grin"
+```
+
 ## Shared
+
+### Connecting an agent (no API key)
+
+Driving agent-media from Claude, Claude Code, Cursor or Codex? Skip the API key entirely — add the hosted MCP connector, one URL with browser sign-in:
+
+```
+https://api.agent-media.ai/mcp
+```
+
+Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: https://agent-media.ai/connect
+
+Over MCP, always call `get_run_status` with the id you were given after submitting — generation is async and the submit response only confirms the job started.
 
 ### Authentication
 
-Every v2 request sends `Authorization: Bearer ma_xxx`. Get a key via `agent-media login` (CLI) or the dashboard.
+Every v2 REST request sends `Authorization: Bearer ma_xxx`. Get a key via `agent-media login` (CLI) or the dashboard. (Not needed for the MCP connector above.)
 
 ### Polling
 

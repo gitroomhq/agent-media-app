@@ -3,13 +3,14 @@
 /**
  * EvoLink adapter (default video provider).
  *
- * Runs Seedance 2.0 reference-to-video at 720p. Model is overridable with
- * EVOLINK_SEEDANCE_MODEL for pinning or experimentation.
+ * Runs Seedance 2.5 reference-to-video at 720p. Model is overridable with
+ * EVOLINK_SEEDANCE_MODEL for pinning or experimentation (or SEEDANCE_V2_MODEL
+ * for the v2 pipelines), so a bad release can be rolled back without a deploy.
  */
 
 import { runGeneration } from '../evolink-client.js';
 
-const DEFAULT_MODEL = 'seedance-2.0-reference-to-video';
+const DEFAULT_MODEL = 'seedance-2.5-reference-to-video';
 
 export const evolinkProvider = {
   name: 'evolink',
