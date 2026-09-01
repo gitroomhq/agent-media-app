@@ -12,9 +12,11 @@ import type { Command } from 'commander';
 import { registerSelfieCommand } from './selfie.js';
 import { registerCharacterCommand } from './character.js';
 import { registerSubtitleCommand } from './subtitle.js';
+import { registerCrazyLookCommand } from './crazy-look.js';
 
 export function registerV2Commands(program: Command): void {
   registerSelfieCommand(program);
   registerCharacterCommand(program);
   registerSubtitleCommand(program);
+  registerCrazyLookCommand(program);
 }
