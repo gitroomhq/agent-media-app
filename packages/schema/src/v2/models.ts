@@ -61,10 +61,14 @@ export const V2ModelCostSchema = z.object({
   note: z.string().min(1),
 });
 
-/** What the USER pays. Present only on live models. */
+/**
+ * What the USER pays. Present only on live models. perUnit may be
+ * fractional (per-character audio is 0.01); quoteGenerate() rounds the
+ * TOTAL up to whole credits, never the rate.
+ */
 export const V2ModelCreditsSchema = z.object({
   unit: z.enum(['second', 'image', 'clip', 'character']),
-  perUnit: z.number().int().nonnegative(),
+  perUnit: z.number().nonnegative(),
   /** Fixed prelude per job (portrait, sheet, storage). */
   base: z.number().int().nonnegative().optional(),
 });
@@ -175,14 +179,16 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     modes: ['text-to-image', 'image-edit'],
     features: ['portrait', 'character-sheet', 'wireframe', 'prompt-adherence'],
     limits: { resolutions: ['1024', '1536'], refs: 'image' },
-    cost: { unit: 'image', usd: 0.015, note: 'EvoLink list price per 1K image; OpenAI direct is comparable. Used for portrait, sheet and wireframe stages.' },
-    credits: { unit: 'image', perUnit: 0, base: 0 },
+    cost: { unit: 'image', usd: 0.06, note: 'OpenAI direct, quality "medium", 1024x1536 — the published gpt-image-1 rate ($0.063); gpt-image-2 assumed equal until an invoice line is checked. EvoLink lists $0.015 for its 1K tier.' },
+    // Standalone price for generate_image. Inside the fixed video skills the
+    // portrait/sheet stages are still included in the video credits.
+    credits: { unit: 'image', perUnit: 20 },
     quality: 'good',
     speed: 'fast',
     bestFor: ['portraits', 'character sheets', 'framing wireframes', 'product placement frames'],
     avoidFor: ['photoreal 4K hero stills'],
     docs: 'docs/models/gpt-image-2.md',
-    verified: { date: '2026-09-05', note: 'every video pipeline stage A-C; portrait + sheet produced on run 2749ee84' },
+    verified: { date: '2026-09-05', note: 'every video pipeline stage A-C; portrait + sheet produced on run 2749ee84; standalone via generate_image' },
   },
   'elevenlabs-tts': {
     id: 'elevenlabs-tts',
@@ -195,13 +201,15 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     features: ['voice-clone', 'multilingual', 'dubbing'],
     limits: {},
     cost: { unit: 'character', usd: 0.00003, note: 'ElevenLabs Creator tier, ~$0.30 per 10k characters. Used by tts.js / dubbing.js in media-worker-v2.' },
-    credits: { unit: 'character', perUnit: 0, base: 0 },
+    // Standalone price for generate_audio: 1 credit per 100 characters,
+    // total rounded up (min 1). Inside the fixed skills it stays included.
+    credits: { unit: 'character', perUnit: 0.01 },
     quality: 'good',
     speed: 'fast',
     bestFor: ['voiceover on b-roll', 'dubbing', 'when Seedance native audio is not used'],
     avoidFor: ['lip-synced talking head: Seedance native audio is the default there'],
     docs: 'docs/models/elevenlabs-tts.md',
-    verified: { date: '2026-09-05', note: 'wired in media-worker-v2 (tts.js, dubbing.js); billed inside the generator credits, not separately' },
+    verified: { date: '2026-09-05', note: 'wired in media-worker-v2 (tts.js, dubbing.js); standalone via generate_audio' },
   },
 
   // ── candidates: in the plan, not selectable ────────────────────────────

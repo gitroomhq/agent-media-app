@@ -15,3 +15,4 @@ export * from './subtitle.js';
 export * from './crazy-look.js';
 export * from './generators.js';
 export * from './models.js';
+export * from './generate.js';
