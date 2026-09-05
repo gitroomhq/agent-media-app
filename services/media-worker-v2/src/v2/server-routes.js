@@ -11,6 +11,8 @@
  * Routes:
  *   POST /v2/selfie       — enqueue + run a Selfie generation
  *   POST /v2/crazy-look   — enqueue + run a Crazy Look generation
+ *   POST /v2/generate/image | /video | /audio — the loose surface:
+ *                           one provider call from the agent's own prompt
  *
  * Each route returns 202 immediately with { accepted, job_id } and
  * fires a callback to the caller-supplied callback_url on completion
@@ -22,6 +24,7 @@ import { processSelfie } from './selfie-adapter.js';
 import { processCharacterCreate } from './character-create-pipeline.js';
 import { processSubtitle } from './subtitle-pipeline.js';
 import { processCrazyLook } from './crazy-look-pipeline.js';
+import { processGenerateImage, processGenerateVideo, processGenerateAudio } from './generate-pipeline.js';
 import { scheduleOrphanReclaim } from './orphan-reclaimer.js';
 import { classifyError } from '../error-classifier.js';
 
@@ -134,6 +137,9 @@ function runJob(key, jobEnvelope) {
   else if (pipeline === 'character-create') runner = processCharacterCreate;
   else if (pipeline === 'subtitle') runner = processSubtitle;
   else if (pipeline === 'crazy-look') runner = processCrazyLook;
+  else if (pipeline === 'generate-image') runner = processGenerateImage;
+  else if (pipeline === 'generate-video') runner = processGenerateVideo;
+  else if (pipeline === 'generate-audio') runner = processGenerateAudio;
   else runner = null;
   if (!runner) {
     console.error(`[v2:${pipeline}:${job_id}] unknown pipeline`);
@@ -201,6 +207,16 @@ function runJob(key, jobEnvelope) {
       } else if (pipeline === 'subtitle') {
         // Subtitle returns just the rehosted mp4 url.
         payload = { ...base, output_url: result.videoUrl };
+      } else if (pipeline.startsWith('generate-')) {
+        // Loose surface: one output_url (the first image for n>1, the
+        // mp4, or the mp3) plus every image url for the agent to pick from.
+        payload = {
+          ...base,
+          output_url: result.outputUrl,
+          ...(result.imageUrls ? { image_urls: result.imageUrls } : {}),
+          ...(result.providerModel ? { provider_model: result.providerModel } : {}),
+          ...(result.seed !== undefined ? { seed: result.seed } : {}),
+        };
       } else {
         // Selfie (and future video pipelines): video + debug assets.
         payload = {
@@ -495,4 +511,50 @@ export function registerV2Routes(app, verifySecret) {
 
   // Re-hydrate the in-memory queue with jobs a deploy swap orphaned.
   scheduleOrphanReclaim(enqueueV2Job);
+
+  // ── POST /v2/generate/:kind — the loose surface ───────────────────
+  // api-v2 already validated the body against GenerateImage/Video/Audio
+  // schemas and the live catalog; the worker checks only what it needs
+  // to run and queues the envelope like every other v2 job.
+  const GENERATE_KINDS = { image: 'generate-image', video: 'generate-video', audio: 'generate-audio' };
+  app.post('/v2/generate/:kind', verifySecret, async (req, res) => {
+    const pipeline = GENERATE_KINDS[req.params.kind];
+    if (!pipeline) {
+      return res.status(404).json({ error: `unknown generate kind "${req.params.kind}" (image | video | audio)` });
+    }
+    const body = req.body ?? {};
+    const { job_id, user_id, callback_url } = body;
+    if (!job_id || !user_id) {
+      return res.status(400).json({ error: 'missing required field: job_id / user_id' });
+    }
+    if (pipeline === 'generate-audio' ? !body.text : !body.prompt) {
+      return res.status(400).json({ error: pipeline === 'generate-audio' ? 'text is required' : 'prompt is required' });
+    }
+    const envelope = {
+      pipeline,
+      params: {
+        job_id,
+        user_id,
+        callback_url,
+        model: body.model,
+        prompt: body.prompt,
+        text: body.text,
+        refs: Array.isArray(body.refs) ? body.refs : [],
+        size: body.size,
+        n: body.n,
+        seconds: body.seconds,
+        aspect: body.aspect,
+        audio: body.audio,
+        seed: body.seed,
+        voice: body.voice,
+        tone: body.tone,
+      },
+    };
+    const enq = enqueueV2Job(envelope);
+    res.status(202).json({
+      accepted: true,
+      job_id,
+      ...(enq.queued ? { queued: true, position: enq.position } : {}),
+    });
+  });
 }

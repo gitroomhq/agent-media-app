@@ -28,6 +28,9 @@ export const OPERATION_TO_PIPELINE = {
   crazy_look: 'crazy-look',
   character_create: 'character-create',
   subtitle: 'subtitle',
+  generate_image: 'generate-image',
+  generate_video: 'generate-video',
+  generate_audio: 'generate-audio',
 };
 
 const MAX_AGE_MS = 2 * 60 * 60 * 1000; // don't resurrect anything older than 2h

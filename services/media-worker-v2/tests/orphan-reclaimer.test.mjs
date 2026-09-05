@@ -24,6 +24,9 @@ test('operation map covers every v2 pipeline the routes register', () => {
     [
       ['character_create', 'character-create'],
       ['crazy_look', 'crazy-look'],
+      ['generate_audio', 'generate-audio'],
+      ['generate_image', 'generate-image'],
+      ['generate_video', 'generate-video'],
       ['selfie', 'selfie'],
       ['subtitle', 'subtitle'],
     ],
