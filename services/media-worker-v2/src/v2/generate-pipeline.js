@@ -23,12 +23,15 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { generateImageFromText, generateImageEdit } from '../openai-image-client.js';
 import { runGeneration } from '../evolink-client.js';
 import { r2Upload } from '../r2.js';
 import { generateElevenLabsTTS } from '../elevenlabs-tts.js';
 import { fetchToBuffer } from './http.js';
 
+const execFileAsync = promisify(execFile);
 const R2_BUCKET = 'generation-outputs';
 const VIDEO_TIMEOUT_MS = 30 * 60_000;
 const DEFAULT_QUALITY = '720p';
@@ -170,10 +173,15 @@ export async function processGenerateAudio(params) {
   const isCloned = !Object.values(VOICES).includes(voiceId);
   const workDir = await mkdtemp(join(tmpdir(), `gen-audio-${job_id}-`));
   try {
-    const out = join(workDir, 'speech.mp3');
+    // generateElevenLabsTTS writes a WAV (it derives its temp mp3 name from a
+    // .wav outputPath — anything else makes ffmpeg read and write the same
+    // file; that was the first live failure, job f927dcad). Deliver mp3.
+    const wav = join(workDir, 'speech.wav');
+    const mp3 = join(workDir, 'speech.mp3');
     onProgress?.('rendering', { voice: voiceId });
-    await generateElevenLabsTTS(text, voiceId, out, {}, tone ?? null, isCloned);
-    const buf = await readFile(out);
+    await generateElevenLabsTTS(text, voiceId, wav, {}, tone ?? null, isCloned);
+    await execFileAsync('ffmpeg', ['-y', '-i', wav, '-c:a', 'libmp3lame', '-b:a', '128k', mp3]);
+    const buf = await readFile(mp3);
     const key = `${user_id}/${job_id}/audio.mp3`;
     const audioUrl = await r2Upload(R2_BUCKET, key, buf, 'audio/mpeg');
     console.log(`[v2:generate-audio:${job_id}] → ${audioUrl}`);
