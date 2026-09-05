@@ -380,7 +380,7 @@ export function buildMcpServer(apiKey: string): Server {
           ? (m.credits.perUnit === 0 ? 'included in the generator credits' : `${m.credits.perUnit} credits/${m.credits.unit}`)
           : 'no price (candidate, not selectable)';
         const sel = m.select_with
-          ? `select: ${m.select_with.field}="${m.select_with.value}" on ${m.select_with.on.join(', ')}; NOT on ${m.select_with.not_on.join(', ')}`
+          ? `select: ${m.select_with.field}="${m.select_with.value}" on ${m.select_with.on.join(', ')}${m.select_with.not_on?.length ? `; NOT on ${m.select_with.not_on.join(', ')}` : ''}`
           : 'select: not selectable (used inside the pipelines)';
         const lim = [m.limits?.maxSeconds ? `max ${m.limits.maxSeconds}s` : null, m.limits?.refs ? `refs: ${m.limits.refs}` : null].filter(Boolean).join(', ');
         const r = m.recent;
