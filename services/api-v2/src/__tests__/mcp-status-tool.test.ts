@@ -137,9 +137,12 @@ describe('hosted MCP: model catalog', () => {
 
   it('never hands an agent a price for a candidate, and never a select handle', () => {
     expect(modelsRoute).toContain('credits: m.credits ?? null');
-    expect(modelsRoute).toMatch(/select_with:\s*m\.kind === 'video' && m\.status === 'live'/);
-    // And it must say where the engine is NOT selectable, or an agent passes a
+    expect(modelsRoute).toMatch(/select_with:\s*m\.status === 'live'/);
+    // Every live model is selectable as `model` on generate_<kind>; and it
+    // must say where a video engine is NOT selectable, or an agent passes a
     // field make_ugc silently ignores.
-    expect(modelsRoute).toMatch(/not_on: \['make_ugc/);
+    expect(modelsRoute).toContain("field: 'model'");
+    expect(modelsRoute).toContain('`generate_${m.kind} (MCP)`');
+    expect(modelsRoute).toMatch(/not_on: m\.kind === 'video' \? \['make_ugc/);
   });
 });

@@ -43,7 +43,15 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { V2_GENERATORS, type V2GeneratorRecord } from '@agentmedia/schema/v2';
+import {
+  V2_GENERATORS,
+  GenerateAudioSchema,
+  GenerateImageSchema,
+  GenerateVideoSchema,
+  V2_DEFAULT_MODEL,
+  liveModelIds,
+  type V2GeneratorRecord,
+} from '@agentmedia/schema/v2';
 import { SKILLS } from '../skills/registry.js';
 import { isPrimitivesRouteEnabled } from './v1/primitives.js';
 
@@ -72,6 +80,11 @@ function readOnlyAnnotations(title: string) {
 }
 function generationAnnotations(title: string) {
   return { title, readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+}
+
+/** AGENT_SURFACE=fixed restores the recipe tools; anything else is the loose surface. */
+export function isLooseSurface(): boolean {
+  return (process.env.AGENT_SURFACE ?? 'loose').trim().toLowerCase() !== 'fixed';
 }
 
 /** "make_ugc" -> "Make UGC" style display title. */
@@ -156,7 +169,7 @@ function takesAnImage(schema: unknown): boolean {
   return Object.keys(props).some((k) => /image|photo|portrait|character/i.test(k));
 }
 
-function buildMcpServer(apiKey: string): Server {
+export function buildMcpServer(apiKey: string): Server {
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },
     { capabilities: { tools: {} } },
@@ -168,9 +181,18 @@ function buildMcpServer(apiKey: string): Server {
   // make_ugc; create_subtitle is replaced by the agent-facing make_subtitles.
   const makeUgcOn = process.env.MAKE_UGC_ENABLED?.trim() === 'true';
 
+  // The agent surface. 'loose' (default): the agent says what it wants —
+  // generate_image / generate_video / generate_audio + quote, with the
+  // model catalog as the recommendation layer — and NO fixed recipe tools
+  // are listed. 'fixed': the previous list (make_ugc, create_character…)
+  // for a rollback without a deploy. The fixed skills stay on REST for the
+  // dashboard either way.
+  const surface = isLooseSurface() ? 'loose' : 'fixed';
+
   // Pre-compute the tool list once per server instance.
   const tools = Object.values(V2_GENERATORS)
     .filter((def): def is V2GeneratorRecord => !!def.mcp)
+    .filter(() => surface === 'fixed')
     .filter((def) => !makeUgcOn || def.mcp!.toolName === 'create_character')
     .map((def) => {
       const schema = zodToJsonSchema(def.inputSchema as any, {
@@ -208,7 +230,7 @@ function buildMcpServer(apiKey: string): Server {
   // When MAKE_UGC_ENABLED is on, make_ugc is THE one curated agent surface
   // (agentFacing) and the other skills drop off tools/list; until then keep the
   // existing skills and hide the unfinished make_ugc so the surface is unchanged.
-  const vnextSkillTools: VnextSkillTool[] = isPrimitivesRouteEnabled()
+  const vnextSkillTools: VnextSkillTool[] = surface === 'fixed' && isPrimitivesRouteEnabled()
     ? Object.values(SKILLS)
         .filter((s) => (makeUgcOn ? s.agentFacing === true : s.slug !== 'make_ugc'))
         .map((s) => {
@@ -240,7 +262,7 @@ function buildMcpServer(apiKey: string): Server {
   const listCharactersTool = {
     name: 'list_characters',
     description:
-      "List the authenticated user's saved, reusable characters. Each has a character_id (char_…) and a character_sheet_url — pass EITHER back to make_ugc's `character` prop to reuse that exact identity (skips re-generating the face). Plus a portrait/thumbnail URL for display.",
+      "List the authenticated user's saved, reusable characters. Each has a character_id (char_…) and a character_sheet_url — pass the character_sheet_url (and/or portrait URL) in `refs` of generate_video / generate_image to reuse that exact identity, or EITHER to make_ugc's `character` prop on the fixed surface. Plus a portrait/thumbnail URL for display.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -323,7 +345,7 @@ function buildMcpServer(apiKey: string): Server {
   const listModelsTool = {
     name: 'list_models',
     description:
-      'List the generation models agent-media can use, with what each costs the user (credits per second), its limits, what it is good and bad at, and how to select it. Read this BEFORE choosing an engine for a video: the default seedance-2.0 is right for most jobs; seedance-2.5 is about 3x the credits and only worth it for a hero clip. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.',
+      'List the generation models agent-media can use, with what each costs the user (credits per second), its limits, what it is good and bad at, and how to select it. Read this BEFORE choosing a model for generate_video / generate_image / generate_audio: the default seedance-2.0 is right for most jobs; seedance-2.5 is about 3x the credits and only worth it for a hero clip. Pass the id as `model`. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -334,8 +356,64 @@ function buildMcpServer(apiKey: string): Server {
     annotations: readOnlyAnnotations('List Models'),
   };
 
+  /**
+   * The loose surface. Three primitives that say what they are: the agent
+   * writes the prompt, picks the model (or takes the catalog default), and
+   * passes reference images by URL. No recipe, no persona brief, no
+   * rubric — the fixed skills exist on REST for the dashboard; here the
+   * agent is the director. `quote` prices a call without running it.
+   */
+  function looseSchema(schema: unknown, name: string) {
+    const js = zodToJsonSchema(schema as any, { name, $refStrategy: 'none' });
+    return (js as any).definitions?.[name] ?? js;
+  }
+  const liveVideo = liveModelIds('video').join(', ');
+  const liveImage = liveModelIds('image').join(', ');
+  const liveAudio = liveModelIds('audio').join(', ');
+
+  const generateVideoTool = {
+    name: 'generate_video',
+    description:
+      `Render a video clip from YOUR prompt on the model YOU choose. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Pass reference images (a portrait, a character sheet from list_characters, a product photo) as https URLs in \`refs\` and the model keeps that identity/look. Models: ${liveVideo} (default ${V2_DEFAULT_MODEL.video}; call list_models for what each is good for and the price per second — seedance-2.5 is ~3x the credits and only worth it for a hero clip). Spends credits (seconds x the model's per-second rate; call \`quote\` first if the user cares about cost). Returns a job id — then call get_run_status until it is done and hand the user the URL.` +
+      IMAGE_URL_HINT,
+    inputSchema: looseSchema(GenerateVideoSchema, 'generate_video_input'),
+    annotations: generationAnnotations('Generate Video'),
+  };
+  const generateImageTool = {
+    name: 'generate_image',
+    description:
+      `Render one image from YOUR prompt. Without refs it paints from the prompt; with refs (https URLs) it edits/composes from them — a portrait to re-light, a product to place in a hand, a character sheet to pose. Use it to build the reference a video needs (portrait first, then generate_video with that URL in refs). Models: ${liveImage} (default ${V2_DEFAULT_MODEL.image}). Spends credits per image (see list_models). Returns a job id — poll get_run_status for the image URL.` +
+      IMAGE_URL_HINT,
+    inputSchema: looseSchema(GenerateImageSchema, 'generate_image_input'),
+    annotations: generationAnnotations('Generate Image'),
+  };
+  const generateAudioTool = {
+    name: 'generate_audio',
+    description:
+      `Speak text in a named voice (jessica, sarah, liam, chris, lily, bill, matilda — or a raw ElevenLabs voice id). Emotion tags like [excited] or [whispers] are honoured. For a talking-head clip you usually do NOT need this: generate_video renders native speech when the words are in the prompt. Use it for voiceover over b-roll or a standalone audio file. Models: ${liveAudio}. Spends 1 credit per 100 characters. Returns a job id — poll get_run_status for the mp3 URL.`,
+    inputSchema: looseSchema(GenerateAudioSchema, 'generate_audio_input'),
+    annotations: generationAnnotations('Generate Audio'),
+  };
+  const quoteTool = {
+    name: 'quote',
+    description:
+      'Price a generate_image / generate_video / generate_audio call WITHOUT running it. Pass the same `input` you would pass to the tool. Returns credits (1 credit = $0.01), the model that would run, and the breakdown. Costs nothing. Use it before spending when the user asked about cost, when choosing between models, or before a clip longer than a few seconds.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['image', 'video', 'audio'] },
+        input: { type: 'object', description: 'The exact arguments you would pass to generate_<kind>.' },
+      },
+      required: ['kind', 'input'],
+      additionalProperties: false,
+    },
+    annotations: readOnlyAnnotations('Quote'),
+  };
+  const looseTools = surface === 'loose' ? [generateVideoTool, generateImageTool, generateAudioTool, quoteTool] : [];
+
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
+      ...looseTools,
       ...tools.map((t) => t.listEntry),
       ...vnextSkillTools.map((t) => t.listEntry),
       listCharactersTool,
@@ -347,6 +425,56 @@ function buildMcpServer(apiKey: string): Server {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    // The loose surface: forward to /v2/generate/:kind and /v2/quote/:kind.
+    // Validation (including the live-catalog model check) happens there,
+    // so an agent naming a candidate model gets the live list back in the
+    // error text and can retry in one turn.
+    const looseKind =
+      name === 'generate_video' ? 'video' : name === 'generate_image' ? 'image' : name === 'generate_audio' ? 'audio' : null;
+    if (surface === 'loose' && (looseKind || name === 'quote')) {
+      const isQuote = name === 'quote';
+      const q = (args ?? {}) as { kind?: string; input?: unknown };
+      const kind = isQuote ? String(q.kind ?? '') : looseKind!;
+      if (!['image', 'video', 'audio'].includes(kind)) {
+        return { content: [{ type: 'text', text: 'kind must be image, video or audio.' }], isError: true };
+      }
+      const body = isQuote ? (q.input ?? {}) : (args ?? {});
+      let resp: FetchResponse;
+      try {
+        resp = await apiFetch(`${PUBLIC_API_BASE}/v2/${isQuote ? 'quote' : 'generate'}/${kind}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(body),
+          timeoutMs: 45_000,
+        });
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). ${isQuote ? 'Call quote again.' : 'The job may or may not have started — call get_run_status if you were given an id, otherwise submit again.'}` }],
+          isError: true,
+        };
+      }
+      const text = await resp.text();
+      let data: any;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!resp.ok) {
+        return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
+      }
+      if (isQuote) {
+        return {
+          content: [{ type: 'text', text: `${data?.credits} credits ($${data?.usd}) — ${data?.breakdown}. Model: ${data?.model}. Nothing was rendered.` }],
+        };
+      }
+      return {
+        content: [{
+          type: 'text',
+          text: [
+            `Submitted ${name}: job_id ${data?.job_id} on ${data?.model} — ${data?.credits_deducted} credits deducted (${data?.breakdown}).`,
+            `Now call get_run_status with run_id "${data?.job_id}" (wait:true) until it is completed, then give the user the URL. ${kind === 'video' ? 'A clip takes a few minutes.' : kind === 'image' ? 'An image takes under a minute.' : 'Audio takes seconds.'}`,
+          ].join('\n'),
+        }],
+      };
+    }
 
     // Read-only: the model catalog (GET /v1/models).
     if (name === 'list_models') {
@@ -399,7 +527,7 @@ function buildMcpServer(apiKey: string): Server {
         content: [{
           type: 'text',
           text: [
-            `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Over MCP every video renders on the default engine today; seedance-2.5 is selectable only on the CLI (--engine) and REST (/v2/selfie, /v2/crazy-look) until P2.`,
+            `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Select a live model by passing its id as \`model\` to generate_video / generate_image / generate_audio (omit it for the default). Candidates cannot be selected.`,
             ...lines,
           ].join('\n'),
         }],
@@ -565,7 +693,7 @@ function buildMcpServer(apiKey: string): Server {
       const done = TERMINAL.has(status.toLowerCase());
       const lines = [
         `Run ${runId} — status: ${status}`,
-        url ? `Video: ${url}` : null,
+        url ? `${/\.(png|jpe?g|webp)(\?|$)/i.test(url) ? 'Image' : /\.(mp3|wav|m4a)(\?|$)/i.test(url) ? 'Audio' : 'Video'}: ${url}` : null,
         otherArtifacts.length ? `Other artifacts:\n${otherArtifacts.join('\n')}` : null,
         typeof b.credits === 'number' ? `Credits: ${b.credits}` : null,
         b.error_message ? `Error: ${b.error_message}` : null,
@@ -604,7 +732,7 @@ function buildMcpServer(apiKey: string): Server {
       const body = chars.length
         ? chars.map((c) => `- ${c.name} — character_id: ${c.character_id ?? '(none)'}  |  sheet: ${c.character_sheet_url}`).join('\n')
         : 'No saved characters yet.';
-      return { content: [{ type: 'text', text: `${chars.length} saved character(s). Reuse one by passing its character_id (or sheet URL) as \`character\` to make_ugc:\n${body}` }] };
+      return { content: [{ type: 'text', text: `${chars.length} saved character(s). Reuse one by putting its sheet URL in \`refs\` of generate_video (loose surface) or passing character_id as \`character\` to make_ugc (fixed surface):\n${body}` }] };
     }
 
     // vNext skill route — forwards to /v1/skills/:slug/run.

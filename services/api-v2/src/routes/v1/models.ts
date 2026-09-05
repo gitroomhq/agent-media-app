@@ -37,17 +37,25 @@ function publicView(m: V2ModelRecord) {
     avoid_for: m.avoidFor,
     docs_url: `${PUBLIC_DOCS_BASE}/${m.docs}`,
     verified: m.verified ?? null,
-    // How to select it today. Video engines are selectable on the v2
-    // generators (selfie, crazy_look) via `engine`, on the CLI via --engine,
-    // and on REST /v2/*. make_ugc does NOT take an engine yet (P2). Say so,
-    // or an agent will pass a field that is silently ignored.
+    // How to select it. Every live model is selectable by id as `model` on
+    // the loose surface (generate_<kind> over MCP, POST /v2/generate/<kind>).
+    // Live VIDEO models are additionally the `engine` of the fixed video
+    // skills (selfie, crazy_look) on REST and the CLI. make_ugc takes no
+    // engine. Say exactly where, or an agent passes a field that is
+    // silently ignored.
     select_with:
-      m.kind === 'video' && m.status === 'live'
+      m.status === 'live'
         ? {
-            field: 'engine',
+            field: 'model',
             value: m.id,
-            on: ['agent-media selfie --engine', 'agent-media crazy-look --engine', 'POST /v2/selfie', 'POST /v2/crazy-look'],
-            not_on: ['make_ugc, and therefore the hosted MCP connector, until P2 (always seedance-2.0)'],
+            on: [
+              `generate_${m.kind} (MCP)`,
+              `POST /v2/generate/${m.kind}`,
+              ...(m.kind === 'video'
+                ? ['as `engine` on: agent-media selfie --engine', 'agent-media crazy-look --engine', 'POST /v2/selfie', 'POST /v2/crazy-look']
+                : []),
+            ],
+            not_on: m.kind === 'video' ? ['make_ugc (always seedance-2.0)'] : [],
           }
         : null,
   };

@@ -84,13 +84,12 @@ export function resolveVoice(voice) {
  * @param {string} [params.model]        catalog id (gpt-image-2)
  * @param {string[]} [params.refs]       https reference images
  * @param {string} [params.size]         '1024x1536' | '1024x1024' | '1536x1024'
- * @param {number} [params.n]            images to render (each billed)
  * @param {(stage: string, meta?: object) => void} [params.onProgress]
- * @returns {Promise<{ imageUrls: string[], outputUrl: string }>}
+ * @returns {Promise<{ imageUrl: string, outputUrl: string }>}
  */
 export async function processGenerateImage(params) {
   const { job_id, user_id } = requireJob(params, 'generate_image');
-  const { prompt, refs = [], size = '1024x1536', n = 1, onProgress } = params;
+  const { prompt, refs = [], size = '1024x1536', onProgress } = params;
   if (!prompt || !String(prompt).trim()) throw new Error('generate_image: prompt is required');
 
   const refBuffers = [];
@@ -99,17 +98,14 @@ export async function processGenerateImage(params) {
     for (const url of refs) refBuffers.push(await fetchToBuffer(url));
   }
 
-  const urls = [];
-  for (let i = 0; i < n; i += 1) {
-    onProgress?.('rendering', { image: i + 1, of: n });
-    const buf = refBuffers.length
-      ? await generateImageEdit({ prompt, imageBuffers: refBuffers, size, quality: 'medium' })
-      : await generateImageFromText({ prompt, size, quality: 'medium' });
-    const key = `${user_id}/${job_id}/image-${i + 1}.png`;
-    urls.push(await r2Upload(R2_BUCKET, key, buf, 'image/png'));
-  }
-  console.log(`[v2:generate-image:${job_id}] ${urls.length} image(s) → ${urls[0]}`);
-  return { imageUrls: urls, outputUrl: urls[0] };
+  onProgress?.('rendering', { model: 'gpt-image-2', size, refs: refBuffers.length });
+  const buf = refBuffers.length
+    ? await generateImageEdit({ prompt, imageBuffers: refBuffers, size, quality: 'medium' })
+    : await generateImageFromText({ prompt, size, quality: 'medium' });
+  const key = `${user_id}/${job_id}/image.png`;
+  const imageUrl = await r2Upload(R2_BUCKET, key, buf, 'image/png');
+  console.log(`[v2:generate-image:${job_id}] → ${imageUrl}`);
+  return { imageUrl, outputUrl: imageUrl };
 }
 
 /**

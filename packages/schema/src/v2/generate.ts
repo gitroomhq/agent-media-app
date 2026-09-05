@@ -80,8 +80,6 @@ export const GenerateImageSchema = z
     refs: z.array(HttpsUrl).max(4).optional(),
     /** Output size. 1024x1536 is portrait (the 9:16-ish default for UGC); 1536x1024 is landscape. */
     size: z.enum(V2_IMAGE_SIZES).default('1024x1536'),
-    /** Count: how many independent images to render from the same prompt (each is billed). */
-    n: z.number().int().min(1).max(4).default(1),
   })
   .strict();
 export type GenerateImageInput = z.infer<typeof GenerateImageSchema>;
@@ -192,9 +190,10 @@ export function quoteGenerate(kind: GenerateKind, input: GenerateImageInput | Ge
     return { kind, model: m.id, credits, breakdown: `${seconds}s on ${m.id} at ${perUnit} credits/${unit}${base ? ` + ${base} base` : ''}` };
   }
   if (kind === 'image') {
-    const n = (input as GenerateImageInput).n ?? 1;
-    const credits = Math.ceil(base + perUnit * n);
-    return { kind, model: m.id, credits, breakdown: `${n} image(s) on ${m.id} at ${perUnit} credits/${unit}` };
+    // One image per call. Agents wanting variants call again (each call is
+    // its own job with its own URL; the job row stores exactly one output).
+    const credits = Math.ceil(base + perUnit);
+    return { kind, model: m.id, credits, breakdown: `1 image on ${m.id} at ${perUnit} credits/${unit}` };
   }
   const chars = (input as GenerateAudioInput).text.length;
   const credits = Math.max(1, Math.ceil(base + perUnit * chars));

@@ -38,6 +38,7 @@ import { schedulePreviewRoute } from './routes/schedule-preview.js';
 import { internalGptImageRoute } from './routes/internal/gpt-image.js';
 import { selfieRoute } from './routes/v2/selfie.js';
 import { crazyLookRoute } from './routes/v2/crazy-look.js';
+import { generateRoute as looseGenerateRoute, quoteRoute as looseQuoteRoute } from './routes/v2/generate.js';
 import { characterCreateRoute, listCharactersRoute, updateCharacterRoute } from './routes/v2/characters.js';
 import { listMyCharactersRoute } from './routes/v1/characters.js';
 import { uploadImageRoute } from './routes/v1/uploads.js';
@@ -785,6 +786,11 @@ app.post('/v1/generate/:generatorId', generateLimiter, authMiddleware, videoConc
 // ── v2 routes (Selfie, Character) — isolated, additive ────────────────────
 app.post('/v2/selfie',     generateLimiter, authMiddleware, videoConcurrencyGate, selfieRoute);
 app.post('/v2/crazy-look', generateLimiter, authMiddleware, videoConcurrencyGate, crazyLookRoute);
+// The loose surface: generate_image / generate_video / generate_audio + quote.
+// Same limiter and concurrency gate as the fixed video skills (the gate
+// counts in-flight jobs, whatever their kind).
+app.post('/v2/generate/:kind', generateLimiter, authMiddleware, videoConcurrencyGate, looseGenerateRoute);
+app.post('/v2/quote/:kind',    readLimiter,     authMiddleware, looseQuoteRoute);
 app.post('/v2/characters', generateLimiter, authMiddleware, videoConcurrencyGate, characterCreateRoute);
 app.get('/v2/characters',  readLimiter,     authMiddleware, listCharactersRoute);
 app.patch('/v2/characters/:characterId', generateLimiter, authMiddleware, updateCharacterRoute);

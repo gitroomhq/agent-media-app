@@ -208,12 +208,10 @@ function runJob(key, jobEnvelope) {
         // Subtitle returns just the rehosted mp4 url.
         payload = { ...base, output_url: result.videoUrl };
       } else if (pipeline.startsWith('generate-')) {
-        // Loose surface: one output_url (the first image for n>1, the
-        // mp4, or the mp3) plus every image url for the agent to pick from.
+        // Loose surface: one output_url (png, mp4 or mp3).
         payload = {
           ...base,
           output_url: result.outputUrl,
-          ...(result.imageUrls ? { image_urls: result.imageUrls } : {}),
           ...(result.providerModel ? { provider_model: result.providerModel } : {}),
           ...(result.seed !== undefined ? { seed: result.seed } : {}),
         };
@@ -541,7 +539,6 @@ export function registerV2Routes(app, verifySecret) {
         text: body.text,
         refs: Array.isArray(body.refs) ? body.refs : [],
         size: body.size,
-        n: body.n,
         seconds: body.seconds,
         aspect: body.aspect,
         audio: body.audio,

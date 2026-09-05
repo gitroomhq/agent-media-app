@@ -74,9 +74,10 @@ describe('loose surface: credit maths', () => {
     expect(v20.breakdown).toContain('seedance-2.0');
   });
 
-  it('image: per image, n images billed', () => {
-    const q = quoteGenerate('image', GenerateImageSchema.parse({ prompt: 'portrait', n: 3 }));
-    expect(q.credits).toBe(3 * V2_MODELS['gpt-image-2'].credits!.perUnit);
+  it('image: one image per call at the catalog price', () => {
+    const q = quoteGenerate('image', GenerateImageSchema.parse({ prompt: 'portrait' }));
+    expect(q.credits).toBe(V2_MODELS['gpt-image-2'].credits!.perUnit);
+    expect(GenerateImageSchema.safeParse({ prompt: 'portrait', n: 3 }).success).toBe(false);
     expect(Number.isInteger(q.credits)).toBe(true);
   });
 
