@@ -1,6 +1,6 @@
 {
   "name": "@agentmedia/schema",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "Type-safe schema definitions for AI UGC video generation \u2014 enums, Zod validation, and generator registry. Single source of truth for the agent-media platform.",
   "type": "module",
   "license": "Apache-2.0",
