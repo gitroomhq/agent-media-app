@@ -15,7 +15,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 vi.mock('../server.js', () => ({ supabase: {} }));
 vi.mock('../routes/v1/primitives.js', () => ({ isPrimitivesRouteEnabled: () => true }));
 
-const LOOSE = ['generate_video', 'generate_image', 'generate_audio', 'quote'];
+const LOOSE = ['generate_video', 'generate_image', 'generate_audio', 'quote', 'rate_run'];
 const SHARED = ['list_characters', 'get_run_status', 'upload_image', 'list_models'];
 
 async function connect(surface: string | undefined) {
@@ -35,7 +35,7 @@ describe('loose surface: tools/list', () => {
   const origEnv = { ...process.env };
   afterEach(() => { process.env = { ...origEnv }; vi.restoreAllMocks(); });
 
-  it('is the default: only the three primitives + quote + the shared read tools', async () => {
+  it('is the default: the three primitives + quote + rate_run + the shared read tools', async () => {
     const { client } = await connect(undefined);
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual([...LOOSE, ...SHARED].sort());
@@ -61,6 +61,7 @@ describe('loose surface: tools/list', () => {
       expect(t.annotations?.title, n).toBeTruthy();
       expect(t.annotations?.readOnlyHint, n).toBe(n === 'quote');
     }
+    expect(tools.find((x) => x.name === 'rate_run')!.annotations?.idempotentHint).toBe(true);
   });
 
   it('input schemas come from the shared zod schemas: model is a free string, refs are urls, no engine field', async () => {

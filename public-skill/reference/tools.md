@@ -16,7 +16,7 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
     },
     "model": {
       "type": "string",
-      "description": "A live video model id from list_models. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits — hero clips only."
+      "description": "A live video model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits — hero clips only."
     },
     "refs": {
       "type": "array",
@@ -76,7 +76,7 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
     },
     "model": {
       "type": "string",
-      "description": "A live image model id from list_models. Omit for the default (gpt-image-2)."
+      "description": "A live image model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default (gpt-image-2)."
     },
     "refs": {
       "type": "array",
@@ -119,7 +119,7 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
     },
     "model": {
       "type": "string",
-      "description": "A live audio model id from list_models. Omit for the default (elevenlabs-tts)."
+      "description": "A live audio model id from list_models, or \"auto\". Omit for the default (elevenlabs-tts)."
     },
     "voice": {
       "type": "string",
@@ -241,6 +241,36 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
       "description": "An https URL to fetch and re-host instead. Use this OR image_base64, not both."
     }
   },
+  "additionalProperties": false
+}
+```
+
+## rate_run
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "The job id the generate tool returned."
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "1 = unusable, 3 = usable with edits, 5 = shipped as-is."
+    },
+    "note": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "One line on why (optional)."
+    }
+  },
+  "required": [
+    "run_id",
+    "score"
+  ],
   "additionalProperties": false
 }
 ```

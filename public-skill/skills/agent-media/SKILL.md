@@ -1,7 +1,7 @@
 ---
 name: 'Agent-Media'
 description: 'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at ~3x; gpt-image-2 for images; elevenlabs-tts for speech), pass reference images for identity, quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image. Use for UGC clips, product-in-hand, reaction clips, portraits, voiceover, and series with one face.'
-allowed-tools: ['mcp__agent-media__generate_video', 'mcp__agent-media__generate_image', 'mcp__agent-media__generate_audio', 'mcp__agent-media__quote', 'mcp__agent-media__list_models', 'mcp__agent-media__list_characters', 'mcp__agent-media__get_run_status', 'mcp__agent-media__upload_image']
+allowed-tools: ['mcp__agent-media__generate_video', 'mcp__agent-media__generate_image', 'mcp__agent-media__generate_audio', 'mcp__agent-media__quote', 'mcp__agent-media__list_models', 'mcp__agent-media__list_characters', 'mcp__agent-media__get_run_status', 'mcp__agent-media__upload_image', 'mcp__agent-media__rate_run']
 x-skill-slug: 'agent-media'
 x-skill-version: '2.0.0'
 x-surface: 'loose'
@@ -13,7 +13,7 @@ You are the director. agent-media gives you three primitives and a model catalog
 ## The loop
 
 1. **Decide the shot** in words: who, where, what happens, camera, and — if anyone speaks — the exact words in quotes.
-2. **Pick the model.** Omit `model` and you get the default (`seedance-2.0` for video, `gpt-image-2` for images, `elevenlabs-tts` for speech). Call `list_models` when the job is unusual — it says what each model is good at, bad at, and what it costs. Only live models are accepted; naming a planned one returns the live list.
+2. **Pick the model.** Omit `model` and you get the default (`seedance-2.0` for video, `gpt-image-2` for images, `elevenlabs-tts` for speech); pass `"auto"` to let recent results decide. Call `list_models` when the job is unusual — it says what each model is good at, bad at, what it costs, and how it has actually performed lately. Only live models are accepted; naming a planned one returns the live list.
 3. **Get identity right.** Same face across clips ⇒ pass the same reference URL in `refs` every time. Make the reference with `generate_image` (a clean portrait), take it from `list_characters` (a saved character sheet), or `upload_image` the user's photo.
 4. **Quote if the user cares about cost** (`quote` costs nothing), then call the tool.
 5. **Poll `get_run_status`** with the job id (`wait: true`) until it is `completed`, and hand the user the URL. Never report success before you hold the URL.
@@ -59,9 +59,13 @@ You are the director. agent-media gives you three primitives and a model catalog
 
 `{ "kind": "video", "input": { …the same arguments… } }` → credits, USD, model, breakdown. Nothing is rendered.
 
-### list_models · list_characters · get_run_status · upload_image
+### list_models · list_characters · get_run_status · upload_image · rate_run
 
-All free. `list_models` is the recommendation layer — read it before an unusual job. `list_characters` returns saved characters with `character_sheet_url` / portrait URLs for `refs`. `get_run_status` takes any job id this server gave you. `upload_image` turns bytes or a foreign URL into an https URL — never paste base64 into a tool call.
+All free. `list_models` is the recommendation layer — read it before an unusual job; every model carries `recent` (last 30 days: runs, fail rate, auto-judge score, user ratings, typical render time). `list_characters` returns saved characters with `character_sheet_url` / portrait URLs for `refs`. `get_run_status` takes any job id this server gave you. `upload_image` turns bytes or a foreign URL into an https URL — never paste base64 into a tool call. `rate_run` records 1–5 and a note on a finished run: do it whenever the user reacts to an output, or you can see a defect yourself.
+
+### model: "auto"
+
+Every loose-surface job is scored by an auto-judge (3 frames or the image against the realism rubric, prompt adherence, identity match when refs were given) and every `rate_run` is stored. `model: "auto"` reads those numbers with one printed policy: the default, unless it failed more than 25% of at least 10 recent runs and another live model is healthy, or a live model within 1.5x the default's price beats its score by 0.10 over at least 10 judged runs. `quote` and the submit response tell you which model auto chose and why. Use it when the user does not care which model; name the model when they do.
 
 ## Writing a prompt that comes out real
 
@@ -104,6 +108,7 @@ The things the old fixed skills did, as prompts you write yourself — see [refe
 - Every image URL must be https (upload_image first). Refs are kept private to the account.
 - Poll until `completed`; a clip takes a few minutes, an image under a minute, audio seconds. If a job fails, the credits are refunded automatically — say so and retry with a clearer prompt.
 - Do not claim a video exists until get_run_status returned its URL.
+- After the user reacts to an output, call rate_run with an honest score. It is how the catalog learns.
 
 ## Errors
 

@@ -121,7 +121,7 @@ export const uploadImageTool = {
 export const listModelsTool = {
   name: 'list_models',
   description:
-    'List the generation models agent-media can use, with what each costs the user (credits per second), its limits, what it is good and bad at, and how to select it. Read this BEFORE choosing a model for generate_video / generate_image / generate_audio: the default seedance-2.0 is right for most jobs; seedance-2.5 is about 3x the credits and only worth it for a hero clip. Pass the id as `model`. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.',
+    'List the generation models agent-media can use, with what each costs the user (credits per second), its limits, what it is good and bad at, and how to select it, plus `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model for generate_video / generate_image / generate_audio: the default seedance-2.0 is right for most jobs; seedance-2.5 is about 3x the credits and only worth it for a hero clip. Pass the id as `model`, or `model:"auto"` and the printed policy picks from the stats. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -150,7 +150,7 @@ const liveAudio = liveModelIds('audio').join(', ');
 export const generateVideoTool = {
   name: 'generate_video',
   description:
-    `Render a video clip from YOUR prompt on the model YOU choose. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Pass reference images (a portrait, a character sheet from list_characters, a product photo) as https URLs in \`refs\` and the model keeps that identity/look. Models: ${liveVideo} (default ${V2_DEFAULT_MODEL.video}; call list_models for what each is good for and the price per second — seedance-2.5 is ~3x the credits and only worth it for a hero clip). Spends credits (seconds x the model's per-second rate; call \`quote\` first if the user cares about cost). Returns a job id — then call get_run_status until it is done and hand the user the URL.` +
+    `Render a video clip from YOUR prompt on the model YOU choose. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Pass reference images (a portrait, a character sheet from list_characters, a product photo) as https URLs in \`refs\` and the model keeps that identity/look. Models: ${liveVideo} (default ${V2_DEFAULT_MODEL.video}; call list_models for what each is good for, the price per second and its recent results — seedance-2.5 is ~3x the credits and only worth it for a hero clip; or pass model:"auto" to let agent-media choose from the last 30 days of scored runs). Spends credits (seconds x the model's per-second rate; call \`quote\` first if the user cares about cost). Returns a job id — then call get_run_status until it is done and hand the user the URL.` +
     IMAGE_URL_HINT,
   inputSchema: looseSchema(GenerateVideoSchema, 'generate_video_input'),
   annotations: generationAnnotations('Generate Video'),
@@ -186,6 +186,28 @@ export const quoteTool = {
   annotations: readOnlyAnnotations('Quote'),
 };
 
+/**
+ * The human half of the quality loop. Every loose-surface job is scored by
+ * an auto-judge; this lets the agent (or the user through it) record what
+ * it actually thought, which feeds model_stats, list_models and model:"auto".
+ */
+export const rateRunTool = {
+  name: 'rate_run',
+  description:
+    'Rate a finished generate_video / generate_image / generate_audio run 1–5, with an optional note (what was wrong or right). Costs nothing. Do this when the user reacts to an output — "perfect", "her face changed", "too slow" — or when you can see a defect yourself. Ratings feed the per-model stats in list_models and the model:"auto" choice, so an honest 2 helps more than a polite 4.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      run_id: { type: 'string', description: 'The job id the generate tool returned.' },
+      score: { type: 'integer', minimum: 1, maximum: 5, description: '1 = unusable, 3 = usable with edits, 5 = shipped as-is.' },
+      note: { type: 'string', maxLength: 1000, description: 'One line on why (optional).' },
+    },
+    required: ['run_id', 'score'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Rate Run', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+};
+
 /** tools/list on the loose surface, in the order the connector lists them. */
 export const LOOSE_SURFACE_TOOLS = [
   generateVideoTool,
@@ -196,4 +218,5 @@ export const LOOSE_SURFACE_TOOLS = [
   getRunStatusTool,
   uploadImageTool,
   listModelsTool,
+  rateRunTool,
 ];

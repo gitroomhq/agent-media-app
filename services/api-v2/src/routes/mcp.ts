@@ -55,6 +55,7 @@ import {
   listCharactersTool,
   listModelsTool,
   quoteTool,
+  rateRunTool,
   readOnlyAnnotations,
   uploadImageTool,
 } from '../mcp/loose-tools.js';
@@ -249,6 +250,7 @@ export function buildMcpServer(apiKey: string): Server {
   const byName = new Map(tools.map((t) => [t.listEntry.name, t.def]));
 
   const looseTools = surface === 'loose' ? [generateVideoTool, generateImageTool, generateAudioTool, quoteTool] : [];
+  const rateTools = surface === 'loose' ? [rateRunTool] : [];
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
@@ -259,11 +261,35 @@ export function buildMcpServer(apiKey: string): Server {
       getRunStatusTool,
       uploadImageTool,
       listModelsTool,
+      ...rateTools,
     ],
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    // The human half of the quality loop: POST /v1/runs/:id/rate.
+    if (surface === 'loose' && name === 'rate_run') {
+      const a = (args ?? {}) as { run_id?: string; score?: number; note?: string };
+      const runId = String(a.run_id ?? '').trim();
+      if (!runId) return { content: [{ type: 'text', text: 'run_id is required.' }], isError: true };
+      let resp: FetchResponse;
+      try {
+        resp = await apiFetch(`${PUBLIC_API_BASE}/v1/runs/${encodeURIComponent(runId)}/rate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ score: a.score, ...(a.note ? { note: a.note } : {}) }),
+          timeoutMs: 20_000,
+        });
+      } catch (err) {
+        return { content: [{ type: 'text', text: `agent-media did not answer in time (${(err as Error).message}). Call rate_run again.` }], isError: true };
+      }
+      const text = await resp.text();
+      let data: any;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!resp.ok) return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
+      return { content: [{ type: 'text', text: `Recorded ${data?.score}/5 for run ${data?.job_id} (${data?.model}). Thank you — this feeds the per-model stats.` }] };
+    }
 
     // The loose surface: forward to /v2/generate/:kind and /v2/quote/:kind.
     // Validation (including the live-catalog model check) happens there,
@@ -301,14 +327,14 @@ export function buildMcpServer(apiKey: string): Server {
       }
       if (isQuote) {
         return {
-          content: [{ type: 'text', text: `${data?.credits} credits ($${data?.usd}) — ${data?.breakdown}. Model: ${data?.model}. Nothing was rendered.` }],
+          content: [{ type: 'text', text: `${data?.credits} credits ($${data?.usd}) — ${data?.breakdown}. Model: ${data?.model}.${data?.auto ? ` auto chose it: ${data.auto.reason}.` : ''} Nothing was rendered.` }],
         };
       }
       return {
         content: [{
           type: 'text',
           text: [
-            `Submitted ${name}: job_id ${data?.job_id} on ${data?.model} — ${data?.credits_deducted} credits deducted (${data?.breakdown}).`,
+            `Submitted ${name}: job_id ${data?.job_id} on ${data?.model} — ${data?.credits_deducted} credits deducted (${data?.breakdown}).${data?.auto ? ` auto chose ${data.model}: ${data.auto.reason}.` : ''}`,
             `Now call get_run_status with run_id "${data?.job_id}" (wait:true) until it is completed, then give the user the URL. ${kind === 'video' ? 'A clip takes a few minutes.' : kind === 'image' ? 'An image takes under a minute.' : 'Audio takes seconds.'}`,
           ].join('\n'),
         }],
@@ -344,8 +370,10 @@ export function buildMcpServer(apiKey: string): Server {
           quality: string; speed: string; best_for: string[]; avoid_for: string[];
           docs_url: string; verified: { date: string; runId?: string } | null;
           select_with: { field: string; value: string; on: string[]; not_on: string[] } | null;
+          recent: { window_days: number; runs: number; fail_rate: number | null; auto_score: number | null; scored: number; user_score: number | null; rated: number; p50_seconds: number | null } | null;
         }>;
         default_video_model?: string;
+        auto_policy?: string;
       } | null;
       const lines = (d?.models ?? []).map((m) => {
         const price = m.credits
@@ -355,10 +383,18 @@ export function buildMcpServer(apiKey: string): Server {
           ? `select: ${m.select_with.field}="${m.select_with.value}" on ${m.select_with.on.join(', ')}; NOT on ${m.select_with.not_on.join(', ')}`
           : 'select: not selectable (used inside the pipelines)';
         const lim = [m.limits?.maxSeconds ? `max ${m.limits.maxSeconds}s` : null, m.limits?.refs ? `refs: ${m.limits.refs}` : null].filter(Boolean).join(', ');
+        const r = m.recent;
+        const recent = r
+          ? `    recent (${r.window_days}d): ${r.runs} run(s), ${Math.round((r.fail_rate ?? 0) * 100)}% failed` +
+            (r.auto_score !== null && r.auto_score !== undefined ? `, auto score ${r.auto_score} over ${r.scored}` : ', not yet scored') +
+            (r.user_score !== null && r.user_score !== undefined ? `, users ${r.user_score}/5 over ${r.rated}` : '') +
+            (r.p50_seconds ? `, ~${Math.max(1, Math.round(r.p50_seconds / 60))} min typical` : '')
+          : '    recent (30d): no runs yet';
         return [
           `- ${m.id} [${m.kind}, ${m.tier}, ${m.status}] — ${price}; ${m.quality} quality, ${m.speed}${lim ? `; ${lim}` : ''}`,
           `    best for: ${m.best_for.join('; ')}`,
           m.avoid_for?.length ? `    avoid for: ${m.avoid_for.join('; ')}` : null,
+          recent,
           `    ${sel}${m.verified ? ` · verified ${m.verified.date}` : ' · no recorded run'} · docs: ${m.docs_url}`,
         ].filter(Boolean).join('\n');
       });
@@ -366,9 +402,10 @@ export function buildMcpServer(apiKey: string): Server {
         content: [{
           type: 'text',
           text: [
-            `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Select a live model by passing its id as \`model\` to generate_video / generate_image / generate_audio (omit it for the default). Candidates cannot be selected.`,
+            `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Select a live model by passing its id as \`model\` to generate_video / generate_image / generate_audio (omit it for the default, or pass "auto"). Candidates cannot be selected.`,
             ...lines,
-          ].join('\n'),
+            d?.auto_policy ? `\nauto policy: ${d.auto_policy}` : null,
+          ].filter(Boolean).join('\n'),
         }],
       };
     }

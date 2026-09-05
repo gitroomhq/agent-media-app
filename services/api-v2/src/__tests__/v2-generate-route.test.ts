@@ -31,6 +31,18 @@ describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
     expect(e.ok).toBe(false);
   });
 
+  it('resolves model:"auto" before quoting and reports the pick', () => {
+    const v = validateAndQuote('video', { prompt: 'x'.repeat(10), seconds: 5, model: 'auto' }, {});
+    expect(v.ok && v.model).toBe('seedance-2.0');
+    expect(v.ok && v.credits).toBe(150);
+    expect(v.ok && v.auto?.reason).toMatch(/default/);
+    expect(v.ok && v.input.model).toBe('seedance-2.0');
+  });
+
+  it('rate route is mounted behind auth on the read limiter', () => {
+    expect(server).toContain("app.post('/v1/runs/:jobId/rate', readLimiter,   authMiddleware, rateRunRoute);");
+  });
+
   it('is mounted behind auth, the generate limiter and the concurrency gate; quote on the read limiter', () => {
     expect(GENERATE_KINDS).toEqual(['image', 'video', 'audio']);
     expect(server).toContain("app.post('/v2/generate/:kind', generateLimiter, authMiddleware, videoConcurrencyGate, looseGenerateRoute);");

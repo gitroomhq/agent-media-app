@@ -14,13 +14,83 @@
  */
 
 import type { Request, Response } from 'express';
-import { V2_MODELS, liveModels, type V2ModelRecord } from '@agentmedia/schema/v2';
+import {
+  V2_MODELS,
+  V2_DEFAULT_MODEL,
+  AUTO_MAX_FAIL_RATE,
+  AUTO_MAX_PRICE_RATIO,
+  AUTO_MIN_GAIN,
+  AUTO_MIN_SCORED,
+  liveModels,
+  type ModelRecentStats,
+  type ModelStatsMap,
+  type V2ModelRecord,
+} from '@agentmedia/schema/v2';
+import { supabase } from '../../server.js';
+
+/**
+ * The last 30 days per model, from public.model_stats (P3). Cached for a
+ * minute: the route is public and the view scans a month of jobs. A
+ * failed read yields an empty map — the catalog must never 500 because
+ * the stats did.
+ */
+const STATS_TTL_MS = 60_000;
+let statsCache: { at: number; map: ModelStatsMap } | null = null;
+
+export async function loadModelStats(): Promise<ModelStatsMap> {
+  if (statsCache && Date.now() - statsCache.at < STATS_TTL_MS) return statsCache.map;
+  const map: ModelStatsMap = {};
+  try {
+    const { data, error } = await supabase.from('model_stats').select('*');
+    if (error) throw new Error(error.message);
+    for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+      const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+      map[String(r.model_slug)] = {
+        runs: Number(r.runs ?? 0),
+        failed: Number(r.failed ?? 0),
+        avg_auto_score: num(r.avg_auto_score),
+        scored: Number(r.scored ?? 0),
+        avg_user_score: num(r.avg_user_score),
+        rated: Number(r.rated ?? 0),
+        p50_seconds: num(r.p50_seconds),
+        avg_credits: num(r.avg_credits),
+      };
+    }
+    statsCache = { at: Date.now(), map };
+  } catch (err) {
+    console.warn(`[models] model_stats unavailable: ${(err as Error).message}`);
+  }
+  return map;
+}
+
+/** The `recent` block an agent sees. Rounded so it reads as a fact, not a spreadsheet. */
+export function recentView(s: ModelRecentStats | undefined) {
+  if (!s || s.runs === 0) return null;
+  return {
+    window_days: 30,
+    runs: s.runs,
+    fail_rate: s.runs ? Number((s.failed / s.runs).toFixed(2)) : null,
+    auto_score: s.avg_auto_score === null ? null : Number(s.avg_auto_score.toFixed(2)),
+    scored: s.scored,
+    user_score: s.avg_user_score === null ? null : Number(s.avg_user_score.toFixed(1)),
+    rated: s.rated,
+    p50_seconds: s.p50_seconds === null ? null : Math.round(s.p50_seconds),
+  };
+}
+
+/** The auto policy, printed once so an agent can reason about it. */
+export const AUTO_POLICY =
+  `model:"auto" starts from the kind's default (${Object.entries(V2_DEFAULT_MODEL).map(([k, v]) => `${k}: ${v}`).join(', ')}); ` +
+  `switches only when the default failed >${Math.round(AUTO_MAX_FAIL_RATE * 100)}% of >=${AUTO_MIN_SCORED} runs and another live model is healthy, ` +
+  `or when a live model within ${AUTO_MAX_PRICE_RATIO}x the default's price beats its auto score by >=${AUTO_MIN_GAIN} over >=${AUTO_MIN_SCORED} judged runs. ` +
+  'Scores come from an auto-judge that grades every loose-surface job (3 frames or the image against the realism rubric, prompt adherence, identity match) plus rate_run.';
 
 const PUBLIC_DOCS_BASE =
   process.env.PUBLIC_DOCS_BASE ?? 'https://github.com/gitroomhq/agent-media-app/blob/main';
 
-function publicView(m: V2ModelRecord) {
+function publicView(m: V2ModelRecord, stats: ModelStatsMap) {
   return {
+    recent: recentView(stats[m.id]),
     id: m.id,
     kind: m.kind,
     tier: m.tier,
@@ -61,16 +131,19 @@ function publicView(m: V2ModelRecord) {
   };
 }
 
-export function listModelsRoute(req: Request, res: Response): void {
+export async function listModelsRoute(req: Request, res: Response): Promise<void> {
   const include = String((req.query as { include?: string }).include ?? '');
   const withCandidates = include.split(',').map((s) => s.trim()).includes('candidates');
   const models = withCandidates
     ? Object.values(V2_MODELS).filter((m) => m.status !== 'retired')
     : liveModels();
+  const stats = await loadModelStats();
   res.status(200).json({
-    models: models.map(publicView),
+    models: models.map((m) => publicView(m, stats)),
     count: models.length,
-    default_video_model: 'seedance-2.0',
-    note: 'Credits: 1 credit = $0.01. Video models bill per second of output. Candidates have no price and cannot be selected.',
+    default_video_model: V2_DEFAULT_MODEL.video,
+    defaults: V2_DEFAULT_MODEL,
+    auto_policy: AUTO_POLICY,
+    note: 'Credits: 1 credit = $0.01. Video models bill per second of output. Candidates have no price and cannot be selected. `recent` is the last 30 days of loose-surface jobs; null until a model has run.',
   });
 }

@@ -47,6 +47,7 @@ OAuth (above) is the default and needs no key. You need credits on the account �
 | `list_characters` | Saved characters (sheet + portrait URLs) to pass as `refs`. | 0 |
 | `get_run_status` | Poll a job id until it is done; returns the URL. | 0 |
 | `upload_image` | Bytes in, https URL out. Call it before passing a photo. | 0 |
+| `rate_run` | Say what you thought of a finished run, 1–5 plus a note. Feeds the per-model stats and `model:"auto"`. | 0 |
 
 ## 4. Ten-second tour
 
@@ -68,7 +69,7 @@ Same face across a series: `generate_image` a portrait once, then pass that URL 
 | `gpt-image-2` (default) | image | 20 credits/image | portraits; character sheets |
 | `elevenlabs-tts` (default) | audio | 0.01 credits/character | voiceover on b-roll; dubbing |
 
-Full guide with the avoid-for column and one page per model: [reference/models.md](reference/models.md). Planned models are listed there too — they cannot be selected until a real run is recorded.
+Full guide with the avoid-for column and one page per model: [reference/models.md](reference/models.md). Planned models are listed there too — they cannot be selected until a real run is recorded. `list_models` also carries `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, typical render time); pass `model: "auto"` and the printed policy picks from those numbers.
 
 ## 6. REST
 

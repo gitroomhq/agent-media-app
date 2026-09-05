@@ -433,11 +433,16 @@ Three primitives with no recipe: your prompt, your model, your reference images.
 | `POST /v2/generate/video` | GenerateVideo (below) | seconds × the model rate — 150 for 5s on `seedance-2.0`, 495 on `seedance-2.5` |
 | `POST /v2/generate/image` | GenerateImage | 20 per image on `gpt-image-2` |
 | `POST /v2/generate/audio` | GenerateAudio | 1 per 100 characters on `elevenlabs-tts`, rounded up |
-| `POST /v2/quote/{kind}` | the same body | 0 — returns `{ credits, usd, model, breakdown }` without running |
+| `POST /v2/quote/{kind}` | the same body | 0 — returns `{ credits, usd, model, breakdown, auto? }` without running |
+| `POST /v1/runs/{job_id}/rate` | `{ score: 1..5, note? }` | 0 — records the user's verdict on a finished loose-surface run |
 
-Response: `201 { job_id, status: "submitted", kind, model, credits_deducted, breakdown, status_url }`. Poll `GET /v1/videos/{job_id}`; `video_url` holds the output URL for every kind (png, mp4 or mp3). A failed job refunds automatically.
+Response: `201 { job_id, status: "submitted", kind, model, credits_deducted, breakdown, auto?, status_url }`. Poll `GET /v1/videos/{job_id}`; `video_url` holds the output URL for every kind (png, mp4 or mp3). A failed job refunds automatically.
 
-`model` must be a **live** catalog id of the right kind (`GET /v1/models`); a planned id is a `400 VALIDATION_ERROR` whose message lists the live ones. Omit it for the default. `refs` must be https URLs (`POST /v1/uploads/image` turns bytes into one). Bodies are strict: an unknown field is a 400, never silently ignored.
+`model` must be a **live** catalog id of the right kind (`GET /v1/models`), or `"auto"`; a planned id is a `400 VALIDATION_ERROR` whose message lists the live ones. Omit it for the default. `refs` must be https URLs (`POST /v1/uploads/image` turns bytes into one). Bodies are strict: an unknown field is a 400, never silently ignored.
+
+### The quality loop
+
+Every completed loose-surface job is scored by an auto-judge in media-worker-v2 (3 frames or the image, graded against the realism rubric, prompt adherence and — with refs — identity match; `gpt-4o-mini`, JSON verdict) into `generation_quality`, alongside any `rate` call. `GET /v1/models` exposes the last 30 days per model as `recent` (`runs`, `fail_rate`, `auto_score`, `scored`, `user_score`, `rated`, `p50_seconds`) and prints the `auto_policy`. `model: "auto"` applies that policy: the default unless it fails >25% of ≥10 runs and another live model is healthy, or a live model within 1.5x the price beats its auto score by ≥0.10 over ≥10 judged runs; the response carries `auto: { model, reason }`.
 
 ### GenerateVideo
 
@@ -453,7 +458,7 @@ Response: `201 { job_id, status: "submitted", kind, model, credits_deducted, bre
     },
     "model": {
       "type": "string",
-      "description": "A live video model id from list_models. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits — hero clips only."
+      "description": "A live video model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits — hero clips only."
     },
     "refs": {
       "type": "array",
@@ -513,7 +518,7 @@ Response: `201 { job_id, status: "submitted", kind, model, credits_deducted, bre
     },
     "model": {
       "type": "string",
-      "description": "A live image model id from list_models. Omit for the default (gpt-image-2)."
+      "description": "A live image model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default (gpt-image-2)."
     },
     "refs": {
       "type": "array",
@@ -556,7 +561,7 @@ Response: `201 { job_id, status: "submitted", kind, model, credits_deducted, bre
     },
     "model": {
       "type": "string",
-      "description": "A live audio model id from list_models. Omit for the default (elevenlabs-tts)."
+      "description": "A live audio model id from list_models, or \"auto\". Omit for the default (elevenlabs-tts)."
     },
     "voice": {
       "type": "string",

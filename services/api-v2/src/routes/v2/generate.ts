@@ -26,10 +26,16 @@ import {
   GenerateImageSchema,
   GenerateVideoSchema,
   V2_DEFAULT_MODEL,
+  V2_MODEL_AUTO,
+  V2_MODELS,
+  pickAuto,
   quoteGenerate,
+  type AutoPick,
   type GenerateKind,
+  type ModelStatsMap,
 } from '@agentmedia/schema/v2';
 import { supabase } from '../../server.js';
+import { loadModelStats } from '../v1/models.js';
 
 const WORKER_V2_URL = process.env.WORKER_V2_URL;
 const WORKER_SECRET = process.env.WORKER_SECRET;
@@ -87,14 +93,23 @@ async function markDispatchFailureAndRefund(jobId: string, userId: string, messa
     .eq('error_code', DISPATCH_FAILED_PENDING_REFUND);
 }
 
-/** Validate + price. Shared by both routes and exported for the MCP tools' tests. */
-export function validateAndQuote(kind: GenerateKind, body: unknown):
-  | { ok: true; input: Record<string, unknown>; credits: number; model: string; breakdown: string }
+/**
+ * Validate + resolve `auto` + price. Pure given `stats`; both routes call it
+ * with the cached model_stats. Exported for tests.
+ */
+export function validateAndQuote(kind: GenerateKind, body: unknown, stats: ModelStatsMap = {}):
+  | { ok: true; input: Record<string, unknown>; credits: number; model: string; breakdown: string; auto: AutoPick | null }
   | { ok: false; issues: unknown[] } {
   const parsed = schemaFor(kind).safeParse(body);
   if (!parsed.success) return { ok: false, issues: parsed.error.issues };
-  const q = quoteGenerate(kind as 'image', parsed.data as never);
-  return { ok: true, input: parsed.data as Record<string, unknown>, credits: q.credits, model: q.model, breakdown: q.breakdown };
+  const data = parsed.data as Record<string, unknown> & { model?: string };
+  let auto: AutoPick | null = null;
+  if (data.model === V2_MODEL_AUTO) {
+    auto = pickAuto(kind, stats);
+    data.model = auto.model;
+  }
+  const q = quoteGenerate(kind as 'image', data as never);
+  return { ok: true, input: data, credits: q.credits, model: q.model, breakdown: q.breakdown, auto };
 }
 
 export async function quoteRoute(req: Request, res: Response): Promise<void> {
@@ -103,12 +118,19 @@ export async function quoteRoute(req: Request, res: Response): Promise<void> {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: 'kind must be image, video or audio' } });
     return;
   }
-  const v = validateAndQuote(kind, req.body);
+  const v = validateAndQuote(kind, req.body, await loadModelStats());
   if (!v.ok) {
     res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid request', issues: v.issues } });
     return;
   }
-  res.json({ kind, model: v.model, credits: v.credits, usd: Number((v.credits * 0.01).toFixed(2)), breakdown: v.breakdown });
+  res.json({
+    kind,
+    model: v.model,
+    credits: v.credits,
+    usd: Number((v.credits * 0.01).toFixed(2)),
+    breakdown: v.breakdown,
+    ...(v.auto ? { auto: v.auto } : {}),
+  });
 }
 
 export async function generateRoute(req: Request, res: Response): Promise<void> {
@@ -123,8 +145,8 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // ── 1+2. Validate and quote ───────────────────────────────────────
-  const v = validateAndQuote(kind, req.body);
+  // ── 1+2. Validate, resolve auto, quote ────────────────────────────
+  const v = validateAndQuote(kind, req.body, await loadModelStats());
   if (!v.ok) {
     res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid request', issues: v.issues } });
     return;
@@ -205,6 +227,79 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
     model,
     credits_deducted: creditCost,
     breakdown: v.breakdown,
+    ...(v.auto ? { auto: v.auto } : {}),
     status_url: `/v1/videos/${jobId}`,
   });
+}
+
+// ── POST /v1/runs/:jobId/rate — the human half of the quality loop ──────
+//
+// The auto-judge scores every job; this is where an agent (or the user
+// through it) says what it actually thought. 1..5 plus an optional note,
+// upserted onto the job's generation_quality row. Only the job's owner,
+// only loose-surface jobs, only once the job is terminal.
+
+const RATE_MIN = 1;
+const RATE_MAX = 5;
+
+export async function rateRunRoute(req: Request, res: Response): Promise<void> {
+  const userId = (req as any).userId as string;
+  if (!userId) {
+    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Auth required' } });
+    return;
+  }
+  const jobId = String(req.params.jobId ?? '');
+  const body = (req.body ?? {}) as { score?: unknown; note?: unknown };
+  const score = Number(body.score);
+  if (!Number.isInteger(score) || score < RATE_MIN || score > RATE_MAX) {
+    res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: `score must be an integer ${RATE_MIN}..${RATE_MAX}` } });
+    return;
+  }
+  const note = typeof body.note === 'string' ? body.note.slice(0, 1000) : null;
+
+  const { data: job, error: jobErr } = await supabase
+    .from('generation_jobs')
+    .select('id, user_id, operation, model_slug, status')
+    .eq('id', jobId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (jobErr) {
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: jobErr.message } });
+    return;
+  }
+  if (!job) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'No such run on this account' } });
+    return;
+  }
+  const op = String(job.operation ?? '');
+  if (!op.startsWith('generate_')) {
+    res.status(400).json({ error: { code: 'NOT_RATEABLE', message: 'Only generate_video / generate_image / generate_audio runs can be rated' } });
+    return;
+  }
+  if (!['completed', 'failed'].includes(String(job.status))) {
+    res.status(409).json({ error: { code: 'NOT_FINISHED', message: `Run is ${job.status}; rate it once it is completed` } });
+    return;
+  }
+  const kind = op.replace('generate_', '');
+  const model = String(job.model_slug ?? V2_DEFAULT_MODEL[kind as GenerateKind] ?? '');
+  const now = new Date().toISOString();
+  const { error: upErr } = await supabase.from('generation_quality').upsert(
+    {
+      job_id: jobId,
+      user_id: userId,
+      operation: op,
+      model_slug: V2_MODELS[model] ? model : V2_DEFAULT_MODEL[kind as GenerateKind],
+      kind,
+      user_score: score,
+      user_note: note,
+      rated_at: now,
+      updated_at: now,
+    },
+    { onConflict: 'job_id' },
+  );
+  if (upErr) {
+    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: upErr.message } });
+    return;
+  }
+  res.json({ job_id: jobId, model, score, note, recorded_at: now });
 }
