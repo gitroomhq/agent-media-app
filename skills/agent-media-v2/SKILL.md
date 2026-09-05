@@ -21,7 +21,7 @@ This skill drives the local `agent-media` CLI. If the CLI is not installed — o
 https://api.agent-media.ai/mcp
 ```
 
-Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: <https://agent-media.ai/connect>. Over MCP the same 4-gate protocol below still applies, and after submitting you MUST call `get_run_status` to get the finished video URL.
+Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: <https://agent-media.ai/connect>. Over MCP the surface is different from the CLI: the connector lists `generate_video`, `generate_image`, `generate_audio`, `quote`, `list_models`, `list_characters`, `get_run_status` and `upload_image` — you write the prompt and pick the model yourself (see the public skill at `public-skill/skills/agent-media/SKILL.md`). After submitting you MUST call `get_run_status` to get the finished URL.
 
 ## 🛑 HARD GATE — read this first, every conversation
 

@@ -26,6 +26,13 @@ submit response only confirms the job started.
 
 If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
 
+Over MCP the connector lists eight tools: `generate_video`, `generate_image`,
+`generate_audio`, `quote`, `list_models`, `list_characters`, `get_run_status`
+and `upload_image`. You write the prompt and pick the model; there is no fixed
+recipe. The same primitives exist over REST as `POST /v2/generate/{video|image|audio}`
+and `POST /v2/quote/{kind}` — see [docs/v2/api-reference.md](v2/api-reference.md#the-loose-surface--post-v2generatekind)
+and the public skill at [public-skill/skills/agent-media/SKILL.md](../public-skill/skills/agent-media/SKILL.md).
+
 The REST reference below is for direct HTTP integrations, where the `ma_` key
 still applies.
 

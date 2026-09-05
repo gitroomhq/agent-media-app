@@ -424,6 +424,174 @@ agent-media crazy-look --character char_8x2vqp --caption "how do you pray so con
 agent-media crazy-look --description "21yo woman, long brown wavy hair, argyle cardigan" --caption "it took me 21 years to realize this" --look "custom:slowly raises one eyebrow, then breaks into a huge grin"
 ```
 
+## The loose surface — `POST /v2/generate/{kind}`
+
+Three primitives with no recipe: your prompt, your model, your reference images. This is what the hosted MCP connector exposes as `generate_video`, `generate_image`, `generate_audio` and `quote`. The fixed generators above stay on REST for the dashboard.
+
+| Route | Body | Credits |
+|---|---|---|
+| `POST /v2/generate/video` | GenerateVideo (below) | seconds × the model rate — 150 for 5s on `seedance-2.0`, 495 on `seedance-2.5` |
+| `POST /v2/generate/image` | GenerateImage | 20 per image on `gpt-image-2` |
+| `POST /v2/generate/audio` | GenerateAudio | 1 per 100 characters on `elevenlabs-tts`, rounded up |
+| `POST /v2/quote/{kind}` | the same body | 0 — returns `{ credits, usd, model, breakdown }` without running |
+
+Response: `201 { job_id, status: "submitted", kind, model, credits_deducted, breakdown, status_url }`. Poll `GET /v1/videos/{job_id}`; `video_url` holds the output URL for every kind (png, mp4 or mp3). A failed job refunds automatically.
+
+`model` must be a **live** catalog id of the right kind (`GET /v1/models`); a planned id is a `400 VALIDATION_ERROR` whose message lists the live ones. Omit it for the default. `refs` must be https URLs (`POST /v1/uploads/image` turns bytes into one). Bodies are strict: an unknown field is a 400, never silently ignored.
+
+### GenerateVideo
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 4000,
+      "description": "The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and — if anyone speaks — the exact words in quotes. ~2.3 words per second."
+    },
+    "model": {
+      "type": "string",
+      "description": "A live video model id from list_models. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits — hero clips only."
+    },
+    "refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "maxItems": 4,
+      "description": "Reference images (https URLs, up to 4): a portrait, a character sheet, a product shot. The model keeps that identity/look across clips. Omit to let the model invent the person."
+    },
+    "seconds": {
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 15,
+      "default": 5,
+      "description": "Clip length in seconds, 4–15. Credits = seconds x the model rate."
+    },
+    "aspect": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1"
+      ],
+      "default": "9:16",
+      "description": "9:16 vertical (default) or 1:1."
+    },
+    "audio": {
+      "type": "boolean",
+      "default": true,
+      "description": "Render native audio (speech from the quoted words, ambience). false = silent clip."
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647,
+      "description": "Same seed + same inputs = the same clip (best effort). Reuse across a series."
+    }
+  },
+  "required": [
+    "prompt"
+  ],
+  "additionalProperties": false
+}
+```
+
+### GenerateImage
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 4000,
+      "description": "What to paint. Be concrete: subject, age, framing, light, lens, mood, what the hands do."
+    },
+    "model": {
+      "type": "string",
+      "description": "A live image model id from list_models. Omit for the default (gpt-image-2)."
+    },
+    "refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "maxItems": 4,
+      "description": "Reference images (https URLs, up to 4). With refs the model EDITS/composes from them (a product into a hand, a portrait re-lit); without, it paints from the prompt alone."
+    },
+    "size": {
+      "type": "string",
+      "enum": [
+        "1024x1024",
+        "1024x1536",
+        "1536x1024"
+      ],
+      "default": "1024x1536",
+      "description": "1024x1536 portrait (default, for 9:16 video), 1024x1024 square, 1536x1024 landscape."
+    }
+  },
+  "required": [
+    "prompt"
+  ],
+  "additionalProperties": false
+}
+```
+
+### GenerateAudio
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "description": "The words to speak. Emotion tags like [excited] or [whispers] are honoured. 1 credit per 100 characters."
+    },
+    "model": {
+      "type": "string",
+      "description": "A live audio model id from list_models. Omit for the default (elevenlabs-tts)."
+    },
+    "voice": {
+      "type": "string",
+      "minLength": 1,
+      "default": "sarah",
+      "description": "A voice name: jessica (young female), sarah (female), liam (young male), chris (male), lily (elder female), bill (elder male), matilda (warm) — or a raw ElevenLabs voice id."
+    },
+    "tone": {
+      "type": "string",
+      "enum": [
+        "energetic",
+        "calm",
+        "confident",
+        "dramatic"
+      ],
+      "description": "energetic | calm | confident | dramatic."
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "additionalProperties": false
+}
+```
+
+```bash
+curl -X POST https://api.agent-media.ai/v2/generate/video \
+  -H "Authorization: Bearer ma_..." -H "Content-Type: application/json" \
+  -d '{ "prompt": "A 28-year-old woman in a bright kitchen, phone framing, holds a serum bottle to the lens and says: \"Okay, I did not expect this to work.\"", "seconds": 5 }'
+# -> 201 { "job_id": "...", "credits_deducted": 150, ... }
+curl https://api.agent-media.ai/v1/videos/<job_id> -H "Authorization: Bearer ma_..."
+```
+
+---
+
 ## Shared
 
 ### Connecting an agent (no API key)
@@ -446,14 +614,14 @@ If you have image bytes (a photo the user attached, a `data:` URL), call `upload
 
 | Model | Kind | Tier | User price | Selectable via |
 |---|---|---|---|---|
-| `seedance-2.0` | video | standard | 30 credits/second | `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
-| `seedance-2.5` | video | premium | 99 credits/second | `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
-| `gpt-image-2` | image | standard | inside generator credits | not selectable (pipeline internal) |
-| `elevenlabs-tts` | audio | standard | inside generator credits | not selectable (pipeline internal) |
+| `seedance-2.0` (default) | video | standard | 30 credits/second | `model` on `/v2/generate/video` and the `generate_video` MCP tool; `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
+| `seedance-2.5` | video | premium | 99 credits/second | `model` on `/v2/generate/video` and the `generate_video` MCP tool; `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
+| `gpt-image-2` (default) | image | standard | 20 credits/image | `model` on `/v2/generate/image` and the `generate_image` MCP tool |
+| `elevenlabs-tts` (default) | audio | standard | 0.01 credits/character | `model` on `/v2/generate/audio` and the `generate_audio` MCP tool |
 
 Planned, not selectable and unpriced until a real run is recorded: `seedance-2.0-mini`, `kling-o3`, `wan-3.0`, `omnihuman-1.5`, `sora-2`, `nano-banana-2`, `seedream-5.0-pro`, `z-image-turbo`, `doubao-seed-audio-1.0`, `suno`. One page per model lives under `docs/models/`.
 
-`make_ugc` over MCP always renders on the default engine (`seedance-2.0`) today.
+`make_ugc` (REST, the dashboard) always renders on the default engine (`seedance-2.0`); it has no engine field.
 
 ### Authentication
 
@@ -464,7 +632,7 @@ Every v2 REST request sends `Authorization: Bearer ma_xxx`. Get a key via `agent
 `GET /v1/videos/{job_id}` returns the same shape for v1 and v2 jobs. v2-specific fields:
 
 - `character_id` — present on jobs that create a v2 character (`char_xxxxxxxxxx`).
-- `video_url` — present on completed video jobs.
+- `video_url` — present on completed jobs; for `generate_image` / `generate_audio` jobs it holds the png / mp3 URL.
 
 ### Selfie pipeline artifacts
 

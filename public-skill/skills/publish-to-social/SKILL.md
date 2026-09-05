@@ -1,8 +1,8 @@
 ---
 name: 'Publish to Social'
-description: 'Publish a generated Agent-Media UGC Video to the user''s connected TikTok, Instagram, or X. Connect channels (OAuth) and post or schedule via the REST API. Use after producing a video with make_ugc.'
+description: 'Publish a generated Agent-Media video to the user''s connected TikTok, Instagram, or X. Connect channels (OAuth) and post or schedule via the REST API. Use after producing a video with generate_video.'
 x-skill-slug: 'publish-to-social'
-x-skill-version: '1.0.0'
+x-skill-version: '1.1.0'
 ---
 # Publish to Social
 
@@ -42,7 +42,7 @@ MCP: `social_publish { video_url, channel_ids, caption, type }`.
 
 ## Typical flow
 
-1. Produce a video → `make_ugc` → `final_output.video_url`.
+1. Produce a video → `generate_video` → `final_output.video_url`.
 2. If the user has no connected channel, send them to connect (step 1) — you can't OAuth for them.
 3. Publish that `video_url` to the chosen `channel_ids`; confirm `post_ids` came back.
 

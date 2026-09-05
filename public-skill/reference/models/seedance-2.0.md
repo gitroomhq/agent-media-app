@@ -6,7 +6,7 @@ The default video engine for every agent-media video. It takes a character sheet
 
 | | |
 |---|---|
-| Kind | video |
+| Kind | video (default for `generate_video`) |
 | Tier | standard |
 | Status | **live** |
 | Provider | evolink (`seedance-2.0-reference-to-video`) |
@@ -16,7 +16,7 @@ The default video engine for every agent-media video. It takes a character sheet
 | Our cost | $0.1 per second. EvoLink detailed table, 720p with image references. Marketing page shows $0.033/s "from" (480p). |
 | User price | 30 credits per second |
 | Quality / speed | good / medium |
-| Verified | 2026-09-05, run `2749ee84-1835-4e69-947d-67034ead0890`. make_ugc via Claude Code over the hosted connector, 5s, succeeded |
+| Verified | 2026-09-05. make_ugc via Claude Code over the hosted connector, 5s, succeeded (run 2749ee84-1835-4e69-947d-67034ead0890) |
 
 ## Best for
 
@@ -39,6 +39,7 @@ The default video engine for every agent-media video. It takes a character sheet
 
 ## How to select it
 
+- `generate_video` over MCP (the default — omit `model`, or pass `"model": "seedance-2.0"`); `POST /v2/generate/video` over REST, same body
 - `agent-media selfie --engine seedance-2.0 ...` (default, flag optional)
 - `POST /v2/selfie` / `POST /v2/crazy-look` over REST (default engine)
-- `make_ugc` and the hosted MCP connector always use this engine today
+- `make_ugc` (REST, the dashboard) always uses this engine

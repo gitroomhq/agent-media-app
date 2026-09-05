@@ -14,10 +14,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const source = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '../routes/mcp.ts'),
-  'utf8',
-);
+// The tool DEFINITIONS live in mcp/loose-tools.ts (shared with the public
+// skill generator); the handlers stay in routes/mcp.ts. Read both.
+const source =
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../routes/mcp.ts'), 'utf8') +
+  '\n' +
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../mcp/loose-tools.ts'), 'utf8');
 
 describe('hosted MCP: run-status tool', () => {
   it('declares get_run_status and lists it in tools/list', () => {

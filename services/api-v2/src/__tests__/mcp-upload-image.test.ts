@@ -21,7 +21,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const source = readFileSync(join(here, '../routes/mcp.ts'), 'utf8');
+const source =
+  readFileSync(join(here, '../routes/mcp.ts'), 'utf8') + '\n' + readFileSync(join(here, '../mcp/loose-tools.ts'), 'utf8');
 const uploadRoute = readFileSync(join(here, '../routes/v1/uploads.ts'), 'utf8');
 const server = readFileSync(join(here, '../server.ts'), 'utf8');
 

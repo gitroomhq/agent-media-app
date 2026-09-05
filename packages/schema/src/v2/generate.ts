@@ -72,14 +72,10 @@ export type V2ImageSize = (typeof V2_IMAGE_SIZES)[number];
 
 export const GenerateImageSchema = z
   .object({
-    /** What to paint. Be concrete: subject, framing, light, lens, mood. */
-    prompt: z.string().min(3).max(4000),
-    /** A live image model id. Omitted ⇒ gpt-image-2. */
-    model: liveModelField('image'),
-    /** Reference images (https). With refs the model EDITS/composes from them; without, it paints from the prompt alone. */
-    refs: z.array(HttpsUrl).max(4).optional(),
-    /** Output size. 1024x1536 is portrait (the 9:16-ish default for UGC); 1536x1024 is landscape. */
-    size: z.enum(V2_IMAGE_SIZES).default('1024x1536'),
+    prompt: z.string().min(3).max(4000).describe('What to paint. Be concrete: subject, age, framing, light, lens, mood, what the hands do.'),
+    model: liveModelField('image').describe('A live image model id from list_models. Omit for the default (gpt-image-2).'),
+    refs: z.array(HttpsUrl).max(4).optional().describe('Reference images (https URLs, up to 4). With refs the model EDITS/composes from them (a product into a hand, a portrait re-lit); without, it paints from the prompt alone.'),
+    size: z.enum(V2_IMAGE_SIZES).default('1024x1536').describe('1024x1536 portrait (default, for 9:16 video), 1024x1024 square, 1536x1024 landscape.'),
   })
   .strict();
 export type GenerateImageInput = z.infer<typeof GenerateImageSchema>;
@@ -92,19 +88,13 @@ export type V2VideoAspect = (typeof V2_VIDEO_ASPECTS)[number];
 
 export const GenerateVideoSchema = z
   .object({
-    /** The shot: who, where, what happens, camera, and — if someone speaks — the exact words in quotes. */
-    prompt: z.string().min(3).max(4000),
-    /** A live video model id. Omitted ⇒ seedance-2.0 (the default; 2.5 is ~3x the credits). */
-    model: liveModelField('video'),
-    /** Reference images (https) — a portrait, a character sheet, a product shot. The model keeps their identity/look. Up to 4. */
-    refs: z.array(HttpsUrl).max(4).optional(),
-    /** Clip length in seconds. */
-    seconds: z.number().int().min(4).max(15).default(5),
-    aspect: z.enum(V2_VIDEO_ASPECTS).default('9:16'),
-    /** Render the model's native audio (speech, ambience). Off ⇒ silent clip. */
-    audio: z.boolean().default(true),
-    /** Reproducibility: same seed + same inputs ⇒ same clip (best effort). */
-    seed: z.number().int().min(0).max(2 ** 31 - 1).optional(),
+    prompt: z.string().min(3).max(4000).describe('The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and — if anyone speaks — the exact words in quotes. ~2.3 words per second.'),
+    model: liveModelField('video').describe('A live video model id from list_models. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits — hero clips only.'),
+    refs: z.array(HttpsUrl).max(4).optional().describe('Reference images (https URLs, up to 4): a portrait, a character sheet, a product shot. The model keeps that identity/look across clips. Omit to let the model invent the person.'),
+    seconds: z.number().int().min(4).max(15).default(5).describe('Clip length in seconds, 4–15. Credits = seconds x the model rate.'),
+    aspect: z.enum(V2_VIDEO_ASPECTS).default('9:16').describe('9:16 vertical (default) or 1:1.'),
+    audio: z.boolean().default(true).describe('Render native audio (speech from the quoted words, ambience). false = silent clip.'),
+    seed: z.number().int().min(0).max(2 ** 31 - 1).optional().describe('Same seed + same inputs = the same clip (best effort). Reuse across a series.'),
   })
   .strict()
   .superRefine((v, ctx) => {
@@ -147,13 +137,10 @@ export const V2_AUDIO_TONES = ['energetic', 'calm', 'confident', 'dramatic'] as 
 
 export const GenerateAudioSchema = z
   .object({
-    /** The words to speak. Emotion tags like [excited] or [whispers] are honoured. */
-    text: z.string().min(1).max(4000),
-    /** A live audio model id. Omitted ⇒ elevenlabs-tts. */
-    model: liveModelField('audio'),
-    /** A voice name from V2_VOICES (jessica, sarah, liam, chris, lily, bill, matilda) or a raw ElevenLabs voice id. */
-    voice: z.string().min(1).default(V2_DEFAULT_VOICE),
-    tone: z.enum(V2_AUDIO_TONES).optional(),
+    text: z.string().min(1).max(4000).describe('The words to speak. Emotion tags like [excited] or [whispers] are honoured. 1 credit per 100 characters.'),
+    model: liveModelField('audio').describe('A live audio model id from list_models. Omit for the default (elevenlabs-tts).'),
+    voice: z.string().min(1).default(V2_DEFAULT_VOICE).describe('A voice name: jessica (young female), sarah (female), liam (young male), chris (male), lily (elder female), bill (elder male), matilda (warm) — or a raw ElevenLabs voice id.'),
+    tone: z.enum(V2_AUDIO_TONES).optional().describe('energetic | calm | confident | dramatic.'),
   })
   .strict();
 export type GenerateAudioInput = z.infer<typeof GenerateAudioSchema>;

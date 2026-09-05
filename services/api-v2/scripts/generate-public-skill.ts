@@ -20,6 +20,22 @@ import { fileURLToPath } from 'node:url';
 
 import { SKILLS, type SkillEntry } from '../src/skills/registry.js';
 import { V2_MODELS, liveModels } from '@agentmedia/schema/v2';
+import { LOOSE_SURFACE_TOOLS } from '../src/mcp/loose-tools.js';
+import {
+  LOOSE_TOOLS,
+  looseSkillBody,
+  looseReadme,
+  loosePluginDescription,
+  looseRefModels,
+  refPrompting,
+  refRecipes,
+  refTools,
+} from './public-skill-loose.js';
+
+// Which surface the connector lists — mirrors isLooseSurface() in
+// src/routes/mcp.ts. The pack must describe the tools an agent will
+// actually see; a drift test compares the two.
+const SURFACE: 'loose' | 'fixed' = (process.env.AGENT_SURFACE ?? 'loose').trim().toLowerCase() === 'fixed' ? 'fixed' : 'loose';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');
@@ -139,7 +155,9 @@ function slugToKebab(slug: string): string {
 }
 
 function pluginVersion(): string {
-  // Pin to the max(skill versions). All five are 1.0.0 today, so 1.0.0.
+  // The loose pack is a new major: the tool list changed shape.
+  if (SURFACE === 'loose') return '2.0.0';
+  // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
 }
@@ -316,7 +334,9 @@ function pluginJson(): string {
     {
       name: 'agent-media',
       description:
-        'Agent-Media UGC Video — one tool. Give a script + a person (description, photo, or saved character) and get a finished, captioned, lip-synced vertical UGC video. Short line → one clip; full monologue → seamless multi-take; b-roll URL → narrated overlay. One Bearer token, one MCP server.',
+        SURFACE === 'loose'
+          ? loosePluginDescription()
+          : 'Agent-Media UGC Video — one tool. Give a script + a person (description, photo, or saved character) and get a finished, captioned, lip-synced vertical UGC video. Short line → one clip; full monologue → seamless multi-take; b-roll URL → narrated overlay. One Bearer token, one MCP server.',
       version: pluginVersion(),
       author: { name: 'gitroomhq', url: 'https://github.com/gitroomhq' },
       homepage: 'https://agent-media.ai',
@@ -368,7 +388,10 @@ function marketplaceJson(): string {
       name: 'agent-media',
       owner: { name: 'gitroomhq', url: 'https://github.com/gitroomhq' },
       metadata: {
-        description: 'Agent-Media UGC Video for Claude Code — one tool: give a script + a person/image/character, get a finished captioned vertical UGC video.',
+        description:
+          SURFACE === 'loose'
+            ? 'Agent-Media for Claude Code — AI video, images and voice with you as the director: your prompt, your model, your references.'
+            : 'Agent-Media UGC Video for Claude Code — one tool: give a script + a person/image/character, get a finished captioned vertical UGC video.',
         version: pluginVersion(),
       },
       plugins: [
@@ -376,7 +399,9 @@ function marketplaceJson(): string {
           name: 'agent-media',
           source: './public-skill',
           description:
-            'Agent-Media UGC Video — one tool. Give a script + a person/image/character; get a finished captioned vertical UGC video (short clip, multi-take monologue, or narrated b-roll). Connects over the hosted MCP server with browser sign-in — no API key.',
+            SURFACE === 'loose'
+              ? loosePluginDescription()
+              : 'Agent-Media UGC Video — one tool. Give a script + a person/image/character; get a finished captioned vertical UGC video (short clip, multi-take monologue, or narrated b-roll). Connects over the hosted MCP server with browser sign-in — no API key.',
         },
       ],
     },
@@ -664,6 +689,16 @@ function refRealism(): string {
   ].join('\n');
 }
 
+
+function readFromRepo(file: string): string {
+  const path = resolve(REPO_ROOT, file);
+  try {
+    return readFileSync(path, 'utf-8');
+  } catch {
+    return `Apache License 2.0 — see ${file} in the source repository.\n`;
+  }
+}
+
 // ── Generate ──────────────────────────────────────────────────────────
 
 if (existsSync(OUT)) {
@@ -675,12 +710,8 @@ writeFile('.claude-plugin/plugin.json', pluginJson());
 // Repo ROOT, not public-skill/ — see marketplaceJson() for why.
 writeRepoFile('.claude-plugin/marketplace.json', marketplaceJson());
 writeFile('.mcp.json', mcpJson());
-writeFile('README.md', readme());
 writeFile('LICENSE', readFromRepo('LICENSE'));
 writeFile('reference/auth.md', refAuth());
-writeFile('reference/pacing.md', refPacing());
-writeFile('reference/realism-rubric.md', refRealism());
-writeFile('reference/models.md', refModels());
 // One page per model, copied verbatim from docs/models/ so the pack and the
 // repo say the same thing. Candidates ship too: an agent that sees a planned
 // model in the index must also see that it is not selectable.
@@ -688,78 +719,127 @@ for (const m of Object.values(V2_MODELS)) {
   writeFile(`reference/models/${m.id}.md`, readFromRepo(m.docs));
 }
 
-// Only the curated agent-facing skill (make_ugc) ships a per-skill SKILL.md, so
-// the pack presents ONE entry point instead of a dozen. The other skills stay
-// REST/CLI-reachable; agents discover their full schema via tools/list when they
-// genuinely need an advanced primitive.
-for (const skill of Object.values(SKILLS).filter((s) => s.agentFacing)) {
-  const kebab = slugToKebab(skill.slug);
-  const fm = frontmatter({
-    name: skill.name,
-    description: skill.description,
-    'allowed-tools': [`mcp__agent-media__${skill.slug}`],
-    'x-skill-slug': skill.slug,
-    'x-skill-version': skill.version,
-    'x-primitive': skill.primitive,
-    'x-mcp-tool': `mcp__agent-media__${skill.slug}`,
-  });
-  writeFile(`skills/${kebab}/SKILL.md`, fm + skillBody(skill));
+if (SURFACE === 'loose') {
+  // ── The loose surface: one skill, the agent is the director ─────────
+  const schemas = Object.fromEntries(LOOSE_SURFACE_TOOLS.map((t) => [t.name, t.inputSchema]));
+  const listed = LOOSE_SURFACE_TOOLS.map((t) => t.name);
+  for (const n of LOOSE_TOOLS) {
+    if (!listed.includes(n)) throw new Error(`public skill names tool ${n} that the connector does not list`);
+  }
+  writeFile('README.md', looseReadme());
+  writeFile('reference/models.md', looseRefModels());
+  writeFile('reference/prompting.md', refPrompting(REPO_ROOT));
+  writeFile('reference/recipes.md', refRecipes());
+  writeFile('reference/tools.md', refTools(schemas));
+  writeFile(
+    'skills/agent-media/SKILL.md',
+    frontmatter({
+      name: 'Agent-Media',
+      description:
+        'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at ~3x; gpt-image-2 for images; elevenlabs-tts for speech), pass reference images for identity, quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image. Use for UGC clips, product-in-hand, reaction clips, portraits, voiceover, and series with one face.',
+      'allowed-tools': LOOSE_TOOLS.map((n) => `mcp__agent-media__${n}`),
+      'x-skill-slug': 'agent-media',
+      'x-skill-version': '2.0.0',
+      'x-surface': 'loose',
+    }) + looseSkillBody(REPO_ROOT),
+  );
+  writeFile(
+    'skills/publish-to-social/SKILL.md',
+    frontmatter({
+      name: 'Publish to Social',
+      description:
+        "Publish a generated Agent-Media video to the user's connected TikTok, Instagram, or X. Connect channels (OAuth) and post or schedule via the REST API. Use after producing a video with generate_video.",
+      'x-skill-slug': 'publish-to-social',
+      'x-skill-version': '1.1.0',
+    }) + socialBody().replace(/make_ugc/g, 'generate_video'),
+  );
+} else {
+  writeFile('README.md', readme());
+  writeFile('LICENSE', readFromRepo('LICENSE'));
+  writeFile('reference/auth.md', refAuth());
+  writeFile('reference/pacing.md', refPacing());
+  writeFile('reference/realism-rubric.md', refRealism());
+  writeFile('reference/models.md', refModels());
+  // One page per model, copied verbatim from docs/models/ so the pack and the
+  // repo say the same thing. Candidates ship too: an agent that sees a planned
+  // model in the index must also see that it is not selectable.
+  for (const m of Object.values(V2_MODELS)) {
+    writeFile(`reference/models/${m.id}.md`, readFromRepo(m.docs));
+  }
+
+  // Only the curated agent-facing skill (make_ugc) ships a per-skill SKILL.md, so
+  // the pack presents ONE entry point instead of a dozen. The other skills stay
+  // REST/CLI-reachable; agents discover their full schema via tools/list when they
+  // genuinely need an advanced primitive.
+  for (const skill of Object.values(SKILLS).filter((s) => s.agentFacing)) {
+    const kebab = slugToKebab(skill.slug);
+    const fm = frontmatter({
+      name: skill.name,
+      description: skill.description,
+      'allowed-tools': [`mcp__agent-media__${skill.slug}`],
+      'x-skill-slug': skill.slug,
+      'x-skill-version': skill.version,
+      'x-primitive': skill.primitive,
+      'x-mcp-tool': `mcp__agent-media__${skill.slug}`,
+    });
+    writeFile(`skills/${kebab}/SKILL.md`, fm + skillBody(skill));
+  }
+
+  // Composite "playbook" skill — not a registry entry; a hand-curated
+  // orchestration guide for agents that want the bigger picture before
+  // picking which primitive(s) to call. The 4 hand-written sections
+  // (one-shot, step-by-step, image-first, troubleshooting) reference
+  // the codegen-controlled per-skill markdowns above.
+  writeFile(
+    'skills/agent-media-ugc/SKILL.md',
+    frontmatter({
+      name: 'Agent-Media UGC Playbook',
+      description:
+        'Playbook for Agent-Media UGC Video — the one tool for UGC video on agent-media. Always call the single make_ugc skill: give it a `script` (any length) and optionally a person/image/character; it returns the finished captioned vertical video. Short script → one clip, long monologue → full multi-take (never trimmed), `broll_url` → narrated overlay. You never pick a sub-skill.',
+      'allowed-tools': Object.values(SKILLS)
+        .filter((s) => s.agentFacing)
+        .map((s) => `mcp__agent-media__${s.slug}`),
+      'x-skill-slug': 'agent-media-ugc',
+      // Bundle version anchor (the CLI update-check compares against this).
+      // 1.1.0 = added the publish-to-social skill (TikTok / Instagram / X).
+      'x-skill-version': '1.1.0',
+    }) + playbookBody(),
+  );
+
+  // Social-publishing skill — not a registry primitive; a guide for posting a
+  // generated video to the user's connected TikTok/Instagram/X via the
+  // /v1/social/* REST endpoints (Postiz Enterprise under the hood).
+  writeFile(
+    'skills/publish-to-social/SKILL.md',
+    frontmatter({
+      name: 'Publish to Social',
+      description:
+        'Publish a generated Agent-Media UGC Video to the user\'s connected TikTok, Instagram, or X. Connect channels (OAuth) and post or schedule via the REST API. Use after producing a video with make_ugc.',
+      'x-skill-slug': 'publish-to-social',
+      'x-skill-version': '1.0.0',
+    }) + socialBody(),
+  );
+
+  // Crazy Look skill — not a vNext registry primitive; it runs on the v2
+  // generator surface (media-worker-v2 via POST /v2/crazy-look). The hosted
+  // MCP server already exposes it as `create_crazy_look` (derived from
+  // V2_GENERATORS in @agentmedia/schema/v2), so the pack documents that
+  // tool + the sheet-first series flow.
+  writeFile(
+    'skills/make-crazy-look/SKILL.md',
+    frontmatter({
+      name: 'Make Crazy Look',
+      description:
+        'Silent 5-10s extreme close-up reaction clip with a static caption overlay ("the crazy look"). One recurring character opens on an exaggerated look and keeps morphing through randomized silent beats — no speech, no subtitles, ambient room tone only. A SERIES MUST START WITH A CHARACTER (create_character first; the saved sheet + pinned seed keeps the SAME face on every clip). Volume workflow: same caption + same character, N calls, N different performances.',
+      'allowed-tools': ['mcp__agent-media__create_crazy_look', 'mcp__agent-media__create_character'],
+      'x-skill-slug': 'make-crazy-look',
+      'x-skill-version': '1.0.0',
+      'x-mcp-tool': 'mcp__agent-media__create_crazy_look',
+    }) + crazyLookBody(),
+  );
+
+  console.log(`generated ${OUT} for ${Object.keys(SKILLS).length} skills`);
 }
-
-// Composite "playbook" skill — not a registry entry; a hand-curated
-// orchestration guide for agents that want the bigger picture before
-// picking which primitive(s) to call. The 4 hand-written sections
-// (one-shot, step-by-step, image-first, troubleshooting) reference
-// the codegen-controlled per-skill markdowns above.
-writeFile(
-  'skills/agent-media-ugc/SKILL.md',
-  frontmatter({
-    name: 'Agent-Media UGC Playbook',
-    description:
-      'Playbook for Agent-Media UGC Video — the one tool for UGC video on agent-media. Always call the single make_ugc skill: give it a `script` (any length) and optionally a person/image/character; it returns the finished captioned vertical video. Short script → one clip, long monologue → full multi-take (never trimmed), `broll_url` → narrated overlay. You never pick a sub-skill.',
-    'allowed-tools': Object.values(SKILLS)
-      .filter((s) => s.agentFacing)
-      .map((s) => `mcp__agent-media__${s.slug}`),
-    'x-skill-slug': 'agent-media-ugc',
-    // Bundle version anchor (the CLI update-check compares against this).
-    // 1.1.0 = added the publish-to-social skill (TikTok / Instagram / X).
-    'x-skill-version': '1.1.0',
-  }) + playbookBody(),
-);
-
-// Social-publishing skill — not a registry primitive; a guide for posting a
-// generated video to the user's connected TikTok/Instagram/X via the
-// /v1/social/* REST endpoints (Postiz Enterprise under the hood).
-writeFile(
-  'skills/publish-to-social/SKILL.md',
-  frontmatter({
-    name: 'Publish to Social',
-    description:
-      'Publish a generated Agent-Media UGC Video to the user\'s connected TikTok, Instagram, or X. Connect channels (OAuth) and post or schedule via the REST API. Use after producing a video with make_ugc.',
-    'x-skill-slug': 'publish-to-social',
-    'x-skill-version': '1.0.0',
-  }) + socialBody(),
-);
-
-// Crazy Look skill — not a vNext registry primitive; it runs on the v2
-// generator surface (media-worker-v2 via POST /v2/crazy-look). The hosted
-// MCP server already exposes it as `create_crazy_look` (derived from
-// V2_GENERATORS in @agentmedia/schema/v2), so the pack documents that
-// tool + the sheet-first series flow.
-writeFile(
-  'skills/make-crazy-look/SKILL.md',
-  frontmatter({
-    name: 'Make Crazy Look',
-    description:
-      'Silent 5-10s extreme close-up reaction clip with a static caption overlay ("the crazy look"). One recurring character opens on an exaggerated look and keeps morphing through randomized silent beats — no speech, no subtitles, ambient room tone only. A SERIES MUST START WITH A CHARACTER (create_character first; the saved sheet + pinned seed keeps the SAME face on every clip). Volume workflow: same caption + same character, N calls, N different performances.',
-    'allowed-tools': ['mcp__agent-media__create_crazy_look', 'mcp__agent-media__create_character'],
-    'x-skill-slug': 'make-crazy-look',
-    'x-skill-version': '1.0.0',
-    'x-mcp-tool': 'mcp__agent-media__create_crazy_look',
-  }) + crazyLookBody(),
-);
-
-console.log(`generated ${OUT} for ${Object.keys(SKILLS).length} skills`);
 
 function crazyLookBody(): string {
   return [
@@ -937,13 +1017,4 @@ function playbookBody(): string {
     '- [reference/realism-rubric.md](../../reference/realism-rubric.md) — the 9 realism props baked into every prompt',
     '',
   ].join('\n');
-}
-
-function readFromRepo(file: string): string {
-  const path = resolve(REPO_ROOT, file);
-  try {
-    return readFileSync(path, 'utf-8');
-  } catch {
-    return `Apache License 2.0 — see ${file} in the source repository.\n`;
-  }
 }

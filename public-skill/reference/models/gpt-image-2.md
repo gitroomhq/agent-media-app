@@ -6,17 +6,17 @@ The image model behind every video: it draws the portrait, the multi-view charac
 
 | | |
 |---|---|
-| Kind | image |
+| Kind | image (default for `generate_image`) |
 | Tier | standard |
 | Status | **live** |
 | Provider | openai (`gpt-image-2`) |
 | Modes | text-to-image, image-edit |
 | Features | portrait, character-sheet, wireframe, prompt-adherence |
 | Limits | 1024, 1536; refs: image |
-| Our cost | $0.015 per image. EvoLink list price per 1K image; OpenAI direct is comparable. Used for portrait, sheet and wireframe stages. |
-| User price | included in the generator's credits |
+| Our cost | $0.06 per image. OpenAI direct, quality "medium", 1024x1536 — the published gpt-image-1 rate ($0.063); gpt-image-2 assumed equal until an invoice line is checked. EvoLink lists $0.015 for its 1K tier. |
+| User price | 20 credits per image standalone (`generate_image`); included in the credits of the fixed video skills |
 | Quality / speed | good / fast |
-| Verified | 2026-09-05. every video pipeline stage A-C; portrait + sheet produced on run 2749ee84 |
+| Verified | 2026-09-05. every video pipeline stage A-C; portrait + sheet produced on run 2749ee84; standalone via generate_image |
 
 ## Best for
 
@@ -37,4 +37,5 @@ The image model behind every video: it draws the portrait, the multi-view charac
 
 ## How to select it
 
-- Internal: pipeline stages A (portrait), B (sheet), C (wireframe)
+- `generate_image` over MCP (the default — omit `model`, or pass `"model": "gpt-image-2"`); `POST /v2/generate/image` over REST. 20 credits per image. With `refs` it runs the image-edit endpoint (compose from the references); without, text-to-image
+- Internal: pipeline stages A (portrait), B (sheet), C (wireframe) of the fixed video skills, included in those skills' credits

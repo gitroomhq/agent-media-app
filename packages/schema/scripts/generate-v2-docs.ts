@@ -19,7 +19,12 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
   V2_GENERATORS,
   V2_MODELS,
+  V2_DEFAULT_MODEL,
+  GenerateAudioSchema,
+  GenerateImageSchema,
+  GenerateVideoSchema,
   liveModels,
+  quoteGenerate,
   type V2GeneratorRecord,
 } from '../src/v2/index.js';
 
@@ -55,6 +60,60 @@ function fmtInputSchema(def: V2GeneratorRecord): string {
 // micro-balance edge case.)
 
 // ── docs/v2/api-reference.md ──────────────────────────────────────────────
+
+function fmtLooseSchema(schema: unknown, name: string): string {
+  const js = zodToJsonSchema(schema as any, { name, $refStrategy: 'none' }) as { definitions?: Record<string, unknown> };
+  return '```json\n' + JSON.stringify(js.definitions?.[name] ?? js, null, 2) + '\n```';
+}
+
+/**
+ * The loose surface: generate_image / generate_video / generate_audio and
+ * quote. Same zod as the routes and the MCP tools, so this section can
+ * never describe a field the server does not accept.
+ */
+function renderLooseSurface(): string {
+  const v5 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5 })).credits;
+  const p5 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5, model: 'seedance-2.5' })).credits;
+  const img = quoteGenerate('image', GenerateImageSchema.parse({ prompt: 'portrait' })).credits;
+  const kinds: Array<['image' | 'video' | 'audio', unknown]> = [
+    ['video', GenerateVideoSchema],
+    ['image', GenerateImageSchema],
+    ['audio', GenerateAudioSchema],
+  ];
+  return [
+    '## The loose surface — `POST /v2/generate/{kind}`',
+    '',
+    'Three primitives with no recipe: your prompt, your model, your reference images. This is what the hosted MCP connector exposes as `generate_video`, `generate_image`, `generate_audio` and `quote`. The fixed generators above stay on REST for the dashboard.',
+    '',
+    '| Route | Body | Credits |',
+    '|---|---|---|',
+    `| \`POST /v2/generate/video\` | GenerateVideo (below) | seconds × the model rate — ${v5} for 5s on \`${V2_DEFAULT_MODEL.video}\`, ${p5} on \`seedance-2.5\` |`,
+    `| \`POST /v2/generate/image\` | GenerateImage | ${img} per image on \`${V2_DEFAULT_MODEL.image}\` |`,
+    `| \`POST /v2/generate/audio\` | GenerateAudio | 1 per 100 characters on \`${V2_DEFAULT_MODEL.audio}\`, rounded up |`,
+    '| `POST /v2/quote/{kind}` | the same body | 0 — returns `{ credits, usd, model, breakdown }` without running |',
+    '',
+    'Response: `201 { job_id, status: "submitted", kind, model, credits_deducted, breakdown, status_url }`. Poll `GET /v1/videos/{job_id}`; `video_url` holds the output URL for every kind (png, mp4 or mp3). A failed job refunds automatically.',
+    '',
+    '`model` must be a **live** catalog id of the right kind (`GET /v1/models`); a planned id is a `400 VALIDATION_ERROR` whose message lists the live ones. Omit it for the default. `refs` must be https URLs (`POST /v1/uploads/image` turns bytes into one). Bodies are strict: an unknown field is a 400, never silently ignored.',
+    '',
+    ...kinds.flatMap(([kind, schema]) => [
+      `### Generate${kind[0].toUpperCase()}${kind.slice(1)}`,
+      '',
+      fmtLooseSchema(schema, `generate_${kind}_input`),
+      '',
+    ]),
+    '```bash',
+    'curl -X POST https://api.agent-media.ai/v2/generate/video \\',
+    '  -H "Authorization: Bearer ma_..." -H "Content-Type: application/json" \\',
+    '  -d \'{ "prompt": "A 28-year-old woman in a bright kitchen, phone framing, holds a serum bottle to the lens and says: \\"Okay, I did not expect this to work.\\"", "seconds": 5 }\'',
+    '# -> 201 { "job_id": "...", "credits_deducted": ' + String(v5) + ', ... }',
+    'curl https://api.agent-media.ai/v1/videos/<job_id> -H "Authorization: Bearer ma_..."',
+    '```',
+    '',
+    '---',
+    '',
+  ].join('\n');
+}
 
 function renderApiReference(): string {
   const generators = Object.values(V2_GENERATORS);
@@ -123,6 +182,7 @@ function renderApiReference(): string {
     '---',
     '',
     sections,
+    renderLooseSurface(),
     '## Shared',
     '',
     '### Connecting an agent (no API key)',
@@ -146,14 +206,16 @@ function renderApiReference(): string {
     '| Model | Kind | Tier | User price | Selectable via |',
     '|---|---|---|---|---|',
     ...liveModels().map((m) => {
-      const price = m.credits ? (m.credits.perUnit === 0 ? 'inside generator credits' : `${m.credits.perUnit} credits/${m.credits.unit}`) : 'no price';
-      const sel = m.kind === 'video' ? '`engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine`' : 'not selectable (pipeline internal)';
-      return `| \`${m.id}\` | ${m.kind} | ${m.tier} | ${price} | ${sel} |`;
+      const price = m.credits ? `${m.credits.perUnit} credits/${m.credits.unit}` : 'no price';
+      const sel =
+        `\`model\` on \`/v2/generate/${m.kind}\` and the \`generate_${m.kind}\` MCP tool` +
+        (m.kind === 'video' ? '; `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine`' : '');
+      return `| \`${m.id}\`${V2_DEFAULT_MODEL[m.kind] === m.id ? ' (default)' : ''} | ${m.kind} | ${m.tier} | ${price} | ${sel} |`;
     }),
     '',
     `Planned, not selectable and unpriced until a real run is recorded: ${Object.values(V2_MODELS).filter((m) => m.status === 'candidate').map((m) => '`' + m.id + '`').join(', ')}. One page per model lives under \`docs/models/\`.`,
     '',
-    '`make_ugc` over MCP always renders on the default engine (`seedance-2.0`) today.',
+    '`make_ugc` (REST, the dashboard) always renders on the default engine (`seedance-2.0`); it has no engine field.',
     '',
     '### Authentication',
     '',
@@ -164,7 +226,7 @@ function renderApiReference(): string {
     '`GET /v1/videos/{job_id}` returns the same shape for v1 and v2 jobs. v2-specific fields:',
     '',
     '- `character_id` — present on jobs that create a v2 character (`char_xxxxxxxxxx`).',
-    '- `video_url` — present on completed video jobs.',
+    '- `video_url` — present on completed jobs; for `generate_image` / `generate_audio` jobs it holds the png / mp3 URL.',
     '',
     '### Selfie pipeline artifacts',
     '',
@@ -241,7 +303,7 @@ function renderSkillIndex(): string {
     'https://api.agent-media.ai/mcp',
     '```',
     '',
-    'Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: <https://agent-media.ai/connect>. Over MCP the same 4-gate protocol below still applies, and after submitting you MUST call `get_run_status` to get the finished video URL.',
+    'Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: <https://agent-media.ai/connect>. Over MCP the surface is different from the CLI: the connector lists `generate_video`, `generate_image`, `generate_audio`, `quote`, `list_models`, `list_characters`, `get_run_status` and `upload_image` — you write the prompt and pick the model yourself (see the public skill at `public-skill/skills/agent-media/SKILL.md`). After submitting you MUST call `get_run_status` to get the finished URL.',
     '',
     '## 🛑 HARD GATE — read this first, every conversation',
     '',

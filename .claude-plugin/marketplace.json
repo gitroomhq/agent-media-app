@@ -5,14 +5,14 @@
     "url": "https://github.com/gitroomhq"
   },
   "metadata": {
-    "description": "Agent-Media UGC Video for Claude Code — one tool: give a script + a person/image/character, get a finished captioned vertical UGC video.",
-    "version": "1.3.0"
+    "description": "Agent-Media for Claude Code — AI video, images and voice with you as the director: your prompt, your model, your references.",
+    "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "agent-media",
       "source": "./public-skill",
-      "description": "Agent-Media UGC Video — one tool. Give a script + a person/image/character; get a finished captioned vertical UGC video (short clip, multi-take monologue, or narrated b-roll). Connects over the hosted MCP server with browser sign-in — no API key."
+      "description": "Agent-Media — AI video, image and voice for agents, the loose way: you write the prompt, you pick the model (seedance-2.0, seedance-2.5, gpt-image-2, elevenlabs-tts…), you pass reference images. Four tools: generate_video, generate_image, generate_audio, quote. list_models tells you what each model is good for and what it costs. One MCP URL, browser sign-in."
     }
   ]
 }

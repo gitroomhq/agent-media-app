@@ -7,11 +7,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { V2_MODELS, V2_MODEL_IDS, liveModels, validateCatalog } from '../v2/models.js';
 import { V2_GENERATORS, V2_VIDEO_ENGINES } from '../v2/index.js';
+import { refreshPage } from '../../scripts/generate-model-docs.js';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
@@ -23,6 +24,13 @@ describe('model catalog', () => {
   it('every model has a docs file that exists in the repo', () => {
     for (const m of Object.values(V2_MODELS)) {
       expect(existsSync(join(REPO_ROOT, m.docs)), `${m.id}: ${m.docs} missing`).toBe(true);
+    }
+  });
+
+  it('every docs page carries the current fact table (run gen:model-docs after editing the catalog)', () => {
+    for (const m of Object.values(V2_MODELS)) {
+      const md = readFileSync(join(REPO_ROOT, m.docs), 'utf8');
+      expect(refreshPage(md, m), `${m.docs} is stale`).toBe(md);
     }
   });
 

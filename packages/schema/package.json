@@ -50,6 +50,7 @@
     "generate:edge-schema": "tsx scripts/generate-edge-schema.ts",
     "generate:openapi": "tsx scripts/generate-openapi.ts",
     "gen:v2-docs": "tsx scripts/generate-v2-docs.ts",
+    "gen:model-docs": "tsx scripts/generate-model-docs.ts",
     "gen:v1-tool-contracts": "tsx scripts/generate-v1-tool-contracts.ts",
     "check:spec": "tsx scripts/check-spec-freshness.ts",
     "check:sdk-types": "npx openapi-typescript ../../generated/openapi.json -o ../../generated/api-types.d.ts && echo '\u2713 SDK types generated'"

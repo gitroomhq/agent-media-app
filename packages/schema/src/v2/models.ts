@@ -379,7 +379,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     cost: { unit: 'track', usd: 0.059, note: 'FROM price on evolink.ai/models: $0.118 per 2 tracks.' },
     quality: 'good',
     speed: 'medium',
-    bestFor: ['the `music` bed field on make_ugc'],
+    bestFor: ['a music bed under a clip'],
     avoidFor: [],
     docs: 'docs/models/suno.md',
   },
