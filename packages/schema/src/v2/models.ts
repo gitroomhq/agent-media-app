@@ -167,7 +167,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     bestFor: ['hero product ads', 'close-up faces', 'one clip that has to be the best'],
     avoidFor: ['drafts', 'bulk', 'anything where 2.0 is good enough: it is ~3x the credits'],
     docs: 'docs/models/seedance-2.5.md',
-    verified: undefined,
+    verified: { date: '2026-09-05', runId: '431f82ba-9e9e-4644-beb3-b1f67c0de91e', note: 'generate_video, text-only (seedance-2.5-text-to-video), 4s, 396 credits; EvoLink render took ~25 min' },
   },
   'gpt-image-2': {
     id: 'gpt-image-2',

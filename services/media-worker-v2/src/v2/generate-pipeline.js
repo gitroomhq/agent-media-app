@@ -38,10 +38,9 @@ const DEFAULT_QUALITY = '720p';
 
 // Seedance model ids per catalog id and input shape. With reference
 // images the reference-to-video variant is used (identity is kept);
-// without, text-to-video. The 2.0 ids and 2.5-reference-to-video are the
-// ones the fixed pipelines already run; seedance-2.5-text-to-video is
-// the same naming pattern and is verified by a live run after deploy
-// (see docs/models/seedance-2.5.md, "verified").
+// without, text-to-video. All four ids are verified: the 2.0 pair and
+// 2.5-reference-to-video by the fixed pipelines, seedance-2.5-text-to-video
+// by job 431f82ba (2026-09-05, see docs/models/seedance-2.5.md).
 const SEEDANCE = {
   'seedance-2.0': { refs: 'seedance-2.0-reference-to-video', text: 'seedance-2.0-text-to-video' },
   'seedance-2.5': { refs: 'seedance-2.5-reference-to-video', text: 'seedance-2.5-text-to-video' },

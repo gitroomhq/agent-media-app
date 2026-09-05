@@ -16,7 +16,7 @@ The premium video engine. Same inputs and pipeline as 2.0, the provider's newer 
 | Our cost | $0.296 per second. EvoLink detailed table, 720p with IMAGE references bills at the text-to-video rate; the reference discount applies only to VIDEO references. Marketing page shows $0.084/s "from". |
 | User price | 99 credits per second |
 | Quality / speed | premium / slow |
-| Verified | no recorded run yet |
+| Verified | 2026-09-05. generate_video, text-only (seedance-2.5-text-to-video), 4s, 396 credits; EvoLink render took ~25 min (run 431f82ba-9e9e-4644-beb3-b1f67c0de91e) |
 
 ## Best for
 
@@ -34,7 +34,7 @@ The premium video engine. Same inputs and pipeline as 2.0, the provider's newer 
 
 - Only choose it when the user asks for top quality or a hero clip.
 - Cost trap: with image references at 720p the provider bills the text-to-video rate. There is no reference discount for images, only for video references. That is why it is 99 credits/s.
-- No run has been recorded on this model through the connector yet; the engine has been selectable since release ff89413 and as `model` on `generate_video` since the loose surface shipped. `seedance-2.5-text-to-video` (the no-refs path) follows the provider's naming pattern and is confirmed by the first recorded text-only run.
+- First recorded run: job 431f82ba (2026-09-05), `generate_video` with no refs on `seedance-2.5-text-to-video`, 4s, 396 credits. The provider took ~25 minutes for 4 seconds of video; budget for that (2.0 renders 5s in ~3 minutes).
 - Max 15s per take through agent-media even though the provider allows up to 30s.
 
 ## How to select it
