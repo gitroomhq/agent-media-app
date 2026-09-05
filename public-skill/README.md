@@ -83,6 +83,7 @@ See `skills/publish-to-social/SKILL.md` for the full flow.
 - [reference/auth.md](reference/auth.md) — first-time setup
 - [reference/pacing.md](reference/pacing.md) — how word count picks the take duration
 - [reference/realism-rubric.md](reference/realism-rubric.md) — realism props baked into every prompt
+- [reference/models.md](reference/models.md) — which model to pick, with prices; one page per model under reference/models/
 
 ## How this repo is built
 

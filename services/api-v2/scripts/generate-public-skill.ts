@@ -19,6 +19,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { SKILLS, type SkillEntry } from '../src/skills/registry.js';
+import { V2_MODELS, liveModels } from '@agentmedia/schema/v2';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');
@@ -500,12 +501,54 @@ function readme(): string {
     '- [reference/auth.md](reference/auth.md) — first-time setup',
     '- [reference/pacing.md](reference/pacing.md) — how word count picks the take duration',
     '- [reference/realism-rubric.md](reference/realism-rubric.md) — realism props baked into every prompt',
+    '- [reference/models.md](reference/models.md) — which model to pick, with prices; one page per model under reference/models/',
     '',
     '## How this repo is built',
     '',
     'This repo is generated. The source of truth is the agent-media private monorepo. A GitHub Action mirrors the `public-skill/` subtree here on every push. Do not commit hand-edits — they will be overwritten.',
     '',
     'License: Apache-2.0.',
+    '',
+  ].join('\n');
+}
+
+/**
+ * The choosing guide. Facts come from V2_MODELS; the prose here is the one
+ * rule that matters: default to seedance-2.0, pay 3x only for a hero clip.
+ */
+function refModels(): string {
+  const live = liveModels();
+  const cands = Object.values(V2_MODELS).filter((m) => m.status === 'candidate');
+  const price = (m: (typeof live)[number]) =>
+    m.credits ? (m.credits.perUnit === 0 ? 'inside generator credits' : `${m.credits.perUnit} credits/${m.credits.unit}`) : 'no price';
+  const row = (m: (typeof live)[number]) =>
+    `| [${m.id}](models/${m.id}.md) | ${m.kind} | ${m.tier} | ${price(m)} | ${m.limits.maxSeconds ? `≤${m.limits.maxSeconds}s` : '–'} | ${m.bestFor[0]} |`;
+  return [
+    '# Choosing a model',
+    '',
+    'Generated from `packages/schema/src/v2/models.ts`. Call the `list_models` MCP tool (or `GET /v1/models`) for the live version with prices.',
+    '',
+    '## The one rule',
+    '',
+    '**Default to `seedance-2.0`.** It is the right engine for talking-head UGC, product-in-hands and crazy-look at 30 credits/second. `seedance-2.5` is about 3x the credits (99/second); pick it only when the user asks for the best possible single clip. Never pick it for drafts or bulk.',
+    '',
+    'Today the engine is selectable on the CLI (`agent-media selfie --engine seedance-2.5`, `agent-media crazy-look --engine seedance-2.5`) and REST (`POST /v2/selfie`, `POST /v2/crazy-look` with `"engine"`). Over MCP, `make_ugc` has no engine field yet and always renders on seedance-2.0; that arrives in P2. Image and audio models are used inside the pipelines and are not selectable.',
+    '',
+    '## Live models',
+    '',
+    '| Model | Kind | Tier | User price | Max | Best for |',
+    '|---|---|---|---|---|---|',
+    ...live.map(row),
+    '',
+    '## Planned (not selectable, no price yet)',
+    '',
+    'Each goes live only after a real run is recorded and its cost is confirmed against the provider\'s detailed table.',
+    '',
+    '| Model | Kind | Tier | Best for |',
+    '|---|---|---|---|',
+    ...cands.map((m) => `| [${m.id}](models/${m.id}.md) | ${m.kind} | ${m.tier} | ${m.bestFor[0]} |`),
+    '',
+    '1 credit = $0.01.',
     '',
   ].join('\n');
 }
@@ -637,6 +680,13 @@ writeFile('LICENSE', readFromRepo('LICENSE'));
 writeFile('reference/auth.md', refAuth());
 writeFile('reference/pacing.md', refPacing());
 writeFile('reference/realism-rubric.md', refRealism());
+writeFile('reference/models.md', refModels());
+// One page per model, copied verbatim from docs/models/ so the pack and the
+// repo say the same thing. Candidates ship too: an agent that sees a planned
+// model in the index must also see that it is not selectable.
+for (const m of Object.values(V2_MODELS)) {
+  writeFile(`reference/models/${m.id}.md`, readFromRepo(m.docs));
+}
 
 // Only the curated agent-facing skill (make_ugc) ships a per-skill SKILL.md, so
 // the pack presents ONE entry point instead of a dozen. The other skills stay

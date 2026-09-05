@@ -440,6 +440,21 @@ Over MCP, always call `get_run_status` with the id you were given after submitti
 
 If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
 
+### Models
+
+`GET /v1/models` (public, no key) and the `list_models` MCP tool return the model catalog with user prices, limits and what each model is good and bad at. Live today:
+
+| Model | Kind | Tier | User price | Selectable via |
+|---|---|---|---|---|
+| `seedance-2.0` | video | standard | 30 credits/second | `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
+| `seedance-2.5` | video | premium | 99 credits/second | `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
+| `gpt-image-2` | image | standard | inside generator credits | not selectable (pipeline internal) |
+| `elevenlabs-tts` | audio | standard | inside generator credits | not selectable (pipeline internal) |
+
+Planned, not selectable and unpriced until a real run is recorded: `seedance-2.0-mini`, `kling-o3`, `wan-3.0`, `omnihuman-1.5`, `sora-2`, `nano-banana-2`, `seedream-5.0-pro`, `z-image-turbo`, `doubao-seed-audio-1.0`, `suno`. One page per model lives under `docs/models/`.
+
+`make_ugc` over MCP always renders on the default engine (`seedance-2.0`) today.
+
 ### Authentication
 
 Every v2 REST request sends `Authorization: Bearer ma_xxx`. Get a key via `agent-media login` (CLI) or the dashboard. (Not needed for the MCP connector above.)

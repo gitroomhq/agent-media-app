@@ -108,3 +108,38 @@ describe('hosted MCP: directory submission requirements', () => {
     expect(gen.slice(0, 200)).toContain('readOnlyHint: false');
   });
 });
+
+describe('hosted MCP: model catalog', () => {
+  const modelsRoute = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../routes/v1/models.ts'),
+    'utf8',
+  );
+  const server = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../server.ts'),
+    'utf8',
+  );
+
+  it('declares list_models, read-only, and lists it in tools/list', () => {
+    expect(source).toContain("name: 'list_models'");
+    expect(source).toContain('listModelsTool,');
+    expect(source).toContain("readOnlyAnnotations('List Models')");
+  });
+
+  it('tells the agent the default and the 3x price gap before it chooses', () => {
+    const desc = source.slice(source.indexOf("name: 'list_models'"), source.indexOf("name: 'list_models'") + 900);
+    expect(desc).toMatch(/seedance-2\.0 is right for most jobs/);
+    expect(desc).toMatch(/3x the credits/);
+  });
+
+  it('GET /v1/models is public and on the read limiter', () => {
+    expect(server).toContain("app.get('/v1/models', readLimiter, listModelsRoute);");
+  });
+
+  it('never hands an agent a price for a candidate, and never a select handle', () => {
+    expect(modelsRoute).toContain('credits: m.credits ?? null');
+    expect(modelsRoute).toMatch(/select_with:\s*m\.kind === 'video' && m\.status === 'live'/);
+    // And it must say where the engine is NOT selectable, or an agent passes a
+    // field make_ugc silently ignores.
+    expect(modelsRoute).toMatch(/not_on: \['make_ugc/);
+  });
+});

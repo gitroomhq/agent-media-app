@@ -315,6 +315,25 @@ function buildMcpServer(apiKey: string): Server {
     },
   };
 
+  /**
+   * The model catalog, for choosing. An agent that cannot read cost, limits
+   * and best-for picks the premium model for everything; this is the menu
+   * with the prices on it. Read-only, no credits.
+   */
+  const listModelsTool = {
+    name: 'list_models',
+    description:
+      'List the generation models agent-media can use, with what each costs the user (credits per second), its limits, what it is good and bad at, and how to select it. Read this BEFORE choosing an engine for a video: the default seedance-2.0 is right for most jobs; seedance-2.5 is about 3x the credits and only worth it for a hero clip. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        include_candidates: { type: 'boolean', description: 'Also return planned models (no price, not selectable). Default false.' },
+      },
+      additionalProperties: false,
+    },
+    annotations: readOnlyAnnotations('List Models'),
+  };
+
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
       ...tools.map((t) => t.listEntry),
@@ -322,11 +341,70 @@ function buildMcpServer(apiKey: string): Server {
       listCharactersTool,
       getRunStatusTool,
       uploadImageTool,
+      listModelsTool,
     ],
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    // Read-only: the model catalog (GET /v1/models).
+    if (name === 'list_models') {
+      const withCandidates = (args as { include_candidates?: boolean })?.include_candidates === true;
+      let resp: FetchResponse;
+      try {
+        resp = await apiFetch(`${PUBLIC_API_BASE}/v1/models${withCandidates ? '?include=candidates' : ''}`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          timeoutMs: 20_000,
+        });
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `agent-media did not answer in time (${(err as Error).message}). Call list_models again.` }],
+          isError: true,
+        };
+      }
+      const text = await resp.text();
+      let data: unknown;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!resp.ok) {
+        return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
+      }
+      const d = data as {
+        models?: Array<{
+          id: string; kind: string; tier: string; status: string;
+          credits: { unit: string; perUnit: number; base?: number } | null;
+          limits: { minSeconds?: number; maxSeconds?: number; refs?: string };
+          quality: string; speed: string; best_for: string[]; avoid_for: string[];
+          docs_url: string; verified: { date: string; runId?: string } | null;
+          select_with: { field: string; value: string; on: string[]; not_on: string[] } | null;
+        }>;
+        default_video_model?: string;
+      } | null;
+      const lines = (d?.models ?? []).map((m) => {
+        const price = m.credits
+          ? (m.credits.perUnit === 0 ? 'included in the generator credits' : `${m.credits.perUnit} credits/${m.credits.unit}`)
+          : 'no price (candidate, not selectable)';
+        const sel = m.select_with
+          ? `select: ${m.select_with.field}="${m.select_with.value}" on ${m.select_with.on.join(', ')}; NOT on ${m.select_with.not_on.join(', ')}`
+          : 'select: not selectable (used inside the pipelines)';
+        const lim = [m.limits?.maxSeconds ? `max ${m.limits.maxSeconds}s` : null, m.limits?.refs ? `refs: ${m.limits.refs}` : null].filter(Boolean).join(', ');
+        return [
+          `- ${m.id} [${m.kind}, ${m.tier}, ${m.status}] — ${price}; ${m.quality} quality, ${m.speed}${lim ? `; ${lim}` : ''}`,
+          `    best for: ${m.best_for.join('; ')}`,
+          m.avoid_for?.length ? `    avoid for: ${m.avoid_for.join('; ')}` : null,
+          `    ${sel}${m.verified ? ` · verified ${m.verified.date}` : ' · no recorded run'} · docs: ${m.docs_url}`,
+        ].filter(Boolean).join('\n');
+      });
+      return {
+        content: [{
+          type: 'text',
+          text: [
+            `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Over MCP every video renders on the default engine today; seedance-2.5 is selectable only on the CLI (--engine) and REST (/v2/selfie, /v2/crazy-look) until P2.`,
+            ...lines,
+          ].join('\n'),
+        }],
+      };
+    }
 
     // Bytes → URL. Forwards to POST /v1/uploads/image.
     if (name === 'upload_image') {

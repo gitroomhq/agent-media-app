@@ -18,6 +18,8 @@ import { fileURLToPath } from 'node:url';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
   V2_GENERATORS,
+  V2_MODELS,
+  liveModels,
   type V2GeneratorRecord,
 } from '../src/v2/index.js';
 
@@ -134,6 +136,24 @@ function renderApiReference(): string {
     'Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: https://agent-media.ai/connect',
     '',
     'Over MCP, always call `get_run_status` with the id you were given after submitting — generation is async and the submit response only confirms the job started.',
+    '',
+    'If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.',
+    '',
+    '### Models',
+    '',
+    '`GET /v1/models` (public, no key) and the `list_models` MCP tool return the model catalog with user prices, limits and what each model is good and bad at. Live today:',
+    '',
+    '| Model | Kind | Tier | User price | Selectable via |',
+    '|---|---|---|---|---|',
+    ...liveModels().map((m) => {
+      const price = m.credits ? (m.credits.perUnit === 0 ? 'inside generator credits' : `${m.credits.perUnit} credits/${m.credits.unit}`) : 'no price';
+      const sel = m.kind === 'video' ? '`engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine`' : 'not selectable (pipeline internal)';
+      return `| \`${m.id}\` | ${m.kind} | ${m.tier} | ${price} | ${sel} |`;
+    }),
+    '',
+    `Planned, not selectable and unpriced until a real run is recorded: ${Object.values(V2_MODELS).filter((m) => m.status === 'candidate').map((m) => '`' + m.id + '`').join(', ')}. One page per model lives under \`docs/models/\`.`,
+    '',
+    '`make_ugc` over MCP always renders on the default engine (`seedance-2.0`) today.',
     '',
     '### Authentication',
     '',

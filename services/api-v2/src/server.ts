@@ -41,6 +41,7 @@ import { crazyLookRoute } from './routes/v2/crazy-look.js';
 import { characterCreateRoute, listCharactersRoute, updateCharacterRoute } from './routes/v2/characters.js';
 import { listMyCharactersRoute } from './routes/v1/characters.js';
 import { uploadImageRoute } from './routes/v1/uploads.js';
+import { listModelsRoute } from './routes/v1/models.js';
 import { subtitleRoute } from './routes/v2/subtitle.js';
 import { jobStreamRoute } from './routes/v2/job-stream.js';
 import { mcpRoute } from './routes/mcp.js';
@@ -871,6 +872,9 @@ if (isPrimitivesRouteEnabled()) {
   // read limiter: an agent uploading a photo must never be throttled by the
   // generate ceiling it will need a moment later.
   app.post('/v1/uploads/image', readLimiter, authMiddleware, uploadImageRoute);
+  // The model catalog. Read-only, no credits; public so docs and the
+  // website can render it without a key.
+  app.get('/v1/models', readLimiter, listModelsRoute);
   app.get('/v1/me/api-keys', readLimiter, authMiddleware, listApiKeysRoute);
   app.post('/v1/me/api-keys', generateLimiter, authMiddleware, createApiKeyRoute);
   app.delete('/v1/me/api-keys/:id', generateLimiter, authMiddleware, revokeApiKeyRoute);
