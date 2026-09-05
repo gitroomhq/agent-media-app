@@ -16,3 +16,4 @@ export * from './crazy-look.js';
 export * from './generators.js';
 export * from './models.js';
 export * from './generate.js';
+export * from './model-docs.js';

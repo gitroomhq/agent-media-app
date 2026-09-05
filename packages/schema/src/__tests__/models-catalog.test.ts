@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { V2_MODELS, V2_MODEL_IDS, liveModels, validateCatalog } from '../v2/models.js';
 import { V2_GENERATORS, V2_VIDEO_ENGINES } from '../v2/index.js';
-import { refreshPage } from '../../scripts/generate-model-docs.js';
+import { refreshPage } from '../v2/model-docs.js';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
