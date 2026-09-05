@@ -196,12 +196,36 @@ jobs:
       - name: CLI smoke test — help
         run: node apps/cli/dist/index.js --help
 
-      # The official MCP conformance suite against THIS build of the hosted
-      # connector. The agent-facing contract is "works with any MCP client", so
-      # the protocol layer is checked by the protocol's own suite, not by us.
-      # Scenarios that only the reference "everything" server can pass are
-      # listed in services/api-v2/conformance/baseline.yml; anything else that
-      # fails is a regression.
+  # ─── MCP conformance ──────────────────────────────────────────────────────
+  # The official MCP conformance suite against THIS build of the hosted
+  # connector. The agent-facing contract is "works with any MCP client", so
+  # the protocol layer is checked by the protocol's own suite, not by us.
+  # Scenarios that only the reference "everything" server can pass are listed
+  # in services/api-v2/conformance/baseline.yml; anything else that fails is a
+  # regression. Own job on Node 22: the conformance CLI uses fs.globSync,
+  # which Node 20 does not have.
+  conformance:
+    name: MCP conformance
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build schema + api-v2
+        run: |
+          pnpm --filter @agentmedia/schema build
+          pnpm --filter api-v2 build
+
       - name: MCP conformance — hosted connector
         run: pnpm --filter api-v2 test:conformance
 
