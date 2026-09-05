@@ -7,12 +7,12 @@
     "source": "github",
     "subfolder": "packages/mcp-server"
   },
-  "version": "0.7.6",
+  "version": "0.8.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@agentmedia/mcp-server",
-      "version": "0.7.6",
+      "version": "0.8.0",
       "transport": {
         "type": "stdio"
       },
