@@ -196,6 +196,15 @@ jobs:
       - name: CLI smoke test — help
         run: node apps/cli/dist/index.js --help
 
+      # The official MCP conformance suite against THIS build of the hosted
+      # connector. The agent-facing contract is "works with any MCP client", so
+      # the protocol layer is checked by the protocol's own suite, not by us.
+      # Scenarios that only the reference "everything" server can pass are
+      # listed in services/api-v2/conformance/baseline.yml; anything else that
+      # fails is a regression.
+      - name: MCP conformance — hosted connector
+        run: pnpm --filter api-v2 test:conformance
+
   # ─── Self-host contract ───────────────────────────────────────────────────
   # The compose stack is the only thing standing behind the README's "clone and
   # run it yourself" claim, and it breaks in ways nothing else catches. Two

@@ -1,0 +1,13 @@
+import express from 'express';
+import { createServer } from 'node:http';
+const stub = express(); stub.use(express.json({limit:'12mb'}));
+stub.get('/v1/characters', (_q,res)=>res.json({characters:[]}));
+stub.all('*', (_q,res)=>res.status(404).json({error:'stub'}));
+const s = createServer(stub).listen(0); await new Promise(r=>s.once('listening',r));
+process.env.PUBLIC_API_BASE = `http://127.0.0.1:${s.address().port}`;
+process.env.VNEXT_PRIMITIVES_ENABLED='true'; process.env.MAKE_UGC_ENABLED='true';
+const { mcpRoute } = await import('../dist/routes/mcp.js');
+const app = express(); app.use(express.json({limit:'12mb'}));
+app.use((req,_r,n)=>{req.userId='u1';req.authToken='ma_test';n();});
+app.all('/mcp', mcpRoute);
+createServer(app).listen(3939, ()=>console.log("conf-host ready :3939"));
