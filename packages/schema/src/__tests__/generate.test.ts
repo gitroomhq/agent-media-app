@@ -9,6 +9,7 @@ import {
   V2_MODELS,
   V2_VOICES,
   liveModelIds,
+  pickAuto,
   quoteAny,
   quoteGenerate,
 } from '../v2/index.js';
@@ -106,5 +107,42 @@ describe('loose surface: credit maths', () => {
     expect(bad.ok).toBe(false);
     const good = quoteAny('video', { prompt: 'x'.repeat(10), seconds: 8 });
     expect(good.ok && good.quote.credits).toBe(240);
+  });
+});
+
+describe('model: "auto"', () => {
+  const S = (runs: number, failed: number, score: number | null, scored: number) => ({
+    runs, failed, avg_auto_score: score, scored, avg_user_score: null, rated: 0, p50_seconds: null, avg_credits: null,
+  });
+
+  it('is accepted by the schemas and refused by quoteGenerate until resolved', () => {
+    expect(GenerateVideoSchema.safeParse({ prompt: 'x'.repeat(10), model: 'auto' }).success).toBe(true);
+    expect(() => quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), model: 'auto' }))).toThrow(/pickAuto/);
+  });
+
+  it('with no data picks the default and says why', () => {
+    const p = pickAuto('video', {});
+    expect(p.model).toBe('seedance-2.0');
+    expect(p.reason).toMatch(/default/);
+  });
+
+  it('never picks a challenger on thin data or a >1.5x price', () => {
+    // seedance-2.5 is 3.3x the price: excluded even with a perfect score.
+    expect(pickAuto('video', { 'seedance-2.5': S(50, 0, 0.99, 50) }).model).toBe('seedance-2.0');
+    // and thin data never counts
+    expect(pickAuto('image', { 'gpt-image-2': S(3, 3, 0.1, 3) }).model).toBe('gpt-image-2');
+  });
+
+  it('abandons a default that fails >25% for a healthy live model', () => {
+    const p = pickAuto('video', { 'seedance-2.0': S(20, 8, 0.8, 12), 'seedance-2.5': S(20, 0, 0.8, 12) });
+    expect(p.model).toBe('seedance-2.5');
+    expect(p.reason).toMatch(/failed 40%/);
+  });
+
+  it('quoteAny resolves auto before pricing and reports the pick', () => {
+    const q = quoteAny('video', { prompt: 'x'.repeat(10), seconds: 5, model: 'auto' }, {});
+    expect(q.ok && q.quote.model).toBe('seedance-2.0');
+    expect(q.ok && q.quote.credits).toBe(150);
+    expect(q.ok && q.auto?.reason).toBeTruthy();
   });
 });
