@@ -43,3 +43,21 @@ test('queue lanes: video pipelines share one per-user lane; image, audio, subtit
   assert.equal(laneFor('subtitle'), 'subtitle');
   assert.equal(laneFor(undefined), 'video');
 });
+
+const judge = await import('../src/v2/quality-judge.js').catch((err) => {
+  if (String(err?.code) === 'ERR_MODULE_NOT_FOUND') return {};
+  throw err;
+});
+
+test('judge: only loose-surface pipelines are scored; the prompt carries the rubric and asks for JSON', { skip: !judge.kindForPipeline }, () => {
+  assert.equal(judge.kindForPipeline('generate-video'), 'video');
+  assert.equal(judge.kindForPipeline('generate-image'), 'image');
+  assert.equal(judge.kindForPipeline('generate-audio'), 'audio');
+  assert.equal(judge.kindForPipeline('selfie'), null);
+  const p = judge.judgeInstructions({ kind: 'video', prompt: 'a woman says hi', hasRefs: true });
+  assert.match(p, /skin shows pores/);
+  assert.match(p, /"identity_match": 0\.\.1/);
+  assert.match(p, /"overall"/);
+  const q = judge.judgeInstructions({ kind: 'image', prompt: 'x', hasRefs: false });
+  assert.match(q, /"identity_match": null/);
+});

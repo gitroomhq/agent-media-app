@@ -26,6 +26,7 @@ import { processCharacterCreate } from './character-create-pipeline.js';
 import { processSubtitle } from './subtitle-pipeline.js';
 import { processCrazyLook } from './crazy-look-pipeline.js';
 import { processGenerateImage, processGenerateVideo, processGenerateAudio } from './generate-pipeline.js';
+import { judgeAndRecord } from './quality-judge.js';
 import { scheduleOrphanReclaim } from './orphan-reclaimer.js';
 import { classifyError } from '../error-classifier.js';
 
@@ -146,6 +147,7 @@ function runJob(key, jobEnvelope) {
   const { pipeline, params } = jobEnvelope;
   const { job_id, callback_url } = params;
 
+  const startedAt = Date.now();
   console.log(`[v2:${pipeline}:${job_id}] starting (queue=${key})`);
   sendCallback(callback_url, {
     job_id,
@@ -250,6 +252,20 @@ function runJob(key, jobEnvelope) {
       }
       if (!settle(() => sendCallback(callback_url, payload))) {
         console.warn(`[v2:${pipeline}:${job_id}] completed AFTER hard timeout — result dropped (job already failed + refunded)`);
+      } else if (pipeline.startsWith('generate-')) {
+        // P3: score it. After the callback, off the queue's critical path,
+        // never able to fail the job.
+        judgeAndRecord({
+          job_id,
+          user_id: params.user_id,
+          pipeline,
+          model: params.model,
+          provider_model: result.providerModel,
+          prompt: params.prompt ?? params.text,
+          refs: Array.isArray(params.refs) ? params.refs : [],
+          output_url: result.outputUrl,
+          render_ms: Date.now() - startedAt,
+        }).catch(() => {});
       }
     })
     .catch((err) => {
