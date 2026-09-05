@@ -27,3 +27,19 @@ test('voice: friendly names map to ElevenLabs ids, raw ids pass through', { skip
   assert.equal(resolveVoice(undefined), 'EXAVITQu4vr4xnSDxMaL');
   assert.equal(resolveVoice('abcdefghij1234567890'), 'abcdefghij1234567890');
 });
+
+const { laneFor } = await import('../src/v2/server-routes.js').catch((err) => {
+  if (String(err?.code) === 'ERR_MODULE_NOT_FOUND') return {};
+  throw err;
+});
+
+test('queue lanes: video pipelines share one per-user lane; image, audio, subtitle each get their own', { skip: !laneFor }, () => {
+  assert.equal(laneFor('selfie'), 'video');
+  assert.equal(laneFor('crazy-look'), 'video');
+  assert.equal(laneFor('generate-video'), 'video');
+  assert.equal(laneFor('generate-image'), 'image');
+  assert.equal(laneFor('character-create'), 'image');
+  assert.equal(laneFor('generate-audio'), 'audio');
+  assert.equal(laneFor('subtitle'), 'subtitle');
+  assert.equal(laneFor(undefined), 'video');
+});

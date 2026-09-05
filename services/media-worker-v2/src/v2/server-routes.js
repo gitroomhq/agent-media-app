@@ -4,9 +4,10 @@
  * v2 · server routes.
  *
  * Registered alongside the legacy worker routes by server.js. Owns its
- * own per-user FIFO queue so v2 jobs never have to share the old
- * dispatcher's `_pipeline` switch — that switch lives in v1 code and
- * must stay untouched.
+ * own per-user, per-lane FIFO queues (video | image | audio | subtitle,
+ * see laneFor) so v2 jobs never have to share the old dispatcher's
+ * `_pipeline` switch — that switch lives in v1 code and must stay
+ * untouched — and a quick image or audio job never waits behind a video.
  *
  * Routes:
  *   POST /v2/selfie       — enqueue + run a Selfie generation
@@ -34,8 +35,29 @@ import { classifyError } from '../error-classifier.js';
 // chain and vice-versa.
 const v2UserQueues = new Map();
 
-function getQueue(userId) {
-  const key = userId || 'anonymous';
+/**
+ * Queue lane per pipeline. One FIFO per user used to hold everything, so a
+ * 2-second generate_audio waited 25 minutes behind a seedance-2.5 clip on
+ * the same account (observed 2026-09-05, jobs 431f82ba / 22296a2e). Video
+ * renders stay serial per user (provider limits, the 15-minute reaper's
+ * assumptions); image and audio each get their own lane. Exported for tests.
+ */
+export function laneFor(pipeline) {
+  switch (pipeline) {
+    case 'generate-image':
+    case 'character-create':
+      return 'image';
+    case 'generate-audio':
+      return 'audio';
+    case 'subtitle':
+      return 'subtitle';
+    default:
+      return 'video';
+  }
+}
+
+function getQueue(userId, pipeline) {
+  const key = `${userId || 'anonymous'}:${laneFor(pipeline)}`;
   if (!v2UserQueues.has(key)) {
     v2UserQueues.set(key, { running: false, queue: [] });
   }
@@ -66,7 +88,7 @@ async function sendCallback(callbackUrl, payload) {
  * killed it — see ./orphan-reclaimer.js).
  */
 export function enqueueV2Job(envelope) {
-  const { key, q } = getQueue(envelope?.params?.user_id);
+  const { key, q } = getQueue(envelope?.params?.user_id, envelope?.pipeline);
   if (q.running) {
     q.queue.push(envelope);
     const position = q.queue.length;
