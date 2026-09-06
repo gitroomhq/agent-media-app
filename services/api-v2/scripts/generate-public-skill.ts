@@ -14,7 +14,7 @@
  * .github/workflows/mirror-public-skill.yml workflow (subtree split).
  */
 
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, copyFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -142,6 +142,13 @@ function writeFile(rel: string, body: string): void {
   const path = join(OUT, rel);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, rel === 'LICENSE' ? body : noDashes(body), 'utf-8');
+}
+
+/** Copy a repo file into the pack byte for byte (images: never text-processed). */
+function copyIntoPack(rel: string, from: string): void {
+  const path = join(OUT, rel);
+  mkdirSync(dirname(path), { recursive: true });
+  copyFileSync(resolve(REPO_ROOT, from), path);
 }
 
 /** Write relative to the REPO ROOT rather than public-skill/ (marketplace manifest). */
@@ -821,9 +828,12 @@ writeFile('.mcp.json', mcpJson());
 writeFile('.cursor-plugin/plugin.json', cursorPluginJson());
 writeFile('mcp.json', mcpJson());
 writeFile('CHANGELOG.md', changelog());
-// The brand mark, copied from the app so the marketplace card and the product
-// carry the same logo (Cursor requires a path inside the plugin directory).
-writeFile('assets/logo.svg', readFromRepo('apps/web/public/agent-media-logo.svg'));
+// The brand mark. `brand/` holds the current logo (the same file the site
+// serves as its icon); apps/web still carries the previous mark, so copying
+// from there put an OLD logo on the marketplace card. Cursor wants a path
+// inside the plugin directory, so it is copied in on every generate.
+copyIntoPack('assets/logo.svg', 'brand/logo.svg');
+copyIntoPack('assets/logo-512.png', 'brand/logo-512.png');
 writeRepoFile('.cursor-plugin/marketplace.json', cursorMarketplaceJson());
 writeFile('LICENSE', readFromRepo('LICENSE'));
 writeFile('reference/auth.md', refAuth());
