@@ -69,7 +69,7 @@ export const getRunStatusTool = {
     type: 'object',
     properties: {
       run_id: { type: 'string', description: 'The run_id / skill_run_id / job_id returned when you submitted.' },
-      wait: { type: 'boolean', description: 'Block until the run finishes or ~2 minutes elapse (default false).' },
+      wait: { type: 'boolean', description: 'Block until the run finishes or ~45 seconds elapse (default false). A video needs several such calls; just call again.' },
     },
     required: ['run_id'],
     additionalProperties: false,

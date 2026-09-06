@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { SKILLS, type SkillEntry } from '../src/skills/registry.js';
 import { V2_MODELS, liveModels } from '@agentmedia/schema/v2';
 import { LOOSE_SURFACE_TOOLS } from '../src/mcp/loose-tools.js';
+import { buildSiteData } from './generate-site-data.js';
 import {
   LOOSE_TOOLS,
   looseSkillBody,
@@ -731,6 +732,9 @@ if (SURFACE === 'loose') {
   writeFile('reference/prompting.md', refPrompting(REPO_ROOT));
   writeFile('reference/recipes.md', refRecipes());
   writeFile('reference/tools.md', refTools(schemas));
+  // The website's Docs section reads this file (raw GitHub, main).
+  // Deterministic on purpose: gen:public-skill:check diffs it in CI.
+  writeFile('site-data.json', JSON.stringify(buildSiteData(pluginVersion()), null, 2) + '\n');
   writeFile(
     'skills/agent-media/SKILL.md',
     frontmatter({

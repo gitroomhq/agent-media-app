@@ -39,6 +39,7 @@ import { internalGptImageRoute } from './routes/internal/gpt-image.js';
 import { selfieRoute } from './routes/v2/selfie.js';
 import { crazyLookRoute } from './routes/v2/crazy-look.js';
 import { generateRoute as looseGenerateRoute, quoteRoute as looseQuoteRoute, rateRunRoute } from './routes/v2/generate.js';
+import { GenerateAudioSchema, GenerateImageSchema, GenerateVideoSchema } from '@agentmedia/schema/v2';
 import { characterCreateRoute, listCharactersRoute, updateCharacterRoute } from './routes/v2/characters.js';
 import { listMyCharactersRoute } from './routes/v1/characters.js';
 import { uploadImageRoute } from './routes/v1/uploads.js';
@@ -699,6 +700,69 @@ function buildOpenApiSpec() {
       },
     },
   };
+  // ── The loose surface (P2/P3) — what the MCP connector exposes ────────
+  // Same zod as the routes and the tools, so the spec cannot describe a
+  // field the server does not accept.
+  const looseSchema = (schema: unknown, name: string) => {
+    const js = zodToJsonSchema(schema as any, { name, $refStrategy: 'none' });
+    return (js as any).definitions?.[name] ?? js;
+  };
+  const looseBodies: Record<string, unknown> = {
+    video: looseSchema(GenerateVideoSchema, 'generate_video_input'),
+    image: looseSchema(GenerateImageSchema, 'generate_image_input'),
+    audio: looseSchema(GenerateAudioSchema, 'generate_audio_input'),
+  };
+  for (const kind of ['video', 'image', 'audio'] as const) {
+    paths[`/v2/generate/${kind}`] = {
+      post: {
+        operationId: `generate_${kind}`,
+        summary: `Render ${kind === 'audio' ? 'speech' : `a ${kind}`} from your prompt on the model you choose (or "auto"). Credits are deducted at submit; poll GET /v1/videos/{job_id}.`,
+        tags: ['loose-surface'],
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: looseBodies[kind] } } },
+        responses: {
+          '201': { description: 'Job submitted', content: { 'application/json': { schema: { $ref: '#/components/schemas/LooseSubmitted' } } } },
+          '400': { description: 'Validation error (unknown field, non-live model — the message lists the live ones)', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '402': { description: 'Insufficient credits', content: { 'application/json': { schema: { $ref: '#/components/schemas/InsufficientCredits' } } } },
+          '429': { description: 'Too many active jobs or rate limited', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    };
+    paths[`/v2/quote/${kind}`] = {
+      post: {
+        operationId: `quote_${kind}`,
+        summary: `Price a generate_${kind} call without running it (resolves "auto").`,
+        tags: ['loose-surface'],
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: looseBodies[kind] } } },
+        responses: {
+          '200': { description: 'The quote', content: { 'application/json': { schema: { $ref: '#/components/schemas/LooseQuote' } } } },
+          '400': { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+        },
+      },
+    };
+  }
+  paths['/v1/models'] = {
+    get: {
+      operationId: 'listModels',
+      summary: 'The model catalog: live models with price, limits, best/avoid-for, recent 30-day results, and the auto policy. Public, no key.',
+      tags: ['loose-surface'],
+      parameters: [{ name: 'include', in: 'query', schema: { type: 'string', enum: ['candidates'] }, description: 'Also return planned models (no price, not selectable).' }],
+      responses: { '200': { description: 'Catalog', content: { 'application/json': { schema: { type: 'object', properties: { models: { type: 'array', items: { type: 'object' } }, defaults: { type: 'object' }, auto_policy: { type: 'string' } } } } } } },
+    },
+  };
+  paths['/v1/runs/{job_id}/rate'] = {
+    post: {
+      operationId: 'rateRun',
+      summary: 'Rate a finished loose-surface run 1–5 with an optional note. Feeds per-model stats and model:"auto".',
+      tags: ['loose-surface'],
+      security: [{ bearerAuth: [] }],
+      parameters: [{ name: 'job_id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['score'], properties: { score: { type: 'integer', minimum: 1, maximum: 5 }, note: { type: 'string', maxLength: 1000 } } } } } },
+      responses: { '200': { description: 'Recorded' }, '404': { description: 'No such run on this account' }, '409': { description: 'Run not finished yet' } },
+    },
+  };
+
   return {
     openapi: '3.1.0',
     info: { title: 'agent-media API', version: '1.0.0', description: 'AI UGC video production API. Generate talking head videos, SaaS reviews, and styled subtitles.', contact: { url: 'https://agent-media.ai' }, license: { name: 'Apache-2.0' }, termsOfService: 'https://agent-media.ai/terms' },
@@ -707,6 +771,8 @@ function buildOpenApiSpec() {
     components: {
       securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', description: 'API key (ma_xxx) or Supabase JWT' } },
       schemas: {
+        LooseSubmitted: { type: 'object', properties: { job_id: { type: 'string', format: 'uuid' }, status: { type: 'string', enum: ['submitted'] }, kind: { type: 'string', enum: ['video', 'image', 'audio'] }, model: { type: 'string' }, credits_deducted: { type: 'integer' }, breakdown: { type: 'string' }, auto: { type: 'object', properties: { model: { type: 'string' }, reason: { type: 'string' } } }, status_url: { type: 'string' } } },
+        LooseQuote: { type: 'object', properties: { kind: { type: 'string' }, model: { type: 'string' }, credits: { type: 'integer' }, usd: { type: 'number' }, breakdown: { type: 'string' }, auto: { type: 'object', properties: { model: { type: 'string' }, reason: { type: 'string' } } } } },
         Error: { type: 'object', properties: { error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' }, details: { type: 'array', items: { type: 'object' } } }, required: ['code', 'message'] } }, required: ['error'] },
         InsufficientCredits: { type: 'object', properties: { error: { type: 'string' }, error_description: { type: 'string' }, credits_required: { type: 'integer' }, credits_available: { type: 'integer' } }, required: ['error', 'credits_required', 'credits_available'] },
         JobSubmitted: { type: 'object', properties: { job_id: { type: 'string', format: 'uuid' }, status: { type: 'string', enum: ['submitted'] }, estimated_duration: { type: 'integer' }, credits_deducted: { type: 'integer' }, selected_voice: { type: 'string' }, voice_auto_detected: { type: 'boolean' }, word_count: { type: 'integer' }, pacing_warning: { type: 'string', nullable: true } }, required: ['job_id', 'status'] },

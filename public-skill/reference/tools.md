@@ -216,7 +216,7 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
     },
     "wait": {
       "type": "boolean",
-      "description": "Block until the run finishes or ~2 minutes elapse (default false)."
+      "description": "Block until the run finishes or ~45 seconds elapse (default false). A video needs several such calls; just call again."
     }
   },
   "required": [

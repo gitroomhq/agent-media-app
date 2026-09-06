@@ -274,84 +274,143 @@ export function looseSkillBody(repoRoot: string): string {
   ].join('\n');
 }
 
+/** Structured prompting guidance: one source for the pack and the website. */
+export function promptingGuide(repoRoot: string) {
+  return {
+    intro: 'On the loose surface the prompt is yours, so the realism work the fixed pipelines did server-side is now in your hands. This is what they injected, and how to use it.',
+    rubric: realismRubric(repoRoot),
+    rules: [
+      'Write the shot as prose, not tags. The models read sentences better than keyword lists.',
+      'Order: who (age, look), where (setting, light), what they do with their hands, camera (phone framing, slight off-axis), the spoken words in quotes.',
+      'Pick 4–6 rubric lines that matter for THIS shot and fold them in naturally: "natural skin texture, soft window light, slight head tilt, hands busy with the bottle".',
+      'For a series, keep the wording of the person and setting identical across calls and pass the same refs.',
+      'Do not say "selfie" or "phone" unless a phone should be in the frame; say "talking to camera".',
+      'Speech: quote the words verbatim; about 2.3 words per second. 5s is 10–12 words, 10s is 20–25, 15s is 30–35.',
+    ],
+    examples: [
+      {
+        title: 'Talking head, 5s, seedance-2.0',
+        tool: 'generate_video',
+        prompt: 'A 28-year-old woman in a bright apartment kitchen, phone-camera framing slightly off-axis, natural skin texture with a little T-zone sheen, soft window daylight from the left and a warm lamp behind her. She holds a small amber serum bottle up near her cheek, tilts her head and says: "Okay. I did not expect this to actually work." Eyes just off the lens, mouth caught mid-word.',
+      },
+      {
+        title: 'Product frame, with the product photo in refs',
+        tool: 'generate_image',
+        prompt: 'The same woman holding THIS bottle (from the reference) up to the lens with both hands, label facing camera, bedroom corner, soft window light, phone photo, natural skin, no beauty-filter glow.',
+      },
+    ],
+  };
+}
+
 export function refPrompting(repoRoot: string): string {
+  const g = promptingGuide(repoRoot);
   return [
     '# Prompting for real-looking output',
     '',
-    'On the loose surface the prompt is yours, so the realism work the fixed pipelines did server-side is now in your hands. This page is what they injected, and how to use it.',
+    g.intro,
     '',
     '## The rubric (verbatim from the worker)',
     '',
     '```text',
-    realismRubric(repoRoot),
+    g.rubric,
     '```',
     '',
     '## How to use it',
     '',
-    '- Write the shot as prose, not tags. The models read sentences better than keyword lists.',
-    '- Order: who (age, look) → where (setting, light) → what they do with their hands → camera (phone framing, slight off-axis) → the spoken words in quotes.',
-    '- Pick 4–6 rubric lines that matter for THIS shot and fold them in naturally: "natural skin texture, soft window light, slight head tilt, hands busy with the bottle".',
-    '- For a series, keep the wording of the person and setting identical across calls and pass the same `refs`.',
-    '- Do not say "selfie" or "phone" unless a phone should be in the frame; say "talking to camera".',
-    '- Speech: quote the words verbatim; ~2.3 words per second.',
+    ...g.rules.map((r) => `- ${r}`),
     '',
-    '## Two worked prompts',
+    '## Worked prompts',
     '',
-    '**Talking head, 5s, seedance-2.0**',
-    '',
-    '> A 28-year-old woman in a bright apartment kitchen, phone-camera framing slightly off-axis, natural skin texture with a little T-zone sheen, soft window daylight from the left and a warm lamp behind her. She holds a small amber serum bottle up near her cheek, tilts her head and says: "Okay. I did not expect this to actually work." Eyes just off the lens, mouth caught mid-word.',
-    '',
-    '**Product frame, generate_image with the product photo in refs**',
-    '',
-    '> The same woman holding THIS bottle (from the reference) up to the lens with both hands, label facing camera, bedroom corner, soft window light, phone photo, natural skin, no beauty-filter glow.',
-    '',
+    ...g.examples.flatMap((e) => [`**${e.title}** (${e.tool})`, '', `> ${e.prompt}`, '']),
   ].join('\n');
 }
 
-export function refRecipes(): string {
+/** Structured recipes: what the fixed skills used to do, as sequences of the loose tools. */
+export function recipes() {
   const v5 = credits('video', { prompt: 'x'.repeat(10), seconds: 5 });
   const img = credits('image', { prompt: 'portrait' });
   return [
+    {
+      id: 'talking-head',
+      title: 'Talking-head UGC clip',
+      credits: `${v5} credits for 5s on seedance-2.0`,
+      steps: [
+        { tool: 'generate_video', text: `Script in quotes in the prompt; seconds from the word count (about 2.3 per second); refs = a portrait if the face must persist.` },
+        { tool: 'get_run_status', text: 'Poll with wait:true until completed; hand over the URL.' },
+      ],
+    },
+    {
+      id: 'product-in-hand',
+      title: 'Product in hand',
+      credits: `${img} credits for the frame, then the clip`,
+      steps: [
+        { tool: 'upload_image', text: 'The product photo becomes an https URL.' },
+        { tool: 'generate_image', text: '"... holding THIS product up to the lens, label facing camera ..." with the product URL (and a portrait, if any) in refs.' },
+        { tool: 'generate_video', text: 'The frame URL in refs, the pitch in quotes. The product stays the product.' },
+      ],
+    },
+    {
+      id: 'crazy-look',
+      title: 'Crazy look (silent reaction clip)',
+      credits: `${v5} credits per 5s clip`,
+      steps: [
+        { tool: 'generate_video', text: '"Extreme close-up, face fills the frame, one exaggerated bug-eyed shock held straight into the lens, slow lean-in, no speech"; audio: false; seconds: 5; a portrait in refs so it is the same face every time.' },
+        { tool: null, text: 'Burn the caption in the editor, or ask for a static caption in the prompt. Volume: same prompt + same refs, N calls, N performances.' },
+      ],
+    },
+    {
+      id: 'voiceover',
+      title: 'B-roll with voiceover',
+      credits: '1 credit per 100 characters',
+      steps: [
+        { tool: 'generate_audio', text: 'The narration, a named voice, a tone.' },
+        { tool: null, text: 'Lay it over the footage in the editor. Muxing external video is not on this surface; the fixed make_subtitles and make_ugc REST routes still exist for that.' },
+      ],
+    },
+    {
+      id: 'series',
+      title: 'A series with one face',
+      credits: `${img} credits once, then ${v5} per 5s clip`,
+      steps: [
+        { tool: 'generate_image', text: 'Once: a clean head-and-shoulders portrait.' },
+        { tool: 'generate_video', text: 'Every clip: the same portrait URL in refs, the same person/setting wording, a different script.' },
+        { tool: 'list_characters', text: 'Saved characters from the dashboard appear here; their character_sheet_url works the same way in refs.' },
+      ],
+    },
+    {
+      id: 'two-people',
+      title: 'Two people',
+      credits: `${v5}–${v5 * 3} credits per exchange`,
+      steps: [
+        { tool: 'generate_video', text: 'Both portraits in refs and a prompt that names who says what: "Two friends on a couch. The one on the left says: ... The one on the right laughs and says: ...". Keep it to 10–15s per exchange.' },
+      ],
+    },
+    {
+      id: 'hero',
+      title: 'The hero clip',
+      credits: 'about 3x the credits of seedance-2.0',
+      steps: [
+        { tool: 'quote', text: 'Price it first: model "seedance-2.5", seconds up to 10.' },
+        { tool: 'generate_video', text: 'One take, a strong reference. Expect a longer render than 2.0.' },
+      ],
+    },
+  ];
+}
+
+export function refRecipes(): string {
+  return [
     '# Recipes',
     '',
-    'What the fixed skills used to do, as sequences of the loose tools. Prices are for seedance-2.0 unless stated; 1 credit = $0.01.',
+    'What the fixed skills used to do, as sequences of the loose tools. 1 credit = $0.01.',
     '',
-    '## 1. Talking-head UGC clip',
-    '',
-    `1. \`generate_video\` — script in quotes in the prompt, \`seconds\` from the word count (~2.3 w/s), \`refs\` = a portrait if the face must persist. **${v5} credits for 5s.**`,
-    '2. `get_run_status` until completed.',
-    '',
-    '## 2. Product in hand',
-    '',
-    '1. `upload_image` the product photo → URL.',
-    `2. \`generate_image\` — "… holding THIS product up to the lens, label facing camera …" with the product URL (and a portrait, if any) in \`refs\`. **${img} credits.**`,
-    '3. `generate_video` — the frame URL in `refs`, the pitch in quotes. The product stays the product.',
-    '',
-    '## 3. Crazy look (silent reaction clip)',
-    '',
-    '1. `generate_video` — "Extreme close-up, face fills the frame, one exaggerated bug-eyed shock held straight into the lens, slow lean-in, no speech", `audio: false`, `seconds: 5`, a portrait in `refs` so it is the same face every time.',
-    '2. Burn the caption in the editor, or ask for a static caption in the prompt.',
-    '3. Volume: same prompt + same refs, N calls, N performances.',
-    '',
-    '## 4. B-roll with voiceover',
-    '',
-    '1. `generate_audio` — the narration, a named voice, a tone.',
-    '2. The user lays it over their footage. (Muxing external video is not on this surface; the fixed `make_subtitles` and `make_ugc` REST routes still exist for that.)',
-    '',
-    '## 5. A series with one face',
-    '',
-    `1. \`generate_image\` once — a clean head-and-shoulders portrait. **${img} credits.**`,
-    '2. Every `generate_video` in the series: the same portrait URL in `refs`, the same person/setting wording, a different script.',
-    '3. Saved characters from the dashboard appear in `list_characters`; their `character_sheet_url` works the same way in `refs`.',
-    '',
-    '## 6. Two people',
-    '',
-    '`generate_video` with both portraits in `refs` and a prompt that names who says what: "Two friends on a couch. The one on the left says: … The one on the right laughs and says: …". Keep it to 10–15s per exchange.',
-    '',
-    '## 7. The hero clip',
-    '',
-    '`model: "seedance-2.5"`, `seconds` ≤ 10, one take, a strong reference. ≈3x the credits — quote it first.',
-    '',
+    ...recipes().flatMap((r, i) => [
+      `## ${i + 1}. ${r.title}`,
+      '',
+      `_${r.credits}_`,
+      '',
+      ...r.steps.map((st, j) => `${j + 1}. ${st.tool ? `\`${st.tool}\` — ` : ''}${st.text}`),
+      '',
+    ]),
   ].join('\n');
 }
 

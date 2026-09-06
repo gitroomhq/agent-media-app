@@ -112,8 +112,10 @@ describe('hosted MCP: directory submission requirements', () => {
 });
 
 describe('hosted MCP: model catalog', () => {
+  // The public view moved to lib/model-view.ts (shared with the site-data
+  // generator); the route file only reads stats and mounts it.
   const modelsRoute = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), '../routes/v1/models.ts'),
+    join(dirname(fileURLToPath(import.meta.url)), '../lib/model-view.ts'),
     'utf8',
   );
   const server = readFileSync(
