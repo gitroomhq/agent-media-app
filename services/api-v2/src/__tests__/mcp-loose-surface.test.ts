@@ -71,8 +71,15 @@ describe('loose surface: tools/list', () => {
     expect(video.properties.prompt).toBeTruthy();
     expect(video.properties.model.type).toBe('string');
     expect(video.properties.refs.items.format).toBe('uri');
-    expect(video.properties.seconds.minimum).toBe(4);
-    expect(video.properties.seconds.maximum).toBe(15);
+    // The per-model range is enforced by the catalog cell (4 to 15 on Seedance); the JSON schema is the envelope.
+    expect(video.properties.seconds.minimum).toBe(1);
+    expect(video.properties.first_frame.format).toBe('uri');
+    expect(video.properties.last_frame.format).toBe('uri');
+    expect(video.properties.video_refs.items.format).toBe('uri');
+    expect(video.properties.audio_refs.items.format).toBe('uri');
+    expect(video.properties.quality.enum).toEqual(['480p', '720p', '1080p']);
+    expect(video.properties.aspect.enum).toContain('adaptive');
+    expect(video.properties.aspect.enum).toContain('16:9');
     expect(video.properties.engine).toBeUndefined();
     expect(video.additionalProperties).toBe(false);
     const audio = tools.find((t) => t.name === 'generate_audio')!.inputSchema as any;
@@ -87,7 +94,10 @@ describe('loose surface: tools/list', () => {
     expect(video.description).toMatch(/model YOU choose/);
     expect(video.description).toMatch(/list_models/);
     expect(video.description).toMatch(/seedance-2\.0/);
-    expect(video.description).toMatch(/3x/);
+    expect(video.description).toMatch(/IMAGE-TO-VIDEO/);
+    expect(video.description).toMatch(/first_frame/);
+    expect(video.description).toMatch(/video_refs/);
+    expect(video.description).toMatch(/720p \(default\)/);
     expect(video.description).toMatch(/get_run_status/);
     expect(video.description).toMatch(/upload_image/);
   });

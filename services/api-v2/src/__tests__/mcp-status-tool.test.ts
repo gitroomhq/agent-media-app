@@ -129,10 +129,11 @@ describe('hosted MCP: model catalog', () => {
     expect(source).toContain("readOnlyAnnotations('List Models')");
   });
 
-  it('tells the agent the default and the 3x price gap before it chooses', () => {
-    const desc = source.slice(source.indexOf("name: 'list_models'"), source.indexOf("name: 'list_models'") + 900);
-    expect(desc).toMatch(/seedance-2\.0 is right for most jobs/);
-    expect(desc).toMatch(/3x the credits/);
+  it('tells the agent the default and that every model has modes with their own limits and prices', () => {
+    const desc = source.slice(source.indexOf("name: 'list_models'"), source.indexOf("name: 'list_models'") + 1200);
+    expect(desc).toMatch(/is right for most jobs/);
+    expect(desc).toMatch(/MODES/);
+    expect(desc).toMatch(/credits per second of every mode/);
   });
 
   it('GET /v1/models is public and on the read limiter', () => {

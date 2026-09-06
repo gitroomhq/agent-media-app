@@ -14,6 +14,7 @@ import {
   GenerateImageSchema,
   GenerateVideoSchema,
   V2_DEFAULT_MODEL,
+  V2_MODELS,
   liveModelIds,
 } from '@agentmedia/schema/v2';
 
@@ -64,7 +65,7 @@ export const listCharactersTool = {
 export const getRunStatusTool = {
   name: 'get_run_status',
   description:
-    'Check a generation you already submitted, and get its output URL (video, image or audio) when it is done. Pass the id ANY agent-media tool returned (run id, skill run id, or job id), this resolves all of them. Set wait:true to block until the job reaches a terminal state (up to ~45 seconds per call; if it is still running, just call again, a video usually needs several such calls). ALWAYS call this after submitting: without it you cannot tell whether the video succeeded, and cannot give the user a link.',
+    'Check a generation you already submitted, and get its output URL (video, image or audio) when it is done. Pass the id ANY agent-media tool returned (run id, skill run id, or job id), this resolves all of them. Set wait:true to block until the job reaches a terminal state (up to ~45 seconds per call; if it is still running, just call again: seedance-2.0 needs about 3 minutes for a 5 s clip, seedance-2.5 12 to 25 minutes, so keep calling until it is done). ALWAYS call this after submitting: without it you cannot tell whether the video succeeded, and cannot give the user a link.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -121,7 +122,7 @@ export const uploadImageTool = {
 export const listModelsTool = {
   name: 'list_models',
   description:
-    'List the generation models agent-media can use, with what each costs the user (credits per second), its limits, what it is good and bad at, and how to select it, plus `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model for generate_video / generate_image / generate_audio: the default seedance-2.0 is right for most jobs; seedance-2.5 is about 3x the credits and only worth it for a hero clip. Pass the id as `model`, or `model:"auto"` and the printed policy picks from the stats. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.',
+    `List the generation models agent-media can use: for each, its MODES (video: text, image-to-video via first_frame, reference via refs / video_refs / audio_refs) with the exact inputs, limits, aspects, qualities and credits per second of every mode, a "pick when" line, prompting tips, expected latency, how to select it, plus \`recent\`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model or a mode for generate_video / generate_image / generate_audio: the default ${V2_DEFAULT_MODEL.video} is right for most jobs. Pass the id as \`model\`, or \`model:"auto"\` and the printed policy picks from the stats. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -146,11 +147,20 @@ export function looseSchema(schema: unknown, name: string) {
 const liveVideo = liveModelIds('video').join(', ');
 const liveImage = liveModelIds('image').join(', ');
 const liveAudio = liveModelIds('audio').join(', ');
+const audioRate = (() => {
+  const m = V2_MODELS[V2_DEFAULT_MODEL.audio];
+  return m?.credits ? `${m.credits.perUnit * 100} credit per 100 characters` : 'per character';
+})();
+const videoPriceLine = (() => {
+  const m = V2_MODELS[V2_DEFAULT_MODEL.video];
+  const c = m?.video?.creditsPerSecond;
+  return c ? `${V2_DEFAULT_MODEL.video}: ${Object.entries(c).map(([q, n]) => `${n} credits/s at ${q}`).join(', ')}` : '';
+})();
 
 export const generateVideoTool = {
   name: 'generate_video',
   description:
-    `Render a video clip from YOUR prompt on the model YOU choose. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Pass reference images (a portrait, a character sheet from list_characters, a product photo) as https URLs in \`refs\` and the model keeps that identity/look. Models: ${liveVideo} (default ${V2_DEFAULT_MODEL.video}; call list_models for what each is good for, the price per second and its recent results, seedance-2.5 is ~3x the credits and only worth it for a hero clip; or pass model:"auto" to let agent-media choose from the last 30 days of scored runs). Spends credits (seconds x the model's per-second rate; call \`quote\` first if the user cares about cost). Returns a job id, then call get_run_status until it is done and hand the user the URL.` +
+    `Render a video clip from YOUR prompt on the model YOU choose, in one of three MODES that follow from the fields you pass: TEXT (prompt only), IMAGE-TO-VIDEO (\`first_frame\`: an https still that becomes frame one, optionally \`last_frame\` to end on; the clip animates the still) or REFERENCE (\`refs\`: https images such as a portrait, a character sheet from list_characters or a product photo whose identity/look is kept; \`video_refs\`: clips whose motion or framing is followed; \`audio_refs\`: a voice or sound to carry; address them in the prompt as @image1, @video1, @audio1). Frames and refs cannot be mixed. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Models: ${liveVideo} (default ${V2_DEFAULT_MODEL.video}; call list_models for each model's modes, limits, prices and recent results; or pass model:"auto"). Aspect: 9:16 default, also 16:9, 1:1, 4:3, 3:4, 21:9, adaptive. Quality: 480p, 720p (default), 1080p; the price per second follows the quality (${videoPriceLine}). Reference clip seconds are billed like output seconds. Call \`quote\` first if the user cares about cost. Returns a job id, then call get_run_status until it is done and hand the user the URL.` +
     IMAGE_URL_HINT,
   inputSchema: looseSchema(GenerateVideoSchema, 'generate_video_input'),
   annotations: generationAnnotations('Generate Video'),
@@ -166,7 +176,7 @@ export const generateImageTool = {
 export const generateAudioTool = {
   name: 'generate_audio',
   description:
-    `Speak text in a named voice (jessica, sarah, liam, chris, lily, bill, matilda, or a raw ElevenLabs voice id). Emotion tags like [excited] or [whispers] are honoured. For a talking-head clip you usually do NOT need this: generate_video renders native speech when the words are in the prompt. Use it for voiceover over b-roll or a standalone audio file. Models: ${liveAudio}. Spends 1 credit per 100 characters. Returns a job id, poll get_run_status for the mp3 URL.`,
+    `Speak text in a named voice (jessica, sarah, liam, chris, lily, bill, matilda, or a raw ElevenLabs voice id). Emotion tags like [excited] or [whispers] are honoured. For a talking-head clip you usually do NOT need this: generate_video renders native speech when the words are in the prompt. Use it for voiceover over b-roll or a standalone audio file. Models: ${liveAudio}. Spends ${audioRate}, rounded up. Returns a job id, poll get_run_status for the mp3 URL. The mp3 URL can be passed as an audio_ref to generate_video.`,
   inputSchema: looseSchema(GenerateAudioSchema, 'generate_audio_input'),
   annotations: generationAnnotations('Generate Audio'),
 };
@@ -194,7 +204,7 @@ export const quoteTool = {
 export const rateRunTool = {
   name: 'rate_run',
   description:
-    'Rate a finished generate_video / generate_image / generate_audio run 1–5, with an optional note (what was wrong or right). Costs nothing. Do this when the user reacts to an output, "perfect", "her face changed", "too slow", or when you can see a defect yourself. Ratings feed the per-model stats in list_models and the model:"auto" choice, so an honest 2 helps more than a polite 4.',
+    'Rate a finished generate_video / generate_image / generate_audio run 1 to 5, with an optional note (what was wrong or right). Costs nothing. Do this when the user reacts to an output, "perfect", "her face changed", "too slow", or when you can see a defect yourself. Ratings feed the per-model stats in list_models and the model:"auto" choice, so an honest 2 helps more than a polite 4.',
   inputSchema: {
     type: 'object',
     properties: {

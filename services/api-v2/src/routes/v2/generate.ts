@@ -28,11 +28,15 @@ import {
   V2_DEFAULT_MODEL,
   V2_MODEL_AUTO,
   V2_MODELS,
+  deriveVideoMode,
   pickAuto,
   quoteGenerate,
+  resolveVideoRequest,
   type AutoPick,
   type GenerateKind,
+  type GenerateVideoInput,
   type ModelStatsMap,
+  type QuoteExtras,
 } from '@agentmedia/schema/v2';
 import { supabase } from '../../server.js';
 import { loadModelStats } from '../v1/models.js';
@@ -94,22 +98,92 @@ async function markDispatchFailureAndRefund(jobId: string, userId: string, messa
 }
 
 /**
- * Validate + resolve `auto` + price. Pure given `stats`; both routes call it
- * with the cached model_stats. Exported for tests.
+ * Durations of reference clips, measured by the worker (ffprobe on the
+ * URL). The provider bills reference video seconds like output seconds,
+ * so the quote and the debit need them BEFORE anything is spent. A clip
+ * that cannot be read is a 400, never a guess. Exported for tests
+ * (injectable fetcher).
  */
-export function validateAndQuote(kind: GenerateKind, body: unknown, stats: ModelStatsMap = {}):
-  | { ok: true; input: Record<string, unknown>; credits: number; model: string; breakdown: string; auto: AutoPick | null }
+export async function probeVideoRefs(
+  urls: string[],
+  probe: (urls: string[]) => Promise<Record<string, number | null>> = workerProbe,
+): Promise<{ ok: true; seconds: number } | { ok: false; unreadable: string[] }> {
+  if (!urls.length) return { ok: true, seconds: 0 };
+  const durations = await probe(urls);
+  const unreadable = urls.filter((u) => !durations[u]);
+  if (unreadable.length) return { ok: false, unreadable };
+  return { ok: true, seconds: urls.reduce((sum, u) => sum + (durations[u] ?? 0), 0) };
+}
+
+async function workerProbe(urls: string[]): Promise<Record<string, number | null>> {
+  if (!WORKER_V2_URL || !WORKER_SECRET) throw new Error('worker not configured');
+  const resp = await fetch(`${WORKER_V2_URL}/v2/probe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Worker-Secret': WORKER_SECRET },
+    body: JSON.stringify({ urls }),
+    signal: AbortSignal.timeout(DISPATCH_TIMEOUT_MS),
+  });
+  if (!resp.ok) throw new Error(`probe failed (${resp.status})`);
+  const body = (await resp.json()) as { durations?: Record<string, number | null> };
+  return body.durations ?? {};
+}
+
+/**
+ * Validate + resolve `auto` + price. Pure given `stats` and `extras`; both
+ * routes call it with the cached model_stats. For video the result also
+ * carries the resolved cell (mode, provider model, aspect, quality) that
+ * the worker will run, so the quote, the job row and the provider call
+ * cannot disagree. Exported for tests.
+ */
+export function validateAndQuote(kind: GenerateKind, body: unknown, stats: ModelStatsMap = {}, extras: QuoteExtras = {}):
+  | {
+      ok: true;
+      input: Record<string, unknown>;
+      credits: number;
+      model: string;
+      breakdown: string;
+      auto: AutoPick | null;
+      video: { mode: string; provider_model: string; aspect: string; quality: string; timeout_minutes: number } | null;
+    }
   | { ok: false; issues: unknown[] } {
-  const parsed = schemaFor(kind).safeParse(body);
+  const schema = schemaFor(kind);
+  let parsed = schema.safeParse(body);
   if (!parsed.success) return { ok: false, issues: parsed.error.issues };
-  const data = parsed.data as Record<string, unknown> & { model?: string };
+  let data = parsed.data as Record<string, unknown> & { model?: string };
   let auto: AutoPick | null = null;
   if (data.model === V2_MODEL_AUTO) {
-    auto = pickAuto(kind, stats);
-    data.model = auto.model;
+    auto = pickAuto(kind, stats, kind === 'video' ? deriveVideoMode(data as GenerateVideoInput) : undefined);
+    // Re-validate against the picked model: its limits may differ.
+    parsed = schema.safeParse({ ...(body as object), model: auto.model });
+    if (!parsed.success) return { ok: false, issues: parsed.error.issues };
+    data = parsed.data as Record<string, unknown> & { model?: string };
   }
-  const q = quoteGenerate(kind as 'image', data as never);
-  return { ok: true, input: data, credits: q.credits, model: q.model, breakdown: q.breakdown, auto };
+  const q = quoteGenerate(kind as 'video', data as never, extras);
+  let video: { mode: string; provider_model: string; aspect: string; quality: string; timeout_minutes: number } | null = null;
+  if (kind === 'video') {
+    const r = resolveVideoRequest(data as GenerateVideoInput);
+    video = { mode: r.mode, provider_model: r.providerModel, aspect: r.aspect, quality: r.quality, timeout_minutes: V2_MODELS[r.model]?.video?.timeoutMinutes ?? 30 };
+  }
+  return { ok: true, input: data, credits: q.credits, model: q.model, breakdown: q.breakdown, auto, video };
+}
+
+/** Video only: measure reference clips first so the quote is the debit. */
+async function extrasFor(kind: GenerateKind, body: unknown): Promise<{ ok: true; extras: QuoteExtras } | { ok: false; unreadable: string[] }> {
+  const refs = kind === 'video' && body && typeof body === 'object' ? (body as { video_refs?: unknown }).video_refs : undefined;
+  const urls = Array.isArray(refs) ? refs.filter((u): u is string => typeof u === 'string') : [];
+  if (!urls.length) return { ok: true, extras: {} };
+  const p = await probeVideoRefs(urls);
+  return p.ok ? { ok: true, extras: { inputVideoSeconds: p.seconds } } : p;
+}
+
+function unreadableResponse(res: Response, unreadable: string[]): void {
+  res.status(400).json({
+    error: {
+      code: 'VALIDATION_ERROR',
+      message: 'Invalid request',
+      issues: [{ path: ['video_refs'], message: `could not read the duration of: ${unreadable.join(', ')}. Reference clips must be public https mp4/mov files.` }],
+    },
+  });
 }
 
 export async function quoteRoute(req: Request, res: Response): Promise<void> {
@@ -118,7 +192,9 @@ export async function quoteRoute(req: Request, res: Response): Promise<void> {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: 'kind must be image, video or audio' } });
     return;
   }
-  const v = validateAndQuote(kind, req.body, await loadModelStats());
+  const ex = await extrasFor(kind, req.body);
+  if (!ex.ok) return unreadableResponse(res, ex.unreadable);
+  const v = validateAndQuote(kind, req.body, await loadModelStats(), ex.extras);
   if (!v.ok) {
     res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid request', issues: v.issues } });
     return;
@@ -129,6 +205,7 @@ export async function quoteRoute(req: Request, res: Response): Promise<void> {
     credits: v.credits,
     usd: Number((v.credits * 0.01).toFixed(2)),
     breakdown: v.breakdown,
+    ...(v.video ? { mode: v.video.mode, quality: v.video.quality, aspect: v.video.aspect } : {}),
     ...(v.auto ? { auto: v.auto } : {}),
   });
 }
@@ -146,7 +223,9 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
   }
 
   // ── 1+2. Validate, resolve auto, quote ────────────────────────────
-  const v = validateAndQuote(kind, req.body, await loadModelStats());
+  const ex = await extrasFor(kind, req.body);
+  if (!ex.ok) return unreadableResponse(res, ex.unreadable);
+  const v = validateAndQuote(kind, req.body, await loadModelStats(), ex.extras);
   if (!v.ok) {
     res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid request', issues: v.issues } });
     return;
@@ -174,7 +253,7 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
     credit_cost: creditCost,
     provider_slug: 'railway',
     provider_job_id: jobId,
-    input_params: { ...input, model },
+    input_params: { ...input, model, ...(v.video ? { mode: v.video.mode, provider_model: v.video.provider_model, aspect: v.video.aspect } : {}) },
   });
   if (jobErr) {
     console.error('[v2 generate] job insert failed:', jobErr.message);
@@ -202,7 +281,7 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
     const resp = await fetch(`${WORKER_V2_URL}/v2/generate/${kind}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Worker-Secret': WORKER_SECRET },
-      body: JSON.stringify({ job_id: jobId, user_id: userId, ...input, model, callback_url: buildCallbackUrl(jobId) }),
+      body: JSON.stringify({ job_id: jobId, user_id: userId, ...input, model, ...(v.video ?? {}), callback_url: buildCallbackUrl(jobId) }),
       signal: AbortSignal.timeout(DISPATCH_TIMEOUT_MS),
     });
     if (!resp.ok) {
@@ -227,6 +306,7 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
     model,
     credits_deducted: creditCost,
     breakdown: v.breakdown,
+    ...(v.video ? { mode: v.video.mode, quality: v.video.quality, aspect: v.video.aspect } : {}),
     ...(v.auto ? { auto: v.auto } : {}),
     status_url: `/v1/videos/${jobId}`,
   });

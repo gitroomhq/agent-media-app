@@ -15,6 +15,7 @@ import {
   type ModelRecentStats,
   type ModelStatsMap,
   type V2ModelRecord,
+  type V2VideoModeSpec,
 } from '@agentmedia/schema/v2';
 
 const PUBLIC_DOCS_BASE =
@@ -43,7 +44,43 @@ export const AUTO_POLICY =
   'Scores come from an auto-judge that grades every loose-surface job (3 frames or the image against the realism rubric, prompt adherence, identity match) plus rate_run.';
 
 
+/** One (model, video mode) cell as an agent reads it: inputs, limits, price, proof. */
+export function modeView(mode: string, s: V2VideoModeSpec, creditsPerSecond: Record<string, number | undefined> | undefined) {
+  const inputs =
+    mode === 'text'
+      ? { prompt: 'required' }
+      : mode === 'image'
+        ? { first_frame: 'required (https image)', ...(s.lastFrame ? { last_frame: 'optional (https image)' } : {}) }
+        : {
+            refs: s.refs?.images ? `up to ${s.refs.images} https images` : 'not accepted',
+            video_refs: s.refs?.videos ? `up to ${s.refs.videos} https clips${s.refs.videoSecondsTotal ? `, ${s.refs.videoSecondsTotal} s in total` : ''}; their seconds are billed like output seconds` : 'not accepted',
+            audio_refs: s.refs?.audios ? `up to ${s.refs.audios} https audio files${s.refs.audioSecondsTotal ? `, ${s.refs.audioSecondsTotal} s in total` : ''}${s.refs.audioAlone ? '' : '; needs an image or video reference beside it'}` : 'not accepted',
+          };
+  return {
+    mode,
+    how: mode === 'text' ? 'prompt only' : mode === 'image' ? 'pass first_frame (and optionally last_frame)' : 'pass refs, video_refs and/or audio_refs',
+    inputs,
+    seconds: { min: s.seconds[0], max: s.seconds[1] },
+    aspects: s.aspects,
+    aspect_default: s.aspectDefault,
+    qualities: s.qualities,
+    credits_per_second: creditsPerSecond ? Object.fromEntries(s.qualities.map((q) => [q, creditsPerSecond[q] ?? null])) : null,
+    seed: s.seed,
+    prompt_syntax: s.promptSyntax ?? null,
+    notes: s.notes,
+    verified: s.verified ?? null,
+  };
+}
+
 export function publicView(m: V2ModelRecord, stats: ModelStatsMap) {
+  const video = m.video
+    ? {
+        modes: Object.entries(m.video.modes).map(([mode, s]) => modeView(mode, s, m.video!.creditsPerSecond)),
+        credits_per_second: m.video.creditsPerSecond ?? null,
+        default_quality: '720p',
+        timeout_minutes: m.video.timeoutMinutes,
+      }
+    : null;
   return {
     recent: recentView(stats[m.id]),
     id: m.id,
@@ -54,14 +91,21 @@ export function publicView(m: V2ModelRecord, stats: ModelStatsMap) {
     modes: m.modes,
     features: m.features,
     limits: m.limits,
+    video,
     // What the user pays. Absent on candidates on purpose.
     credits: m.credits ?? null,
+    price_default: m.credits ? `${m.credits.perUnit} credits per ${m.credits.unit}${m.kind === 'video' ? ' at 720p' : ''}` : null,
     quality: m.quality,
     speed: m.speed,
     best_for: m.bestFor,
     avoid_for: m.avoidFor,
+    usage: m.usage
+      ? { pick_when: m.usage.pickWhen, prompt_tips: m.usage.promptTips, latency: m.usage.latency }
+      : null,
     docs_url: `${PUBLIC_DOCS_BASE}/${m.docs}`,
-    verified: m.verified ?? null,
+    verified: m.kind === 'video' && m.video
+      ? Object.entries(m.video.modes).filter(([, s]) => s.verified).map(([mode, s]) => ({ mode, ...s.verified! }))
+      : m.verified ?? null,
     // How to select it. Every live model is selectable by id as `model` on
     // the loose surface (generate_<kind> over MCP, POST /v2/generate/<kind>).
     // Live VIDEO models are additionally the `engine` of the fixed video

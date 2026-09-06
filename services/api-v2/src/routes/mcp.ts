@@ -237,7 +237,7 @@ export function buildMcpServer(apiKey: string): Server {
           listEntry: {
             name: s.slug,
             description:
-              `${s.name} (v${s.version}) — ${s.description}` +
+              `${s.name} (v${s.version}): ${s.description}` +
               (takesAnImage(inputSchema) ? IMAGE_URL_HINT : ''),
             inputSchema,
             annotations: generationAnnotations(s.name),
@@ -288,7 +288,7 @@ export function buildMcpServer(apiKey: string): Server {
       let data: any;
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
       if (!resp.ok) return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
-      return { content: [{ type: 'text', text: `Recorded ${data?.score}/5 for run ${data?.job_id} (${data?.model}). Thank you — this feeds the per-model stats.` }] };
+      return { content: [{ type: 'text', text: `Recorded ${data?.score}/5 for run ${data?.job_id} (${data?.model}). Thank you: this feeds the per-model stats.` }] };
     }
 
     // The loose surface: forward to /v2/generate/:kind and /v2/quote/:kind.
@@ -315,7 +315,7 @@ export function buildMcpServer(apiKey: string): Server {
         });
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). ${isQuote ? 'Call quote again.' : 'The job may or may not have started — call get_run_status if you were given an id, otherwise submit again.'}` }],
+          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). ${isQuote ? 'Call quote again.' : 'The job may or may not have started: call get_run_status if you were given an id, otherwise submit again.'}` }],
           isError: true,
         };
       }
@@ -327,14 +327,14 @@ export function buildMcpServer(apiKey: string): Server {
       }
       if (isQuote) {
         return {
-          content: [{ type: 'text', text: `${data?.credits} credits ($${data?.usd}) — ${data?.breakdown}. Model: ${data?.model}.${data?.auto ? ` auto chose it: ${data.auto.reason}.` : ''} Nothing was rendered.` }],
+          content: [{ type: 'text', text: `${data?.credits} credits ($${data?.usd}): ${data?.breakdown}. Model: ${data?.model}.${data?.auto ? ` auto chose it: ${data.auto.reason}.` : ''} Nothing was rendered.` }],
         };
       }
       return {
         content: [{
           type: 'text',
           text: [
-            `Submitted ${name}: job_id ${data?.job_id} on ${data?.model} — ${data?.credits_deducted} credits deducted (${data?.breakdown}).${data?.auto ? ` auto chose ${data.model}: ${data.auto.reason}.` : ''}`,
+            `Submitted ${name}: job_id ${data?.job_id} on ${data?.model}: ${data?.credits_deducted} credits deducted (${data?.breakdown}).${data?.auto ? ` auto chose ${data.model}: ${data.auto.reason}.` : ''}`,
             `Now call get_run_status with run_id "${data?.job_id}" (wait:true) until it is completed, then give the user the URL. ${kind === 'video' ? 'A clip takes a few minutes.' : kind === 'image' ? 'An image takes under a minute.' : 'Audio takes seconds.'}`,
           ].join('\n'),
         }],
@@ -362,13 +362,22 @@ export function buildMcpServer(apiKey: string): Server {
       if (!resp.ok) {
         return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
       }
+      type ModeRow = {
+        mode: string; how: string; inputs: Record<string, string>;
+        seconds: { min: number; max: number }; aspects: string[]; aspect_default: string; qualities: string[];
+        credits_per_second: Record<string, number | null> | null; seed: boolean; prompt_syntax: string | null; notes: string[];
+        verified: { date: string; runId?: string; note?: string } | null;
+      };
       const d = data as {
         models?: Array<{
           id: string; kind: string; tier: string; status: string;
           credits: { unit: string; perUnit: number; base?: number } | null;
-          limits: { minSeconds?: number; maxSeconds?: number; refs?: string };
+          price_default: string | null;
+          limits: { resolutions?: string[]; refsMax?: number };
+          video: { modes: ModeRow[]; credits_per_second: Record<string, number> | null; default_quality: string; timeout_minutes: number } | null;
           quality: string; speed: string; best_for: string[]; avoid_for: string[];
-          docs_url: string; verified: { date: string; runId?: string } | null;
+          usage: { pick_when: string; prompt_tips: string[]; latency: string } | null;
+          docs_url: string; verified: { date: string; runId?: string } | Array<{ mode: string; date: string }> | null;
           select_with: { field: string; value: string; on: string[]; not_on: string[] } | null;
           recent: { window_days: number; runs: number; fail_rate: number | null; auto_score: number | null; scored: number; user_score: number | null; rated: number; p50_seconds: number | null } | null;
         }>;
@@ -377,12 +386,12 @@ export function buildMcpServer(apiKey: string): Server {
       } | null;
       const lines = (d?.models ?? []).map((m) => {
         const price = m.credits
-          ? (m.credits.perUnit === 0 ? 'included in the generator credits' : `${m.credits.perUnit} credits/${m.credits.unit}`)
+          ? (m.credits.perUnit === 0 ? 'included in the generator credits' : m.price_default ?? `${m.credits.perUnit} credits/${m.credits.unit}`)
           : 'no price (candidate, not selectable)';
         const sel = m.select_with
           ? `select: ${m.select_with.field}="${m.select_with.value}" on ${m.select_with.on.join(', ')}${m.select_with.not_on?.length ? `; NOT on ${m.select_with.not_on.join(', ')}` : ''}`
           : 'select: not selectable (used inside the pipelines)';
-        const lim = [m.limits?.maxSeconds ? `max ${m.limits.maxSeconds}s` : null, m.limits?.refs ? `refs: ${m.limits.refs}` : null].filter(Boolean).join(', ');
+        const lim = [m.limits?.resolutions?.length ? `sizes: ${m.limits.resolutions.join(', ')}` : null, m.limits?.refsMax !== undefined ? `up to ${m.limits.refsMax} refs` : null].filter(Boolean).join(', ');
         const r = m.recent;
         const recent = r
           ? `    recent (${r.window_days}d): ${r.runs} run(s), ${Math.round((r.fail_rate ?? 0) * 100)}% failed` +
@@ -390,19 +399,36 @@ export function buildMcpServer(apiKey: string): Server {
             (r.user_score !== null && r.user_score !== undefined ? `, users ${r.user_score}/5 over ${r.rated}` : '') +
             (r.p50_seconds ? `, ~${Math.max(1, Math.round(r.p50_seconds / 60))} min typical` : '')
           : '    recent (30d): no runs yet';
+        const modeLines = (m.video?.modes ?? []).map((md) => {
+          const inputs = Object.entries(md.inputs).map(([k, v]) => `${k}: ${v}`).join('; ');
+          const cps = md.credits_per_second ? Object.entries(md.credits_per_second).map(([q, c]) => `${q} ${c ?? '?'}`).join(', ') + ' credits/s' : 'unpriced';
+          const ver = md.verified ? `verified ${md.verified.date}` : 'no recorded run';
+          return [
+            `    mode ${md.mode}: ${md.how}. ${inputs}. ${md.seconds.min} to ${md.seconds.max} s; aspect ${md.aspects.join('/')} (default ${md.aspect_default}); ${cps}; seed ${md.seed ? 'yes' : 'no'}; ${ver}`,
+            ...(md.prompt_syntax ? [`      prompt syntax: ${md.prompt_syntax}`] : []),
+            ...md.notes.map((n) => `      note: ${n}`),
+          ].join('\n');
+        });
+        const verifiedText = Array.isArray(m.verified)
+          ? (m.verified.length ? ` · verified modes: ${m.verified.map((v) => v.mode).join(', ')}` : ' · no recorded run')
+          : (m.verified ? ` · verified ${m.verified.date}` : ' · no recorded run');
         return [
-          `- ${m.id} [${m.kind}, ${m.tier}, ${m.status}] — ${price}; ${m.quality} quality, ${m.speed}${lim ? `; ${lim}` : ''}`,
+          `- ${m.id} [${m.kind}, ${m.tier}, ${m.status}]: ${price}; ${m.quality} quality, ${m.speed}${lim ? `; ${lim}` : ''}`,
+          m.usage ? `    pick when: ${m.usage.pick_when}` : null,
           `    best for: ${m.best_for.join('; ')}`,
           m.avoid_for?.length ? `    avoid for: ${m.avoid_for.join('; ')}` : null,
+          ...modeLines,
+          m.usage ? `    prompting: ${m.usage.prompt_tips.join(' ')}` : null,
+          m.usage ? `    latency: ${m.usage.latency}` : null,
           recent,
-          `    ${sel}${m.verified ? ` · verified ${m.verified.date}` : ' · no recorded run'} · docs: ${m.docs_url}`,
+          `    ${sel}${verifiedText} · docs: ${m.docs_url}`,
         ].filter(Boolean).join('\n');
       });
       return {
         content: [{
           type: 'text',
           text: [
-            `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Select a live model by passing its id as \`model\` to generate_video / generate_image / generate_audio (omit it for the default, or pass "auto"). Candidates cannot be selected.`,
+            `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Select a live model by passing its id as \`model\` to generate_video / generate_image / generate_audio (omit it for the default, or pass "auto"). Video MODES: text (prompt only), image (first_frame, optional last_frame), reference (refs / video_refs / audio_refs); the mode is derived from the fields you pass and each mode has its own limits below. Quality 480p / 720p (default) / 1080p changes the per-second price. Candidates cannot be selected.`,
             ...lines,
             d?.auto_policy ? `\nauto policy: ${d.auto_policy}` : null,
           ].filter(Boolean).join('\n'),
@@ -432,7 +458,7 @@ export function buildMcpServer(apiKey: string): Server {
         });
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Upload did not complete in time (${(err as Error).message}). Try once more; if it fails again the image is probably too large — ask the user for a smaller one or a public URL.` }],
+          content: [{ type: 'text', text: `Upload did not complete in time (${(err as Error).message}). Try once more; if it fails again the image is probably too large: ask the user for a smaller one or a public URL.` }],
           isError: true,
         };
       }
@@ -450,7 +476,7 @@ export function buildMcpServer(apiKey: string): Server {
             text: [
               `Image stored: ${up?.image_url ?? '(no url returned)'}`,
               up?.bytes ? `${Math.round(up.bytes / 1024)} KB, ${up.mime}` : null,
-              'Pass this URL to the generation tool. Do not send the base64 again — reuse this URL for every retry.',
+              'Pass this URL to the generation tool. Do not send the base64 again: reuse this URL for every retry.',
             ].filter(Boolean).join('\n'),
           },
         ],
@@ -568,14 +594,14 @@ export function buildMcpServer(apiKey: string): Server {
       ];
       const done = TERMINAL.has(status.toLowerCase());
       const lines = [
-        `Run ${runId} — status: ${status}`,
+        `Run ${runId}: status: ${status}`,
         url ? `${/\.(png|jpe?g|webp)(\?|$)/i.test(url) ? 'Image' : /\.(mp3|wav|m4a)(\?|$)/i.test(url) ? 'Audio' : 'Video'}: ${url}` : null,
         otherArtifacts.length ? `Other artifacts:\n${otherArtifacts.join('\n')}` : null,
         typeof b.credits === 'number' ? `Credits: ${b.credits}` : null,
         b.error_message ? `Error: ${b.error_message}` : null,
         b.error_code ? `Error code: ${b.error_code}` : null,
         b.progress_detail?.stage ? `Stage: ${b.progress_detail.stage}` : null,
-        !done ? 'Still running — call get_run_status again (or with wait:true).' : null,
+        !done ? 'Still running: call get_run_status again (or with wait:true).' : null,
       ].filter(Boolean);
       return {
         content: [{ type: 'text', text: lines.join('\n') }],
@@ -594,7 +620,7 @@ export function buildMcpServer(apiKey: string): Server {
         });
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `agent-media did not answer in time (${(err as Error).message}). This is transient — call list_characters again.` }],
+          content: [{ type: 'text', text: `agent-media did not answer in time (${(err as Error).message}). This is transient: call list_characters again.` }],
           isError: true,
         };
       }
@@ -606,7 +632,7 @@ export function buildMcpServer(apiKey: string): Server {
       }
       const chars = ((data as { characters?: Array<{ name?: string; character_id?: string | null; character_sheet_url?: string }> } | null)?.characters) ?? [];
       const body = chars.length
-        ? chars.map((c) => `- ${c.name} — character_id: ${c.character_id ?? '(none)'}  |  sheet: ${c.character_sheet_url}`).join('\n')
+        ? chars.map((c) => `- ${c.name}: character_id: ${c.character_id ?? '(none)'}  |  sheet: ${c.character_sheet_url}`).join('\n')
         : 'No saved characters yet.';
       return { content: [{ type: 'text', text: `${chars.length} saved character(s). Reuse one by putting its sheet URL in \`refs\` of generate_video (loose surface) or passing character_id as \`character\` to make_ugc (fixed surface):\n${body}` }] };
     }
@@ -633,7 +659,7 @@ export function buildMcpServer(apiKey: string): Server {
         );
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). The run may or may not have started — use the list/status tools to check.` }],
+          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). The run may or may not have started: use the list/status tools to check.` }],
           isError: true,
         };
       }
@@ -676,7 +702,7 @@ export function buildMcpServer(apiKey: string): Server {
               `Skill submitted: ${sub?.skill ?? skillTool.slug}`,
               jobId ? `Run id: ${jobId}` : null,
               sub?.workflow_id ? `Workflow id: ${sub.workflow_id}` : null,
-              `NEXT STEP: call get_run_status with run_id "${jobId ?? '<id>'}" (add wait:true to wait ~45s per call; repeat until it is done) to get the video URL. Do not stop here — the user needs the link.`,
+              `NEXT STEP: call get_run_status with run_id "${jobId ?? '<id>'}" (add wait:true to wait ~45s per call; repeat until it is done) to get the video URL. Do not stop here: the user needs the link.`,
               `(REST equivalent: ${pollUrl})`,
             ]
               .filter(Boolean)
@@ -708,7 +734,7 @@ export function buildMcpServer(apiKey: string): Server {
       });
     } catch (err) {
       return {
-        content: [{ type: 'text', text: `agent-media did not respond in time (${(err as Error).message}). The job may or may not have started — call list_characters or get_run_status before resubmitting, so the user is not charged twice.` }],
+        content: [{ type: 'text', text: `agent-media did not respond in time (${(err as Error).message}). The job may or may not have started: call list_characters or get_run_status before resubmitting, so the user is not charged twice.` }],
         isError: true,
       };
     }
@@ -739,7 +765,7 @@ export function buildMcpServer(apiKey: string): Server {
           text: [
             `Job submitted: ${sub?.job_id ?? '(no job id)'}`,
             sub?.credits_deducted != null ? `Credits: ${sub.credits_deducted}` : null,
-            `NEXT STEP: call get_run_status with run_id "${sub?.job_id ?? '<job_id>'}" (add wait:true to wait ~45s per call; repeat until it is done) to get the video URL. Do not stop here — the user needs the link.`,
+            `NEXT STEP: call get_run_status with run_id "${sub?.job_id ?? '<job_id>'}" (add wait:true to wait ~45s per call; repeat until it is done) to get the video URL. Do not stop here: the user needs the link.`,
           ]
             .filter(Boolean)
             .join('\n'),

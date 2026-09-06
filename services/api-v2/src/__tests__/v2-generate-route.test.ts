@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 vi.mock('../server.js', () => ({ supabase: {} }));
 
-const { validateAndQuote, GENERATE_KINDS } = await import('../routes/v2/generate.js');
+const { validateAndQuote, probeVideoRefs, GENERATE_KINDS } = await import('../routes/v2/generate.js');
 const server = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../server.ts'), 'utf8');
 
 describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
@@ -37,6 +37,30 @@ describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
     expect(v.ok && v.credits).toBe(150);
     expect(v.ok && v.auto?.reason).toMatch(/default/);
     expect(v.ok && v.input.model).toBe('seedance-2.0');
+  });
+
+  it('resolves the video cell the worker will run: mode, provider model, aspect, quality, timeout', () => {
+    const t = validateAndQuote('video', { prompt: 'x'.repeat(10) });
+    expect(t.ok && t.video).toEqual({ mode: 'text', provider_model: 'seedance-2.0-text-to-video', aspect: '9:16', quality: '720p', timeout_minutes: 30 });
+    const i = validateAndQuote('video', { prompt: 'x'.repeat(10), model: 'seedance-2.5', first_frame: 'https://x.com/a.png', quality: '480p' });
+    expect(i.ok && i.video).toEqual({ mode: 'image', provider_model: 'seedance-2.5-image-to-video', aspect: 'adaptive', quality: '480p', timeout_minutes: 90 });
+    expect(i.ok && i.credits).toBe(5 * 50);
+    const r = validateAndQuote('video', { prompt: '@image1 waves', refs: ['https://x.com/a.png'], aspect: '16:9' });
+    expect(r.ok && r.video?.provider_model).toBe('seedance-2.0-reference-to-video');
+    expect(r.ok && r.video?.aspect).toBe('16:9');
+    const bad = validateAndQuote('video', { prompt: 'x'.repeat(10), model: 'seedance-2.5', first_frame: 'https://x.com/a.png', aspect: '9:16' });
+    expect(bad.ok).toBe(false);
+    expect(JSON.stringify(!bad.ok && bad.issues)).toMatch(/adaptive/);
+  });
+
+  it('bills reference clip seconds from the probe, and refuses a clip it cannot read', async () => {
+    const probe = async (urls: string[]) => Object.fromEntries(urls.map((u) => [u, u.endsWith('a.mp4') ? 4.2 : null]));
+    const ok = await probeVideoRefs(['https://x.com/a.mp4'], probe);
+    expect(ok).toEqual({ ok: true, seconds: 4.2 });
+    const v = validateAndQuote('video', { prompt: '@video1 style', seconds: 5, video_refs: ['https://x.com/a.mp4'] }, {}, { inputVideoSeconds: 4.2 });
+    expect(v.ok && v.credits).toBe(30 * (5 + 5));
+    const nope = await probeVideoRefs(['https://x.com/a.mp4', 'https://x.com/b.mp4'], probe);
+    expect(nope).toEqual({ ok: false, unreadable: ['https://x.com/b.mp4'] });
   });
 
   it('rate route is mounted behind auth on the read limiter', () => {
