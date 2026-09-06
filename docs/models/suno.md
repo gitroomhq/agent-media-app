@@ -9,18 +9,14 @@ Music generation with vocals and lyrics.
 | Kind | audio |
 | Tier | standard |
 | Status | **candidate** |
-| Provider | evolink (`suno`) |
+| Provider | evolink (`suno-v5-beta`) |
 | Modes | music |
 | Features | vocals, lyrics |
 | Limits | – |
-| Our cost | $0.059 per track. FROM price on evolink.ai/models: $0.118 per 2 tracks. |
 | User price | none (candidate) |
 | Quality / speed | good / medium |
 | Verified | no recorded run yet |
-
-## Best for
-
-- the `music` bed field on make_ugc
+<!-- /generated -->
 
 ## Usage notes
 

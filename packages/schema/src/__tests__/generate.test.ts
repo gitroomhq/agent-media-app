@@ -2,17 +2,32 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  EDIT_INTENT_RE,
   GenerateAudioSchema,
   GenerateImageSchema,
   GenerateVideoSchema,
   V2_DEFAULT_MODEL,
   V2_MODELS,
   V2_VOICES,
+  deriveVideoMode,
   liveModelIds,
   pickAuto,
   quoteAny,
   quoteGenerate,
+  resolveVideoRequest,
 } from '../v2/index.js';
+
+const IMG = 'https://x.com/a.png';
+const IMG2 = 'https://x.com/b.png';
+const MP4 = 'https://x.com/c.mp4';
+const WAV = 'https://x.com/d.wav';
+const P = 'a woman holds a serum bottle and says "this saved my skin"';
+
+const parse = (input: object) => GenerateVideoSchema.safeParse(input);
+const messages = (input: object) => {
+  const r = parse(input);
+  return r.success ? '' : r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n');
+};
 
 describe('loose surface: schemas', () => {
   it('defaults come from the catalog and are live', () => {
@@ -24,17 +39,18 @@ describe('loose surface: schemas', () => {
   });
 
   it('accepts a minimal video call and fills defaults', () => {
-    const v = GenerateVideoSchema.parse({ prompt: 'a woman holds a serum bottle and says "this saved my skin"' });
+    const v = GenerateVideoSchema.parse({ prompt: P });
     expect(v.seconds).toBe(5);
-    expect(v.aspect).toBe('9:16');
+    expect(v.aspect).toBeUndefined();
+    expect(v.quality).toBe('720p');
     expect(v.audio).toBe(true);
     expect(v.model).toBeUndefined();
+    const r = resolveVideoRequest(v);
+    expect(r).toMatchObject({ model: 'seedance-2.0', mode: 'text', providerModel: 'seedance-2.0-text-to-video', aspect: '9:16', quality: '720p' });
   });
 
   it('rejects a candidate model by name and lists the live ones', () => {
-    const r = GenerateVideoSchema.safeParse({ prompt: 'x'.repeat(10), model: 'kling-o3' });
-    expect(r.success).toBe(false);
-    const msg = r.success ? '' : r.error.issues.map((i) => i.message).join('\n');
+    const msg = messages({ prompt: P, model: 'kling-o3' });
     expect(msg).toMatch(/not-live video model "kling-o3"/);
     for (const id of liveModelIds('video')) expect(msg).toContain(id);
   });
@@ -44,19 +60,19 @@ describe('loose surface: schemas', () => {
   });
 
   it('enforces the model limits, not a global guess', () => {
-    expect(GenerateVideoSchema.safeParse({ prompt: 'x'.repeat(10), seconds: 15 }).success).toBe(true);
-    expect(GenerateVideoSchema.safeParse({ prompt: 'x'.repeat(10), seconds: 16 }).success).toBe(false);
-    expect(GenerateVideoSchema.safeParse({ prompt: 'x'.repeat(10), seconds: 3 }).success).toBe(false);
+    expect(parse({ prompt: P, seconds: 15 }).success).toBe(true);
+    expect(messages({ prompt: P, seconds: 16 })).toMatch(/4 to 15 seconds/);
+    expect(messages({ prompt: P, seconds: 3 })).toMatch(/4 to 15 seconds/);
   });
 
   it('refs must be https', () => {
     expect(GenerateImageSchema.safeParse({ prompt: 'portrait', refs: ['http://x.com/a.png'] }).success).toBe(false);
     expect(GenerateImageSchema.safeParse({ prompt: 'portrait', refs: ['data:image/png;base64,AAAA'] }).success).toBe(false);
-    expect(GenerateImageSchema.safeParse({ prompt: 'portrait', refs: ['https://x.com/a.png'] }).success).toBe(true);
+    expect(GenerateImageSchema.safeParse({ prompt: 'portrait', refs: [IMG] }).success).toBe(true);
   });
 
   it('is strict: unknown fields fail loudly instead of being ignored', () => {
-    expect(GenerateVideoSchema.safeParse({ prompt: 'x'.repeat(10), engine: 'seedance-2.5' }).success).toBe(false);
+    expect(parse({ prompt: P, engine: 'seedance-2.5' }).success).toBe(false);
   });
 
   it('audio voice names map to real ElevenLabs ids', () => {
@@ -65,14 +81,92 @@ describe('loose surface: schemas', () => {
   });
 });
 
+describe('video modes (from the provider specs)', () => {
+  it('derives the mode from the inputs', () => {
+    expect(deriveVideoMode({})).toBe('text');
+    expect(deriveVideoMode({ first_frame: IMG })).toBe('image');
+    expect(deriveVideoMode({ refs: [IMG] })).toBe('reference');
+    expect(deriveVideoMode({ video_refs: [MP4] })).toBe('reference');
+    expect(deriveVideoMode({ audio_refs: [WAV], refs: [IMG] })).toBe('reference');
+  });
+
+  it('image-to-video routes to the image provider id with adaptive aspect by default', () => {
+    for (const model of ['seedance-2.0', 'seedance-2.5']) {
+      const v = GenerateVideoSchema.parse({ prompt: P, model, first_frame: IMG, last_frame: IMG2 });
+      const r = resolveVideoRequest(v);
+      expect(r.mode).toBe('image');
+      expect(r.providerModel).toBe(`${model}-image-to-video`);
+      expect(r.aspect).toBe('adaptive');
+    }
+  });
+
+  it('seedance-2.5 image mode refuses a fixed aspect; 2.0 accepts one', () => {
+    expect(messages({ prompt: P, model: 'seedance-2.5', first_frame: IMG, aspect: '9:16' })).toMatch(/only supports aspect "adaptive"/);
+    expect(parse({ prompt: P, model: 'seedance-2.0', first_frame: IMG, aspect: '9:16' }).success).toBe(true);
+  });
+
+  it('frames and references cannot be mixed on Seedance', () => {
+    expect(messages({ prompt: P, first_frame: IMG, refs: [IMG2] })).toMatch(/frames only/);
+    expect(messages({ prompt: P, last_frame: IMG })).toMatch(/last_frame needs first_frame/);
+  });
+
+  it('reference mode routes to the reference provider id and enforces the counts', () => {
+    const v = GenerateVideoSchema.parse({ prompt: '@image1 talks to camera', refs: [IMG], video_refs: [MP4], audio_refs: [WAV] });
+    expect(resolveVideoRequest(v).providerModel).toBe('seedance-2.0-reference-to-video');
+    expect(messages({ prompt: P, refs: Array(10).fill(IMG) })).toMatch(/up to 9 image references/);
+    expect(parse({ prompt: P, model: 'seedance-2.5', refs: Array(10).fill(IMG) }).success).toBe(true);
+    expect(messages({ prompt: P, video_refs: Array(4).fill(MP4) })).toMatch(/up to 3 reference clips/);
+  });
+
+  it('audio alone is refused on 2.0 and accepted on 2.5 (spec)', () => {
+    expect(messages({ prompt: P, audio_refs: [WAV] })).toMatch(/needs an image or video reference/);
+    expect(parse({ prompt: P, model: 'seedance-2.5', audio_refs: [WAV] }).success).toBe(true);
+  });
+
+  it('edit or extend wording with a reference clip is refused at submit, not minutes later', () => {
+    expect(EDIT_INTENT_RE.test('replace the bottle in @video1 with a jar')).toBe(true);
+    expect(EDIT_INTENT_RE.test('she removes the cap and smiles')).toBe(false);
+    expect(messages({ prompt: 'extend the video with her walking away', video_refs: [MP4] })).toMatch(/EDIT\/EXTEND/);
+    expect(parse({ prompt: 'extend the video with her walking away' }).success).toBe(true); // no clip, no reclassification
+  });
+
+  it('all seven aspects and three qualities are accepted in text mode', () => {
+    for (const aspect of ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9', 'adaptive']) expect(parse({ prompt: P, aspect }).success, aspect).toBe(true);
+    for (const quality of ['480p', '720p', '1080p']) expect(parse({ prompt: P, quality }).success, quality).toBe(true);
+    expect(parse({ prompt: P, quality: '4k' }).success).toBe(false);
+  });
+
+  it('seed is refused: no live video model takes one', () => {
+    expect(messages({ prompt: P, seed: 7 })).toMatch(/does not accept a seed/);
+  });
+});
+
 describe('loose surface: credit maths', () => {
-  it('video: seconds x catalog per-second, 2.5 is ~3x', () => {
-    const v20 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5 }));
-    const v25 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5, model: 'seedance-2.5' }));
+  it('video: seconds x the per-quality rate; 2.5 is about 3x', () => {
+    const v20 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: P, seconds: 5 }));
+    const v25 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: P, seconds: 5, model: 'seedance-2.5' }));
     expect(v20.credits).toBe(5 * V2_MODELS['seedance-2.0'].credits!.perUnit);
     expect(v25.credits).toBe(5 * V2_MODELS['seedance-2.5'].credits!.perUnit);
     expect(v25.credits / v20.credits).toBeGreaterThan(3);
     expect(v20.breakdown).toContain('seedance-2.0');
+    expect(v20.mode).toBe('text');
+  });
+
+  it('video: quality changes the rate', () => {
+    const q = (quality: string) => quoteGenerate('video', GenerateVideoSchema.parse({ prompt: P, seconds: 5, quality })).credits;
+    expect(q('480p')).toBe(5 * V2_MODELS['seedance-2.0'].video!.creditsPerSecond!['480p']!);
+    expect(q('1080p')).toBe(5 * V2_MODELS['seedance-2.0'].video!.creditsPerSecond!['1080p']!);
+    expect(q('480p')).toBeLessThan(q('720p'));
+  });
+
+  it('video: reference clip seconds are billed at the same rate once measured', () => {
+    const v = GenerateVideoSchema.parse({ prompt: '@video1 style, she waves', seconds: 5, video_refs: [MP4] });
+    const unmeasured = quoteGenerate('video', v);
+    expect(unmeasured.credits).toBe(150);
+    expect(unmeasured.breakdown).toMatch(/measured at submit/);
+    const measured = quoteGenerate('video', v, { inputVideoSeconds: 4.2 });
+    expect(measured.credits).toBe(30 * (5 + 5));
+    expect(measured.breakdown).toMatch(/5s of reference video/);
   });
 
   it('image: one image per call at the catalog price', () => {
@@ -88,24 +182,10 @@ describe('loose surface: credit maths', () => {
     expect(quoteGenerate('audio', GenerateAudioSchema.parse({ text: 'a'.repeat(1000) })).credits).toBe(10);
   });
 
-  // The floor is 3x cost (≈67% margin): seedance-2.0 is exactly 3x
-  // ($0.30 charged vs $0.10 paid) and that price is locked by the
-  // V2_GENERATORS parity test, so a 70% floor would be a lie here.
-  it('every live model charges at least 3x its provider cost standalone', () => {
-    for (const m of Object.values(V2_MODELS).filter((m) => m.status === 'live')) {
-      const c = m.credits!;
-      // usd per catalog unit charged vs paid
-      const charged = c.perUnit * 0.01;
-      const paid = m.cost.unit === c.unit ? m.cost.usd : NaN;
-      expect(Number.isNaN(paid), `${m.id}: cost unit ${m.cost.unit} vs credit unit ${c.unit}`).toBe(false);
-      expect(charged, `${m.id} charges ${charged} vs cost ${paid}`).toBeGreaterThanOrEqual(paid * 3 - 1e-9);
-    }
-  });
-
   it('quoteAny returns issues for bad input and a quote for good input', () => {
-    const bad = quoteAny('video', { prompt: 'x'.repeat(10), model: 'sora-2' });
+    const bad = quoteAny('video', { prompt: P, model: 'sora-2' });
     expect(bad.ok).toBe(false);
-    const good = quoteAny('video', { prompt: 'x'.repeat(10), seconds: 8 });
+    const good = quoteAny('video', { prompt: P, seconds: 8 });
     expect(good.ok && good.quote.credits).toBe(240);
   });
 });
@@ -116,8 +196,8 @@ describe('model: "auto"', () => {
   });
 
   it('is accepted by the schemas and refused by quoteGenerate until resolved', () => {
-    expect(GenerateVideoSchema.safeParse({ prompt: 'x'.repeat(10), model: 'auto' }).success).toBe(true);
-    expect(() => quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), model: 'auto' }))).toThrow(/pickAuto/);
+    expect(parse({ prompt: P, model: 'auto' }).success).toBe(true);
+    expect(() => quoteGenerate('video', GenerateVideoSchema.parse({ prompt: P, model: 'auto' }))).toThrow(/pickAuto/);
   });
 
   it('with no data picks the default and says why', () => {
@@ -127,22 +207,21 @@ describe('model: "auto"', () => {
   });
 
   it('never picks a challenger on thin data or a >1.5x price', () => {
-    // seedance-2.5 is 3.3x the price: excluded even with a perfect score.
     expect(pickAuto('video', { 'seedance-2.5': S(50, 0, 0.99, 50) }).model).toBe('seedance-2.0');
-    // and thin data never counts
     expect(pickAuto('image', { 'gpt-image-2': S(3, 3, 0.1, 3) }).model).toBe('gpt-image-2');
   });
 
-  it('abandons a default that fails >25% for a healthy live model', () => {
-    const p = pickAuto('video', { 'seedance-2.0': S(20, 8, 0.8, 12), 'seedance-2.5': S(20, 0, 0.8, 12) });
+  it('abandons a default that fails >25% for a healthy live model that has the mode', () => {
+    const p = pickAuto('video', { 'seedance-2.0': S(20, 8, 0.8, 12), 'seedance-2.5': S(20, 0, 0.8, 12) }, 'image');
     expect(p.model).toBe('seedance-2.5');
     expect(p.reason).toMatch(/failed 40%/);
   });
 
-  it('quoteAny resolves auto before pricing and reports the pick', () => {
-    const q = quoteAny('video', { prompt: 'x'.repeat(10), seconds: 5, model: 'auto' }, {});
+  it('quoteAny resolves auto before pricing, re-validates against the pick, and reports it', () => {
+    const q = quoteAny('video', { prompt: P, seconds: 5, model: 'auto' }, {});
     expect(q.ok && q.quote.model).toBe('seedance-2.0');
     expect(q.ok && q.quote.credits).toBe(150);
     expect(q.ok && q.auto?.reason).toBeTruthy();
+    expect(q.ok && (q.input as { model?: string }).model).toBe('seedance-2.0');
   });
 });

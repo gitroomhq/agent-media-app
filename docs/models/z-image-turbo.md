@@ -11,21 +11,12 @@ Ultra-cheap, ultra-fast image model.
 | Status | **candidate** |
 | Provider | evolink (`z-image-turbo`) |
 | Modes | text-to-image |
-| Features | ultra-fast |
-| Limits | – |
-| Our cost | $0.0039 per image. FROM price on evolink.ai/models. |
+| Features | ultra-fast, seed |
+| Limits | up to 0 refs |
 | User price | none (candidate) |
 | Quality / speed | draft / fast |
 | Verified | no recorded run yet |
-
-## Best for
-
-- framing wireframes
-- throwaway previews
-
-## Avoid for
-
-- anything a user sees
+<!-- /generated -->
 
 ## Usage notes
 

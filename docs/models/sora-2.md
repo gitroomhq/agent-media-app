@@ -9,22 +9,26 @@ OpenAI's video model via EvoLink, with native audio, text-to-video only.
 | Kind | video |
 | Tier | premium |
 | Status | **candidate** |
-| Provider | evolink (`sora-2`) |
-| Modes | text-to-video |
+| Provider | evolink |
+| Modes | text-to-video, image-to-video |
 | Features | native-audio |
-| Limits | 10–15 s |
-| Our cost | $0.085 per second. FROM price on evolink.ai/models; no reference input listed, so character consistency is unproven. |
+| Limits | 4 to 12 s (per mode below); worker waits up to 30 min |
 | User price | none (candidate) |
 | Quality / speed | premium / slow |
 | Verified | no recorded run yet |
 
-## Best for
+## Modes
 
-- cinematic b-roll without a locked face
+The mode is derived from the request: `first_frame` means image mode, `refs` / `video_refs` / `audio_refs` mean reference mode, neither means text mode.
 
-## Avoid for
+| Mode | Provider model | Inputs | Seconds | Aspect | Quality | Seed | Verified |
+|---|---|---|---|---|---|---|---|
+| text | `sora-2-preview` | prompt only | 4 to 12 | 16:9, 9:16 (default 9:16) | 720p | no | no recorded run yet |
+| image | `sora-2-preview` | first_frame | 4 to 12 | 16:9, 9:16 (default 9:16) | 720p | no | no recorded run yet |
 
-- anything that must keep a saved character identity
+- text: Only 4, 8 or 12 s. Strict content moderation; real people are not accepted.
+- image: One image; its pixel size must match the aspect exactly (1280x720 or 720x1280). No real people.
+<!-- /generated -->
 
 ## Usage notes
 

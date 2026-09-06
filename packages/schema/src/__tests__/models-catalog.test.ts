@@ -64,9 +64,23 @@ describe('model catalog', () => {
     }
   });
 
-  it('candidates cite a FROM price and say it must be confirmed', () => {
-    for (const m of Object.values(V2_MODELS).filter((x) => x.status === 'candidate')) {
-      expect(m.cost.note, `${m.id} cost note`).toMatch(/FROM price/);
+  it('never carries provider cost (internal) in the public catalog', () => {
+    for (const m of Object.values(V2_MODELS)) {
+      expect('cost' in (m as object), `${m.id} exposes a cost field`).toBe(false);
+      const text = JSON.stringify(m);
+      expect(text, `${m.id} mentions a dollar figure`).not.toMatch(/\$\d/);
+      expect(text, `${m.id} mentions margin or provider cost`).not.toMatch(/margin|our cost|provider cost/i);
+    }
+  });
+
+  it('every video mode cell is priced for each quality it offers and has a provider id from the spec', () => {
+    for (const m of liveModels().filter((x) => x.kind === 'video')) {
+      for (const [mode, s] of Object.entries(m.video!.modes)) {
+        expect(s.providerModel, `${m.id} ${mode}`).toMatch(/^seedance-2\.[05](?:-mini)?-(text|image|reference)-to-video$/);
+        for (const q of s.qualities) expect(m.video!.creditsPerSecond![q], `${m.id} ${mode} ${q} unpriced`).toBeGreaterThan(0);
+      }
+      expect(m.video!.creditsPerSecond!['480p']!).toBeLessThan(m.video!.creditsPerSecond!['720p']!);
+      expect(m.video!.creditsPerSecond!['720p']!).toBeLessThan(m.video!.creditsPerSecond!['1080p']!);
     }
   });
 
@@ -77,10 +91,10 @@ describe('model catalog', () => {
     expect(ids).not.toContain('seedance-2.0-mini');
   });
 
-  it('live video models cost less than they charge (70% floor is documented, this is the sanity floor)', () => {
-    for (const m of liveModels().filter((x) => x.kind === 'video')) {
-      const usdPerSecondCharged = m.credits!.perUnit * 0.01;
-      expect(usdPerSecondCharged, `${m.id} charges below cost`).toBeGreaterThan(m.cost.usd);
+  it('the two Seedance models expose text, image and reference modes', () => {
+    for (const id of ['seedance-2.0', 'seedance-2.5']) {
+      expect(Object.keys(V2_MODELS[id].video!.modes).sort()).toEqual(['image', 'reference', 'text']);
     }
+    expect(V2_MODELS['seedance-2.5'].video!.modes.image!.aspects).toEqual(['adaptive']);
   });
 });
