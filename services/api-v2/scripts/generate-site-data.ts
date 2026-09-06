@@ -2,7 +2,7 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
 
 /**
- * public-skill/site-data.json — everything the website's Docs section
+ * public-skill/site-data.json, everything the website's Docs section
  * renders, generated from the same objects as the connector and the
  * skill pack: tools/list (src/mcp/loose-tools.ts), the model catalog
  * (@agentmedia/schema/v2), the prices (quoteGenerate), the recipes and

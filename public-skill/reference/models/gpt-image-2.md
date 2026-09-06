@@ -13,7 +13,7 @@ The image model behind every video: it draws the portrait, the multi-view charac
 | Modes | text-to-image, image-edit |
 | Features | portrait, character-sheet, wireframe, prompt-adherence |
 | Limits | 1024, 1536; refs: image |
-| Our cost | $0.06 per image. OpenAI direct, quality "medium", 1024x1536 — the published gpt-image-1 rate ($0.063); gpt-image-2 assumed equal until an invoice line is checked. EvoLink lists $0.015 for its 1K tier. |
+| Our cost | $0.06 per image. OpenAI direct, quality "medium", 1024x1536, the published gpt-image-1 rate ($0.063); gpt-image-2 assumed equal until an invoice line is checked. EvoLink lists $0.015 for its 1K tier. |
 | User price | 20 credits per image standalone (`generate_image`); included in the credits of the fixed video skills |
 | Quality / speed | good / fast |
 | Verified | 2026-09-05. every video pipeline stage A-C; portrait + sheet produced on run 2749ee84; standalone via generate_image |

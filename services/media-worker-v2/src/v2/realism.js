@@ -16,7 +16,7 @@
  *
  * The pipeline never embeds prose prompts directly. It composes them
  * from this module so when we tune the rubric, every clip we render
- * after that point picks up the new wording — zero per-pipeline edits.
+ * after that point picks up the new wording, zero per-pipeline edits.
  */
 
 // ── The 9-point realism rubric, baked into every prompt ───────────────────
@@ -28,14 +28,14 @@ export const REALISM_RUBRIC = `Critical realism rules (must all be visible in th
 - NO plastic AI sheen, NO uncanny symmetry, NO ultra-smoothed skin;
 - NO shiny/plastic face, NO glowing light on the face, NO beauty-filter glow;
 - subtle asymmetry: head tilt, blink, micro-expressions;
-- hands are always doing something — gesturing, holding a product, adjusting clothing, or otherwise occupied (never limp at the sides);
+- hands are always doing something, gesturing, holding a product, adjusting clothing, or otherwise occupied (never limp at the sides);
 - mouth caught mid-syllable when talking, not closed and not open-smile;
 - eyes slightly off-center to camera, not a dead stare;
 - no visible phone, selfie-stick, or outstretched selfie arm unless explicitly requested.`;
 
 // ── Shot-grammar preset library (20 named presets) ────────────────────────
 //
-// Each preset is a fully composed brief — setting + lighting + outfit +
+// Each preset is a fully composed brief, setting + lighting + outfit +
 // posture + free-hand action. The shape is intentionally prose, not a
 // struct, because Seedance + gpt-image-2 read prose better than tags.
 //
@@ -76,7 +76,7 @@ export const SHOT_PRESETS = {
   'closet-fit-check':
     'Setting: in front of a clothes rack, edge of a full-length mirror visible. Lighting: bright bedroom daylight.',
   'studio-apartment-tour':
-    'Setting: lived-in studio-apartment vibe — bookshelf or throw blanket visible in the background. Lighting: warm interior, single lamp glow.',
+    'Setting: lived-in studio-apartment vibe, bookshelf or throw blanket visible in the background. Lighting: warm interior, single lamp glow.',
   'balcony-evening-vibes':
     'Setting: balcony railing with city blur behind. Lighting: warm golden-hour or string-light glow.',
 
@@ -136,16 +136,16 @@ export function resolveVibeBrief(vibe) {
  * the full rubric because gpt-image-2 has to generate the realism
  * details from scratch.
  *
- * DO NOT use for Stage D (Seedance video) — the references already
+ * DO NOT use for Stage D (Seedance video), the references already
  * encode everything the rubric describes (skin pores, lighting,
  * camera framing). Repeating it in the video prompt bloats the call
  * and confuses the model. For Stage D use buildVideoPrompt() below.
  *
  * @param {object} args
- * @param {string} args.preset       — shot preset key, e.g. 'bedroom-morning-ritual'
- * @param {string} [args.vibe]       — one of VIBE_MODIFIERS, defaults to 'excited'
- * @param {string} [args.voiceBrief] — natural-language voice direction (image stages: ignored)
- * @param {string[]} args.lines      — stage-specific instructional lines, in order
+ * @param {string} args.preset      , shot preset key, e.g. 'bedroom-morning-ritual'
+ * @param {string} [args.vibe]      , one of VIBE_MODIFIERS, defaults to 'excited'
+ * @param {string} [args.voiceBrief], natural-language voice direction (image stages: ignored)
+ * @param {string[]} args.lines     , stage-specific instructional lines, in order
  */
 export function buildScaffoldedPrompt({ preset, vibe = 'excited', voiceBrief, lines }) {
   if (!Array.isArray(lines) || lines.length === 0) {
@@ -168,17 +168,17 @@ export function buildScaffoldedPrompt({ preset, vibe = 'excited', voiceBrief, li
  * what's playing, how long.
  *
  * @param {object} args
- * @param {string} args.action     — what the person is doing (scene_action, or "talking to camera")
- * @param {string} [args.script]   — verbatim line if speaking; empty/undefined for non-speech
- * @param {string} [args.music]    — background-music direction; null/undefined for none
- * @param {number} args.duration   — seconds (5/10/15)
+ * @param {string} args.action    , what the person is doing (scene_action, or "talking to camera")
+ * @param {string} [args.script]  , verbatim line if speaking; empty/undefined for non-speech
+ * @param {string} [args.music]   , background-music direction; null/undefined for none
+ * @param {number} args.duration  , seconds (5/10/15)
  */
 export function buildVideoPrompt({ action, script, music, duration }) {
   // Emit caller-supplied action/script/music plus one mandatory quality
   // guardrail line for Seedance 2's face lighting/skin behavior.
   const lines = [
     `The person in the reference images: ${action}.`,
-    'CRITICAL for Seedance 2: facial skin and lighting must stay natural and realistic — no shiny/plastic face, no glowing light on the face, no beauty-filter glow.',
+    'CRITICAL for Seedance 2: facial skin and lighting must stay natural and realistic, no shiny/plastic face, no glowing light on the face, no beauty-filter glow.',
   ];
   if (script && script.trim()) {
     lines.push(`They say, exactly: "${script}".`);

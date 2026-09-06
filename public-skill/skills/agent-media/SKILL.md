@@ -6,21 +6,21 @@ x-skill-slug: 'agent-media'
 x-skill-version: '2.0.0'
 x-surface: 'loose'
 ---
-# agent-media — the skill
+# agent-media, the skill
 
 You are the director. agent-media gives you three primitives and a model catalog; there is no fixed recipe between your intent and the render. Read this once; it is the whole manual.
 
 ## The loop
 
-1. **Decide the shot** in words: who, where, what happens, camera, and — if anyone speaks — the exact words in quotes.
-2. **Pick the model.** Omit `model` and you get the default (`seedance-2.0` for video, `gpt-image-2` for images, `elevenlabs-tts` for speech); pass `"auto"` to let recent results decide. Call `list_models` when the job is unusual — it says what each model is good at, bad at, what it costs, and how it has actually performed lately. Only live models are accepted; naming a planned one returns the live list.
+1. **Decide the shot** in words: who, where, what happens, camera, and, if anyone speaks, the exact words in quotes.
+2. **Pick the model.** Omit `model` and you get the default (`seedance-2.0` for video, `gpt-image-2` for images, `elevenlabs-tts` for speech); pass `"auto"` to let recent results decide. Call `list_models` when the job is unusual, it says what each model is good at, bad at, what it costs, and how it has actually performed lately. Only live models are accepted; naming a planned one returns the live list.
 3. **Get identity right.** Same face across clips ⇒ pass the same reference URL in `refs` every time. Make the reference with `generate_image` (a clean portrait), take it from `list_characters` (a saved character sheet), or `upload_image` the user's photo.
 4. **Quote if the user cares about cost** (`quote` costs nothing), then call the tool.
 5. **Poll `get_run_status`** with the job id (`wait: true`) until it is `completed`, and hand the user the URL. Never report success before you hold the URL.
 
 ## The tools
 
-### generate_video — 150 / 300 / 450 credits for 5 / 10 / 15s on seedance-2.0 (495 for 5s on seedance-2.5)
+### generate_video, 150 / 300 / 450 credits for 5 / 10 / 15s on seedance-2.0 (495 for 5s on seedance-2.5)
 
 ```json
 {
@@ -34,10 +34,10 @@ You are the director. agent-media gives you three primitives and a model catalog
 
 - `seconds` 4–15, `aspect` `9:16` or `1:1`, `refs` up to 4 https URLs, `seed` for a repeatable take, `model` a live video id.
 - With `refs` the model keeps that person / product / look (reference-to-video). Without, it invents one from the prompt (text-to-video).
-- Speech: put the exact words in quotes in the prompt and leave `audio: true`. The model renders the voice and lip-sync natively — you do not need `generate_audio` for a talking head.
+- Speech: put the exact words in quotes in the prompt and leave `audio: true`. The model renders the voice and lip-sync natively, you do not need `generate_audio` for a talking head.
 - Pace the words: ~2.3 words per second. 5s ≈ 10–12 words, 10s ≈ 20–25, 15s ≈ 30–35. A longer script is several clips.
 
-### generate_image — 20 credits
+### generate_image, 20 credits
 
 ```json
 { "prompt": "Head-and-shoulders portrait of a 28-year-old woman, warm smile, soft window light, phone camera, natural skin, plain kitchen behind her", "size": "1024x1536" }
@@ -46,7 +46,7 @@ You are the director. agent-media gives you three primitives and a model catalog
 - `size` `1024x1024`, `1024x1536`, `1536x1024` (portrait is the default). With `refs` it edits/composes from them: put a product into a hand, re-light a portrait, pose a character sheet.
 - This is how you make the reference a series needs. One portrait, then every clip cites it.
 
-### generate_audio — 1 credit per 100 characters
+### generate_audio, 1 credit per 100 characters
 
 ```json
 { "text": "[excited] Three things nobody tells you about launching…", "voice": "sarah", "tone": "energetic" }
@@ -61,7 +61,7 @@ You are the director. agent-media gives you three primitives and a model catalog
 
 ### list_models · list_characters · get_run_status · upload_image · rate_run
 
-All free. `list_models` is the recommendation layer — read it before an unusual job; every model carries `recent` (last 30 days: runs, fail rate, auto-judge score, user ratings, typical render time). `list_characters` returns saved characters with `character_sheet_url` / portrait URLs for `refs`. `get_run_status` takes any job id this server gave you. `upload_image` turns bytes or a foreign URL into an https URL — never paste base64 into a tool call. `rate_run` records 1–5 and a note on a finished run: do it whenever the user reacts to an output, or you can see a defect yourself.
+All free. `list_models` is the recommendation layer, read it before an unusual job; every model carries `recent` (last 30 days: runs, fail rate, auto-judge score, user ratings, typical render time). `list_characters` returns saved characters with `character_sheet_url` / portrait URLs for `refs`. `get_run_status` takes any job id this server gave you. `upload_image` turns bytes or a foreign URL into an https URL, never paste base64 into a tool call. `rate_run` records 1–5 and a note on a finished run: do it whenever the user reacts to an output, or you can see a defect yourself.
 
 ### model: "auto"
 
@@ -69,7 +69,7 @@ Every loose-surface job is scored by an auto-judge (3 frames or the image agains
 
 ## Writing a prompt that comes out real
 
-The fixed pipelines used to inject this rubric into every prompt. Now it is yours to include — put the relevant lines in your `prompt`, in your own words:
+The fixed pipelines used to inject this rubric into every prompt. Now it is yours to include, put the relevant lines in your `prompt`, in your own words:
 
 ```text
 Critical realism rules (must all be visible in the frame):
@@ -80,7 +80,7 @@ Critical realism rules (must all be visible in the frame):
 - NO plastic AI sheen, NO uncanny symmetry, NO ultra-smoothed skin;
 - NO shiny/plastic face, NO glowing light on the face, NO beauty-filter glow;
 - subtle asymmetry: head tilt, blink, micro-expressions;
-- hands are always doing something — gesturing, holding a product, adjusting clothing, or otherwise occupied (never limp at the sides);
+- hands are always doing something, gesturing, holding a product, adjusting clothing, or otherwise occupied (never limp at the sides);
 - mouth caught mid-syllable when talking, not closed and not open-smile;
 - eyes slightly off-center to camera, not a dead stare;
 - no visible phone, selfie-stick, or outstretched selfie arm unless explicitly requested.
@@ -92,27 +92,27 @@ Full guide: [reference/prompting.md](../../reference/prompting.md).
 
 ## Recipes
 
-The things the old fixed skills did, as prompts you write yourself — see [reference/recipes.md](../../reference/recipes.md) for the full versions:
+The things the old fixed skills did, as prompts you write yourself, see [reference/recipes.md](../../reference/recipes.md) for the full versions:
 
-- **Talking-head UGC** — generate_video with the script in quotes; a portrait in `refs` if the face must persist.
-- **Product in hand** — upload_image the product → generate_image "…holding <product> up to the lens" with the product URL in refs → generate_video with that frame in refs.
-- **Crazy look** — silent 5s extreme close-up, one exaggerated expression held to the lens, `audio: false`; burn the caption in your editor or ask for it in the prompt.
-- **B-roll voiceover** — generate_audio the narration; the user overlays it on their footage (agent-media does not mux external video on this surface).
-- **A series with one face** — one generate_image portrait, then N generate_video calls with the same `refs` and the same `seed` family.
-- **Hero clip** — the one clip that must be the best: `model: "seedance-2.5"` (≈3x the credits). Never for drafts or bulk.
+- **Talking-head UGC**, generate_video with the script in quotes; a portrait in `refs` if the face must persist.
+- **Product in hand**, upload_image the product → generate_image "…holding <product> up to the lens" with the product URL in refs → generate_video with that frame in refs.
+- **Crazy look**, silent 5s extreme close-up, one exaggerated expression held to the lens, `audio: false`; burn the caption in your editor or ask for it in the prompt.
+- **B-roll voiceover**, generate_audio the narration; the user overlays it on their footage (agent-media does not mux external video on this surface).
+- **A series with one face**, one generate_image portrait, then N generate_video calls with the same `refs` and the same `seed` family.
+- **Hero clip**, the one clip that must be the best: `model: "seedance-2.5"` (≈3x the credits). Never for drafts or bulk.
 
 ## Rules
 
 - Ask before spending big: quote a 15s seedance-2.5 clip before running it.
 - Default model for everything unless the user asked for the best possible single clip.
 - Every image URL must be https (upload_image first). Refs are kept private to the account.
-- Poll until `completed`; a clip takes a few minutes, an image under a minute, audio seconds. If a job fails, the credits are refunded automatically — say so and retry with a clearer prompt.
+- Poll until `completed`; a clip takes a few minutes, an image under a minute, audio seconds. If a job fails, the credits are refunded automatically, say so and retry with a clearer prompt.
 - Do not claim a video exists until get_run_status returned its URL.
 - After the user reacts to an output, call rate_run with an honest score. It is how the catalog learns.
 
 ## Errors
 
-- `VALIDATION_ERROR` with `model` in the message — you named a planned or unknown model; the message lists the live ones.
-- `INSUFFICIENT_CREDITS` — the account is out; point the user to agent-media.ai billing.
-- `TOO_MANY_ACTIVE_VIDEOS` — wait for one to finish.
-- `CONTENT_POLICY_BLOCKED` — the provider refused the prompt or the reference; rephrase, or use a different image.
+- `VALIDATION_ERROR` with `model` in the message, you named a planned or unknown model; the message lists the live ones.
+- `INSUFFICIENT_CREDITS`, the account is out; point the user to agent-media.ai billing.
+- `TOO_MANY_ACTIVE_VIDEOS`, wait for one to finish.
+- `CONTENT_POLICY_BLOCKED`, the provider refused the prompt or the reference; rephrase, or use a different image.

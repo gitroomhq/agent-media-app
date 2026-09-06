@@ -12,11 +12,11 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
       "type": "string",
       "minLength": 3,
       "maxLength": 4000,
-      "description": "The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and — if anyone speaks — the exact words in quotes. ~2.3 words per second."
+      "description": "The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and, if anyone speaks, the exact words in quotes. ~2.3 words per second."
     },
     "model": {
       "type": "string",
-      "description": "A live video model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits — hero clips only."
+      "description": "A live video model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits, hero clips only."
     },
     "refs": {
       "type": "array",
@@ -125,7 +125,7 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
       "type": "string",
       "minLength": 1,
       "default": "sarah",
-      "description": "A voice name: jessica (young female), sarah (female), liam (young male), chris (male), lily (elder female), bill (elder male), matilda (warm) — or a raw ElevenLabs voice id."
+      "description": "A voice name: jessica (young female), sarah (female), liam (young male), chris (male), lily (elder female), bill (elder male), matilda (warm), or a raw ElevenLabs voice id."
     },
     "tone": {
       "type": "string",

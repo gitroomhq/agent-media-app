@@ -12,7 +12,7 @@ Pass the id as `model` to `generate_video` / `generate_image` / `generate_audio`
 
 ## What the numbers mean
 
-`list_models` / `GET /v1/models` add a `recent` block per model: the last 30 days of loose-surface runs — `runs`, `fail_rate`, `auto_score` (0–1, an auto-judge grades every job: 3 frames or the image against the realism rubric, prompt adherence, identity match when refs were given), `scored`, `user_score` (1–5 from `rate_run`), `rated`, `p50_seconds`. `null` until a model has run.
+`list_models` / `GET /v1/models` add a `recent` block per model: the last 30 days of loose-surface runs, `runs`, `fail_rate`, `auto_score` (0–1, an auto-judge grades every job: 3 frames or the image against the realism rubric, prompt adherence, identity match when refs were given), `scored`, `user_score` (1–5 from `rate_run`), `rated`, `p50_seconds`. `null` until a model has run.
 
 `model: "auto"` is one printed rule over those numbers: the kind's default, unless it failed >25% of ≥10 recent runs and another live model is healthy, or a live model within 1.5x the default's price beats its auto score by ≥0.10 over ≥10 judged runs. The quote and the submit response say which model was chosen and why.
 

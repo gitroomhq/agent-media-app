@@ -11,8 +11,8 @@
  *
  * Why a catalog and not just an `engine` enum: the product direction is
  * "let the agent choose the model for the job". An agent chooses well only
- * when the choice is machine-readable — cost, limits, what it is good at
- * and what it is bad at — otherwise it picks the premium model for
+ * when the choice is machine-readable, cost, limits, what it is good at
+ * and what it is bad at, otherwise it picks the premium model for
  * everything and the margin is gone. So every field below exists to be
  * read by a model, not a human.
  *
@@ -179,7 +179,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     modes: ['text-to-image', 'image-edit'],
     features: ['portrait', 'character-sheet', 'wireframe', 'prompt-adherence'],
     limits: { resolutions: ['1024', '1536'], refs: 'image' },
-    cost: { unit: 'image', usd: 0.06, note: 'OpenAI direct, quality "medium", 1024x1536 — the published gpt-image-1 rate ($0.063); gpt-image-2 assumed equal until an invoice line is checked. EvoLink lists $0.015 for its 1K tier.' },
+    cost: { unit: 'image', usd: 0.06, note: 'OpenAI direct, quality "medium", 1024x1536, the published gpt-image-1 rate ($0.063); gpt-image-2 assumed equal until an invoice line is checked. EvoLink lists $0.015 for its 1K tier.' },
     // Standalone price for generate_image. Inside the fixed video skills the
     // portrait/sheet stages are still included in the video credits.
     credits: { unit: 'image', perUnit: 20 },

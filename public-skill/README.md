@@ -1,7 +1,7 @@
-# agent-media — Claude Skill plugin
+# agent-media, Claude Skill plugin
 
-[![npm — mcp-server](https://img.shields.io/npm/v/%40agentmedia%2Fmcp-server?label=%40agentmedia%2Fmcp-server)](https://www.npmjs.com/package/@agentmedia/mcp-server)
-[![npm — CLI](https://img.shields.io/npm/v/agent-media-cli?label=agent-media-cli)](https://www.npmjs.com/package/agent-media-cli)
+[![npm, mcp-server](https://img.shields.io/npm/v/%40agentmedia%2Fmcp-server?label=%40agentmedia%2Fmcp-server)](https://www.npmjs.com/package/@agentmedia/mcp-server)
+[![npm, CLI](https://img.shields.io/npm/v/agent-media-cli?label=agent-media-cli)](https://www.npmjs.com/package/agent-media-cli)
 [![Claude plugin](https://img.shields.io/badge/claude-%2Fplugin%20install-A78BFA)](https://github.com/gitroomhq/agent-media-app)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
@@ -9,7 +9,7 @@
 
 agent-media renders video, images and voice from YOUR prompt on the model YOU choose. There is no fixed recipe: you describe the shot like a director, pass reference images for identity, pick a model from the catalog (or take the default), and poll for the URL. Works in Claude Code, Claude.ai, Cursor, Codex, Grok, or any MCP / HTTP agent.
 
-## 1. Connect — no API key needed
+## 1. Connect, no API key needed
 
 ```
 https://api.agent-media.ai/mcp
@@ -31,9 +31,9 @@ Other routes: **Claude.ai / Desktop** → Settings → Connectors → add custom
 
 ## 2. Auth
 
-OAuth (above) is the default and needs no key. You need credits on the account — buy at agent-media.ai. 1 credit = $0.01.
+OAuth (above) is the default and needs no key. You need credits on the account, buy at agent-media.ai. 1 credit = $0.01.
 
-**API keys** remain supported for CI, scripts, and the local stdio server (`npx @agentmedia/mcp-server`): get one with `npm i -g agent-media-cli && agent-media login` or from the dashboard, then send `Authorization: Bearer ma_...` — including to the same hosted URL above.
+**API keys** remain supported for CI, scripts, and the local stdio server (`npx @agentmedia/mcp-server`): get one with `npm i -g agent-media-cli && agent-media login` or from the dashboard, then send `Authorization: Bearer ma_...`, including to the same hosted URL above.
 
 ## 3. The tools
 
@@ -41,7 +41,7 @@ OAuth (above) is the default and needs no key. You need credits on the account �
 |---|---|---|
 | `generate_video` | A clip from your prompt (+ reference images) on the model you pick. Native speech when the words are in the prompt. | seconds × the model's per-second rate (seedance-2.0: 30/s, seedance-2.5: 99/s) |
 | `generate_image` | One image from your prompt; with refs it edits/composes from them. The way to build a portrait or product frame for a video. | 20 per image |
-| `generate_audio` | Text to speech in a named voice. For voiceover over b-roll — a talking head does not need it. | 1 per 100 characters |
+| `generate_audio` | Text to speech in a named voice. For voiceover over b-roll, a talking head does not need it. | 1 per 100 characters |
 | `quote` | The price of any of the above without running it. | 0 |
 | `list_models` | The catalog: what each model is good and bad at, limits, price, how to select it. | 0 |
 | `list_characters` | Saved characters (sheet + portrait URLs) to pass as `refs`. | 0 |
@@ -69,7 +69,7 @@ Same face across a series: `generate_image` a portrait once, then pass that URL 
 | `gpt-image-2` (default) | image | 20 credits/image | portraits; character sheets |
 | `elevenlabs-tts` (default) | audio | 0.01 credits/character | voiceover on b-roll; dubbing |
 
-Full guide with the avoid-for column and one page per model: [reference/models.md](reference/models.md). Planned models are listed there too — they cannot be selected until a real run is recorded. `list_models` also carries `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, typical render time); pass `model: "auto"` and the printed policy picks from those numbers.
+Full guide with the avoid-for column and one page per model: [reference/models.md](reference/models.md). Planned models are listed there too, they cannot be selected until a real run is recorded. `list_models` also carries `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, typical render time); pass `model: "auto"` and the printed policy picks from those numbers.
 
 ## 6. REST
 
@@ -81,16 +81,16 @@ Full guide with the avoid-for column and one page per model: [reference/models.m
 
 ## Publish to social
 
-Post a generated video to the user's TikTok / Instagram / X via `POST /v1/social/*` — see [skills/publish-to-social/SKILL.md](skills/publish-to-social/SKILL.md).
+Post a generated video to the user's TikTok / Instagram / X via `POST /v1/social/*`, see [skills/publish-to-social/SKILL.md](skills/publish-to-social/SKILL.md).
 
 ## Reference docs
 
-- [skills/agent-media/SKILL.md](skills/agent-media/SKILL.md) — the skill: prompting, recipes, rules
-- [reference/models.md](reference/models.md) — which model for what, with prices
-- [reference/prompting.md](reference/prompting.md) — how to write a prompt that comes out real
-- [reference/recipes.md](reference/recipes.md) — talking head, product in hand, crazy look, b-roll voiceover, series
-- [reference/tools.md](reference/tools.md) — every tool with its exact input schema
-- [reference/auth.md](reference/auth.md) — first-time setup
+- [skills/agent-media/SKILL.md](skills/agent-media/SKILL.md), the skill: prompting, recipes, rules
+- [reference/models.md](reference/models.md), which model for what, with prices
+- [reference/prompting.md](reference/prompting.md), how to write a prompt that comes out real
+- [reference/recipes.md](reference/recipes.md), talking head, product in hand, crazy look, b-roll voiceover, series
+- [reference/tools.md](reference/tools.md), every tool with its exact input schema
+- [reference/auth.md](reference/auth.md), first-time setup
 
 ## How this repo is built
 

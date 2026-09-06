@@ -13,7 +13,7 @@ Critical realism rules (must all be visible in the frame):
 - NO plastic AI sheen, NO uncanny symmetry, NO ultra-smoothed skin;
 - NO shiny/plastic face, NO glowing light on the face, NO beauty-filter glow;
 - subtle asymmetry: head tilt, blink, micro-expressions;
-- hands are always doing something — gesturing, holding a product, adjusting clothing, or otherwise occupied (never limp at the sides);
+- hands are always doing something, gesturing, holding a product, adjusting clothing, or otherwise occupied (never limp at the sides);
 - mouth caught mid-syllable when talking, not closed and not open-smile;
 - eyes slightly off-center to camera, not a dead stare;
 - no visible phone, selfie-stick, or outstretched selfie arm unless explicitly requested.

@@ -7,8 +7,8 @@
  * into one tool. That is the right shape for a dashboard button and the
  * wrong shape for an agent: the agent already knows what it wants, and a
  * fixed recipe either matches or gets in the way. So the agent-facing
- * surface is three primitives that say what they are and nothing more —
- * a prompt, an optional model, optional references — plus the model
+ * surface is three primitives that say what they are and nothing more,
+ * a prompt, an optional model, optional references, plus the model
  * catalog (list_models) telling it what each model is good for and what
  * it costs, and `quote` so it can say the price before it spends.
  *
@@ -35,7 +35,7 @@ const HttpsUrl = z
   .url()
   .refine((u) => u.startsWith('https://'), 'must be an https URL (call upload_image first for raw bytes)');
 
-/** Live model ids of one kind — what the schemas accept. */
+/** Live model ids of one kind, what the schemas accept. */
 export function liveModelIds(kind: V2ModelKind): string[] {
   return liveModels()
     .filter((m) => m.kind === kind)
@@ -50,7 +50,7 @@ export const V2_DEFAULT_MODEL: Record<V2ModelKind, string> = {
 };
 
 /**
- * `model: "auto"` — let agent-media pick from the live catalog using the
+ * `model: "auto"`, let agent-media pick from the live catalog using the
  * last 30 days of results (see pickAuto). Resolved server-side BEFORE the
  * quote, so the price the agent sees is the price of the model that runs.
  */
@@ -95,8 +95,8 @@ export type V2VideoAspect = (typeof V2_VIDEO_ASPECTS)[number];
 
 export const GenerateVideoSchema = z
   .object({
-    prompt: z.string().min(3).max(4000).describe('The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and — if anyone speaks — the exact words in quotes. ~2.3 words per second.'),
-    model: liveModelField('video').describe('A live video model id from list_models, or "auto" to let agent-media pick from recent results. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits — hero clips only.'),
+    prompt: z.string().min(3).max(4000).describe('The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and, if anyone speaks, the exact words in quotes. ~2.3 words per second.'),
+    model: liveModelField('video').describe('A live video model id from list_models, or "auto" to let agent-media pick from recent results. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits, hero clips only.'),
     refs: z.array(HttpsUrl).max(4).optional().describe('Reference images (https URLs, up to 4): a portrait, a character sheet, a product shot. The model keeps that identity/look across clips. Omit to let the model invent the person.'),
     seconds: z.number().int().min(4).max(15).default(5).describe('Clip length in seconds, 4–15. Credits = seconds x the model rate.'),
     aspect: z.enum(V2_VIDEO_ASPECTS).default('9:16').describe('9:16 vertical (default) or 1:1.'),
@@ -146,7 +146,7 @@ export const GenerateAudioSchema = z
   .object({
     text: z.string().min(1).max(4000).describe('The words to speak. Emotion tags like [excited] or [whispers] are honoured. 1 credit per 100 characters.'),
     model: liveModelField('audio').describe('A live audio model id from list_models, or "auto". Omit for the default (elevenlabs-tts).'),
-    voice: z.string().min(1).default(V2_DEFAULT_VOICE).describe('A voice name: jessica (young female), sarah (female), liam (young male), chris (male), lily (elder female), bill (elder male), matilda (warm) — or a raw ElevenLabs voice id.'),
+    voice: z.string().min(1).default(V2_DEFAULT_VOICE).describe('A voice name: jessica (young female), sarah (female), liam (young male), chris (male), lily (elder female), bill (elder male), matilda (warm), or a raw ElevenLabs voice id.'),
     tone: z.enum(V2_AUDIO_TONES).optional().describe('energetic | calm | confident | dramatic.'),
   })
   .strict();
