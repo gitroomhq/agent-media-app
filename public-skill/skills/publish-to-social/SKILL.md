@@ -1,5 +1,5 @@
 ---
-name: 'Publish to Social'
+name: 'publish-to-social'
 description: 'Publish a generated Agent-Media video to the user''s connected TikTok, Instagram, or X. Connect channels (OAuth) and post or schedule via the REST API. Use after producing a video with generate_video.'
 x-skill-slug: 'publish-to-social'
 x-skill-version: '1.1.0'

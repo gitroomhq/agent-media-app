@@ -1,5 +1,5 @@
 ---
-name: 'Agent-Media'
+name: 'agent-media'
 description: 'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at about 3x; gpt-image-2 for images; elevenlabs-tts for speech), pick the video mode (text; image-to-video with first_frame and optional last_frame; reference with refs, video_refs, audio_refs addressed as @image1 @video1 @audio1), pick the quality (480p, 720p default, 1080p), quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. Use for UGC clips, product-in-hand, animating a still, first-to-last-frame moves, matching a reference clip, reaction clips, portraits, voiceover, and series with one face.'
 allowed-tools: ['mcp__agent-media__generate_video', 'mcp__agent-media__generate_image', 'mcp__agent-media__generate_audio', 'mcp__agent-media__quote', 'mcp__agent-media__list_models', 'mcp__agent-media__list_characters', 'mcp__agent-media__get_run_status', 'mcp__agent-media__upload_image', 'mcp__agent-media__rate_run']
 x-skill-slug: 'agent-media'

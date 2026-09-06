@@ -167,11 +167,12 @@ export function looseReadme(): string {
   const liveVideo = live.filter((m) => m.kind === 'video');
   const v5 = credits('video', { prompt: 'x'.repeat(10), seconds: 5 });
   return [
-    '# agent-media, Claude Skill plugin',
+    '# agent-media',
     '',
     '[![npm, mcp-server](https://img.shields.io/npm/v/%40agentmedia%2Fmcp-server?label=%40agentmedia%2Fmcp-server)](https://www.npmjs.com/package/@agentmedia/mcp-server)',
     '[![npm, CLI](https://img.shields.io/npm/v/agent-media-cli?label=agent-media-cli)](https://www.npmjs.com/package/agent-media-cli)',
     '[![Claude plugin](https://img.shields.io/badge/claude-%2Fplugin%20install-A78BFA)](https://github.com/gitroomhq/agent-media-app)',
+    '[![Cursor plugin](https://img.shields.io/badge/cursor-plugin-A78BFA)](https://cursor.com/marketplace)',
     '[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)',
     '',
     '**Agents: read this page, then [skills/agent-media/SKILL.md](skills/agent-media/SKILL.md). That is everything.**',
@@ -196,7 +197,7 @@ export function looseReadme(): string {
     "Once that's done, call list_models and tell me what you can make.",
     '```',
     '',
-    'Other routes: **Claude.ai / Desktop**: Settings > Connectors > add custom connector > paste the URL > Connect. **Claude Code**: `claude mcp add --transport http agent-media ' + MCP + '`. **Codex**: `codex mcp add agent-media --url ' + MCP + '`. **Grok**: `grok mcp add agent-media -t http ' + MCP + '`. **Claude Code plugin**: `/plugin marketplace add gitroomhq/agent-media-app` then `/plugin install agent-media@agent-media`.',
+    'Other routes: **Claude.ai / Desktop**: Settings > Connectors > add custom connector > paste the URL > Connect. **Claude Code**: `claude mcp add --transport http agent-media ' + MCP + '`. **Codex**: `codex mcp add agent-media --url ' + MCP + '`. **Grok**: `grok mcp add agent-media -t http ' + MCP + '`. **Claude Code plugin**: `/plugin marketplace add gitroomhq/agent-media-app` then `/plugin install agent-media@agent-media`. **Cursor plugin**: Settings > Plugins > search Agent Media > Install, or `/add-plugin agent-media` in chat; the plugin ships this skill plus the hosted MCP server, and Cursor opens the sign-in for you.',
     '',
     '## 2. Auth',
     '',

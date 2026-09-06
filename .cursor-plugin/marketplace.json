@@ -1,0 +1,20 @@
+{
+  "name": "agent-media",
+  "owner": {
+    "name": "agent-media",
+    "email": "info@agent-media.ai"
+  },
+  "metadata": {
+    "description": "AI video, images and voice for agents. One hosted MCP server, browser sign-in."
+  },
+  "plugins": [
+    {
+      "name": "agent-media",
+      "source": "public-skill",
+      "description": "Generate video, images and voice: your prompt, your model, your references. Nine tools over a hosted MCP server.",
+      "minClientVersions": {
+        "cursor": "3.13.0"
+      }
+    }
+  ]
+}

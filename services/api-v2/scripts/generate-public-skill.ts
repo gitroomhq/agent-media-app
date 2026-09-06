@@ -457,6 +457,94 @@ function mcpJson(): string {
   ) + '\n';
 }
 
+/**
+ * Cursor plugin manifest (`public-skill/.cursor-plugin/plugin.json`).
+ *
+ * Cursor reads a DIFFERENT manifest from Claude Code: `.cursor-plugin/plugin.json`
+ * against https://cursor.com/schemas/cursor-plugin/plugin.json, which is strict
+ * (`additionalProperties: false`), so only the fields that schema names may
+ * appear here. The plugin itself is the same directory: the same skills, the
+ * same hosted MCP server, one source of truth for both clients.
+ *
+ * `mcpServers` points at `mcp.json` (Cursor's file name) rather than Claude's
+ * `.mcp.json`; both are written with the same content.
+ *
+ * minClientVersions.cursor: 3.13.0 is the first Cursor that installs plugins
+ * from the marketplace (every first-party plugin in cursor/plugins pins it).
+ */
+function cursorPluginJson(): string {
+  return JSON.stringify(
+    {
+      name: 'agent-media',
+      displayName: 'Agent Media',
+      version: pluginVersion(),
+      minClientVersions: { cursor: '3.13.0' },
+      description: CURSOR_DESCRIPTION,
+      author: { name: 'agent-media', email: 'info@agent-media.ai' },
+      publisher: 'gitroomhq',
+      homepage: 'https://agent-media.ai',
+      repository: 'https://github.com/gitroomhq/agent-media-app',
+      license: 'Apache-2.0',
+      logo: 'assets/logo.svg',
+      keywords: ['video', 'ai-video', 'ugc', 'image-generation', 'text-to-speech', 'seedance', 'mcp', 'agent-media'],
+      category: 'integrations',
+      tags: ['video', 'media', 'mcp', 'ai-video', 'ugc'],
+      skills: './skills/',
+      mcpServers: './mcp.json',
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+/** One line, marketplace-card length. Cursor's own entries stay under ~120 chars. */
+const CURSOR_DESCRIPTION = 'Generate video, images and voice: your prompt, your model, your references. Nine tools over a hosted MCP server.';
+
+/**
+ * Cursor multi-plugin index at the REPO ROOT (`/.cursor-plugin/marketplace.json`).
+ * The plugin lives in `public-skill/`, not at the root of this monorepo, and
+ * this file is how Cursor is told that (same reason as the Claude marketplace
+ * manifest: `source` must name the directory, never `./`).
+ */
+function cursorMarketplaceJson(): string {
+  return JSON.stringify(
+    {
+      name: 'agent-media',
+      owner: { name: 'agent-media', email: 'info@agent-media.ai' },
+      metadata: { description: 'AI video, images and voice for agents. One hosted MCP server, browser sign-in.' },
+      plugins: [
+        {
+          name: 'agent-media',
+          source: 'public-skill',
+          description: CURSOR_DESCRIPTION,
+          minClientVersions: { cursor: '3.13.0' },
+        },
+      ],
+    },
+    null,
+    2,
+  ) + '\n';
+}
+
+/** The pack's changelog. Cursor's review reads it; the marketplace shows updates. */
+function changelog(): string {
+  return [
+    '# Changelog',
+    '',
+    '## 2.0.0',
+    '',
+    '- The loose surface: nine tools (generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run). The agent writes the prompt and picks the model instead of calling a fixed recipe.',
+    '- generate_video has three modes, chosen by the fields you pass: text, image-to-video (first_frame and optional last_frame) and reference (refs, video_refs, audio_refs addressed as @image1, @video1, @audio1).',
+    '- Quality 480p, 720p (default) and 1080p, with the credits per second of each on list_models; seven aspect ratios.',
+    '- model "auto" picks from the last 30 days of scored runs, and rate_run feeds those numbers back.',
+    '',
+    '## 1.x',
+    '',
+    '- The fixed skills (make_ugc and friends). Still available over REST and the CLI.',
+    '',
+  ].join('\n');
+}
+
 function readme(): string {
   return [
     '# agent-media — Claude Skill plugin',
@@ -729,6 +817,14 @@ writeFile('.claude-plugin/plugin.json', pluginJson());
 // Repo ROOT, not public-skill/ — see marketplaceJson() for why.
 writeRepoFile('.claude-plugin/marketplace.json', marketplaceJson());
 writeFile('.mcp.json', mcpJson());
+// Cursor: same plugin, its own manifest names and its own mcp.json file name.
+writeFile('.cursor-plugin/plugin.json', cursorPluginJson());
+writeFile('mcp.json', mcpJson());
+writeFile('CHANGELOG.md', changelog());
+// The brand mark, copied from the app so the marketplace card and the product
+// carry the same logo (Cursor requires a path inside the plugin directory).
+writeFile('assets/logo.svg', readFromRepo('apps/web/public/agent-media-logo.svg'));
+writeRepoFile('.cursor-plugin/marketplace.json', cursorMarketplaceJson());
 writeFile('LICENSE', readFromRepo('LICENSE'));
 writeFile('reference/auth.md', refAuth());
 // One page per model, copied verbatim from docs/models/ so the pack and the
@@ -756,7 +852,9 @@ if (SURFACE === 'loose') {
   writeFile(
     'skills/agent-media/SKILL.md',
     frontmatter({
-      name: 'Agent-Media',
+      // Kebab-case, matching the directory: Cursor's skill loader keys on it
+      // and Claude Code accepts the same form.
+      name: 'agent-media',
       description:
         'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at about 3x; gpt-image-2 for images; elevenlabs-tts for speech), pick the video mode (text; image-to-video with first_frame and optional last_frame; reference with refs, video_refs, audio_refs addressed as @image1 @video1 @audio1), pick the quality (480p, 720p default, 1080p), quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. Use for UGC clips, product-in-hand, animating a still, first-to-last-frame moves, matching a reference clip, reaction clips, portraits, voiceover, and series with one face.',
       'allowed-tools': LOOSE_TOOLS.map((n) => `mcp__agent-media__${n}`),
@@ -768,7 +866,7 @@ if (SURFACE === 'loose') {
   writeFile(
     'skills/publish-to-social/SKILL.md',
     frontmatter({
-      name: 'Publish to Social',
+      name: 'publish-to-social',
       description:
         "Publish a generated Agent-Media video to the user's connected TikTok, Instagram, or X. Connect channels (OAuth) and post or schedule via the REST API. Use after producing a video with generate_video.",
       'x-skill-slug': 'publish-to-social',
