@@ -16,11 +16,11 @@ The mode follows from the fields: `first_frame` (and optional `last_frame`) is i
 
 | Model | Mode | Inputs | Seconds | Aspects | Credits/s | Verified |
 |---|---|---|---|---|---|---|
-| seedance-2.0 | text | prompt only | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 15 at 480p, 30 at 720p, 75 at 1080p | no recorded run yet |
-| seedance-2.0 | image | first_frame + optional last_frame | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default adaptive) | 15 at 480p, 30 at 720p, 75 at 1080p | no recorded run yet |
-| seedance-2.0 | reference | refs up to 9, video_refs up to 3 (15 s total), audio_refs up to 3 (15 s total); audio needs an image or video beside it | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 15 at 480p, 30 at 720p, 75 at 1080p | 2026-09-05: generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded |
+| seedance-2.0 | text | prompt only | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 15 at 480p, 30 at 720p, 75 at 1080p | 2026-09-06: 4s, 16:9, 480p, native audio; rendered in 231 s |
+| seedance-2.0 | image | first_frame + optional last_frame | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default adaptive) | 15 at 480p, 30 at 720p, 75 at 1080p | 2026-09-06: first_frame only (4s, 480p, adaptive) and first_frame + last_frame (task-unified-1788681109-w09254uu); both rendered in about 3 to 5 min |
+| seedance-2.0 | reference | refs up to 9, video_refs up to 3 (15 s total), audio_refs up to 3 (15 s total); audio needs an image or video beside it | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 15 at 480p, 30 at 720p, 75 at 1080p | 2026-09-06: image ref (4s, 480p) and image ref + 8 s reference clip (task-unified-1788681110-hdbufncn); earlier 5s 720p portrait run b0011e92 via Claude Code |
 | seedance-2.5 | text | prompt only | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 50 at 480p, 99 at 720p, 180 at 1080p | 2026-09-05: generate_video, text only, 4s, 720p, 396 credits; the provider took about 25 min |
-| seedance-2.5 | image | first_frame + optional last_frame | 4 to 15 | adaptive (default adaptive) | 50 at 480p, 99 at 720p, 180 at 1080p | no recorded run yet |
+| seedance-2.5 | image | first_frame + optional last_frame | 4 to 15 | adaptive (default adaptive) | 50 at 480p, 99 at 720p, 180 at 1080p | 2026-09-06: first_frame, 4s, 480p, adaptive; rendered in 262 s |
 | seedance-2.5 | reference | refs up to 30, video_refs up to 10 (30 s total), audio_refs up to 10 (30 s total) | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 50 at 480p, 99 at 720p, 180 at 1080p | 2026-09-06: generate_video with a product image ref via Claude Code, 8s, 720p (perfume UGC run) |
 
 Notes for seedance-2.0:

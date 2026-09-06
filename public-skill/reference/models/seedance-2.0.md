@@ -15,7 +15,7 @@ The default video engine for every agent-media video. It takes a character sheet
 | Limits | 4 to 15 s (per mode below); worker waits up to 30 min |
 | User price | 15 credits/s at 480p, 30 credits/s at 720p, 75 credits/s at 1080p. Reference video seconds are billed at the same rate. |
 | Quality / speed | good / medium |
-| Verified | modes: reference (see below) |
+| Verified | modes: text, image, reference (see below) |
 
 ## Modes
 
@@ -23,9 +23,9 @@ The mode is derived from the request: `first_frame` means image mode, `refs` / `
 
 | Mode | Provider model | Inputs | Seconds | Aspect | Quality | Seed | Verified |
 |---|---|---|---|---|---|---|---|
-| text | `seedance-2.0-text-to-video` | prompt only | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 480p, 720p, 1080p | no | no recorded run yet |
-| image | `seedance-2.0-image-to-video` | first_frame (+ last_frame) | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default adaptive) | 480p, 720p, 1080p | no | no recorded run yet |
-| reference | `seedance-2.0-reference-to-video` | 9 images, 3 clips (15 s total), 3 audio (15 s total) | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 480p, 720p, 1080p | no | 2026-09-05. generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded (run b0011e92) |
+| text | `seedance-2.0-text-to-video` | prompt only | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 480p, 720p, 1080p | no | 2026-09-06. 4s, 16:9, 480p, native audio; rendered in 231 s (run task-unified-1788681109-ghg38bm9) |
+| image | `seedance-2.0-image-to-video` | first_frame (+ last_frame) | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default adaptive) | 480p, 720p, 1080p | no | 2026-09-06. first_frame only (4s, 480p, adaptive) and first_frame + last_frame (task-unified-1788681109-w09254uu); both rendered in about 3 to 5 min (run task-unified-1788681109-qybq2r1j) |
+| reference | `seedance-2.0-reference-to-video` | 9 images, 3 clips (15 s total), 3 audio (15 s total) | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 480p, 720p, 1080p | no | 2026-09-06. image ref (4s, 480p) and image ref + 8 s reference clip (task-unified-1788681110-hdbufncn); earlier 5s 720p portrait run b0011e92 via Claude Code (run task-unified-1788681109-a6w7aq0y) |
 
 - text: No seed. Every render is new; keep a series consistent with references, not seeds.
 - image: first_frame becomes frame one of the clip; last_frame (optional) becomes the final frame and the model animates between them.

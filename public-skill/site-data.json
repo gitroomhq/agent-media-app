@@ -445,7 +445,11 @@
               "notes": [
                 "No seed. Every render is new; keep a series consistent with references, not seeds."
               ],
-              "verified": null
+              "verified": {
+                "date": "2026-09-06",
+                "runId": "task-unified-1788681109-ghg38bm9",
+                "note": "4s, 16:9, 480p, native audio; rendered in 231 s"
+              }
             },
             {
               "mode": "image",
@@ -485,7 +489,11 @@
                 "Frames only: refs, video_refs and audio_refs are not accepted in this mode. To keep an identity AND set the frame, put the frame image in refs and describe it as @image1.",
                 "aspect \"adaptive\" (default) follows the first frame. Frame images: jpeg/png/webp, ratio between 0.4 and 2.5, 300 to 6000 px, up to 30 MB."
               ],
-              "verified": null
+              "verified": {
+                "date": "2026-09-06",
+                "runId": "task-unified-1788681109-qybq2r1j",
+                "note": "first_frame only (4s, 480p, adaptive) and first_frame + last_frame (task-unified-1788681109-w09254uu); both rendered in about 3 to 5 min"
+              }
             },
             {
               "mode": "reference",
@@ -528,9 +536,9 @@
                 "aspect \"adaptive\" follows the first video reference, else the first image, else the prompt."
               ],
               "verified": {
-                "date": "2026-09-05",
-                "runId": "b0011e92",
-                "note": "generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded"
+                "date": "2026-09-06",
+                "runId": "task-unified-1788681109-a6w7aq0y",
+                "note": "image ref (4s, 480p) and image ref + 8 s reference clip (task-unified-1788681110-hdbufncn); earlier 5s 720p portrait run b0011e92 via Claude Code"
               }
             }
           ],
@@ -573,10 +581,22 @@
         "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/seedance-2.0.md",
         "verified": [
           {
+            "mode": "text",
+            "date": "2026-09-06",
+            "runId": "task-unified-1788681109-ghg38bm9",
+            "note": "4s, 16:9, 480p, native audio; rendered in 231 s"
+          },
+          {
+            "mode": "image",
+            "date": "2026-09-06",
+            "runId": "task-unified-1788681109-qybq2r1j",
+            "note": "first_frame only (4s, 480p, adaptive) and first_frame + last_frame (task-unified-1788681109-w09254uu); both rendered in about 3 to 5 min"
+          },
+          {
             "mode": "reference",
-            "date": "2026-09-05",
-            "runId": "b0011e92",
-            "note": "generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded"
+            "date": "2026-09-06",
+            "runId": "task-unified-1788681109-a6w7aq0y",
+            "note": "image ref (4s, 480p) and image ref + 8 s reference clip (task-unified-1788681110-hdbufncn); earlier 5s 720p portrait run b0011e92 via Claude Code"
           }
         ],
         "select_with": {
@@ -692,7 +712,11 @@
                 "aspect must be \"adaptive\" on this model in image mode: the clip takes the frame's ratio. Any other aspect is refused.",
                 "Frames only: refs, video_refs and audio_refs are not accepted in this mode."
               ],
-              "verified": null
+              "verified": {
+                "date": "2026-09-06",
+                "runId": "task-unified-1788681109-pzf704jd",
+                "note": "first_frame, 4s, 480p, adaptive; rendered in 262 s"
+              }
             },
             {
               "mode": "reference",
@@ -781,6 +805,12 @@
             "date": "2026-09-05",
             "runId": "431f82ba-9e9e-4644-beb3-b1f67c0de91e",
             "note": "generate_video, text only, 4s, 720p, 396 credits; the provider took about 25 min"
+          },
+          {
+            "mode": "image",
+            "date": "2026-09-06",
+            "runId": "task-unified-1788681109-pzf704jd",
+            "note": "first_frame, 4s, 480p, adaptive; rendered in 262 s"
           },
           {
             "mode": "reference",
@@ -964,7 +994,11 @@
           "notes": [
             "No seed. Every render is new; keep a series consistent with references, not seeds."
           ],
-          "verified": null
+          "verified": {
+            "date": "2026-09-06",
+            "runId": "task-unified-1788681109-ghg38bm9",
+            "note": "4s, 16:9, 480p, native audio; rendered in 231 s"
+          }
         },
         {
           "mode": "image",
@@ -1004,7 +1038,11 @@
             "Frames only: refs, video_refs and audio_refs are not accepted in this mode. To keep an identity AND set the frame, put the frame image in refs and describe it as @image1.",
             "aspect \"adaptive\" (default) follows the first frame. Frame images: jpeg/png/webp, ratio between 0.4 and 2.5, 300 to 6000 px, up to 30 MB."
           ],
-          "verified": null
+          "verified": {
+            "date": "2026-09-06",
+            "runId": "task-unified-1788681109-qybq2r1j",
+            "note": "first_frame only (4s, 480p, adaptive) and first_frame + last_frame (task-unified-1788681109-w09254uu); both rendered in about 3 to 5 min"
+          }
         },
         {
           "mode": "reference",
@@ -1047,9 +1085,9 @@
             "aspect \"adaptive\" follows the first video reference, else the first image, else the prompt."
           ],
           "verified": {
-            "date": "2026-09-05",
-            "runId": "b0011e92",
-            "note": "generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded"
+            "date": "2026-09-06",
+            "runId": "task-unified-1788681109-a6w7aq0y",
+            "note": "image ref (4s, 480p) and image ref + 8 s reference clip (task-unified-1788681110-hdbufncn); earlier 5s 720p portrait run b0011e92 via Claude Code"
           }
         }
       ],
@@ -1127,7 +1165,11 @@
             "aspect must be \"adaptive\" on this model in image mode: the clip takes the frame's ratio. Any other aspect is refused.",
             "Frames only: refs, video_refs and audio_refs are not accepted in this mode."
           ],
-          "verified": null
+          "verified": {
+            "date": "2026-09-06",
+            "runId": "task-unified-1788681109-pzf704jd",
+            "note": "first_frame, 4s, 480p, adaptive; rendered in 262 s"
+          }
         },
         {
           "mode": "reference",

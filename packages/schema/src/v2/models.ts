@@ -253,6 +253,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
           qualities: ALL_QUALITIES,
           seed: false,
           notes: ['No seed. Every render is new; keep a series consistent with references, not seeds.'],
+          verified: { date: '2026-09-06', runId: 'task-unified-1788681109-ghg38bm9', note: '4s, 16:9, 480p, native audio; rendered in 231 s' },
         },
         image: {
           providerModel: 'seedance-2.0-image-to-video',
@@ -267,6 +268,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
             'Frames only: refs, video_refs and audio_refs are not accepted in this mode. To keep an identity AND set the frame, put the frame image in refs and describe it as @image1.',
             'aspect "adaptive" (default) follows the first frame. Frame images: jpeg/png/webp, ratio between 0.4 and 2.5, 300 to 6000 px, up to 30 MB.',
           ],
+          verified: { date: '2026-09-06', runId: 'task-unified-1788681109-qybq2r1j', note: 'first_frame only (4s, 480p, adaptive) and first_frame + last_frame (task-unified-1788681109-w09254uu); both rendered in about 3 to 5 min' },
         },
         reference: {
           providerModel: 'seedance-2.0-reference-to-video',
@@ -283,7 +285,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
             'Audio references: wav/mp3, 2 to 15 s each, 15 s in total, up to 15 MB. Audio alone is not accepted: add an image or video reference.',
             'aspect "adaptive" follows the first video reference, else the first image, else the prompt.',
           ],
-          verified: { date: '2026-09-05', runId: 'b0011e92', note: 'generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded' },
+          verified: { date: '2026-09-06', runId: 'task-unified-1788681109-a6w7aq0y', note: 'image ref (4s, 480p) and image ref + 8 s reference clip (task-unified-1788681110-hdbufncn); earlier 5s 720p portrait run b0011e92 via Claude Code' },
         },
       },
     },
@@ -340,6 +342,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
             'aspect must be "adaptive" on this model in image mode: the clip takes the frame\'s ratio. Any other aspect is refused.',
             'Frames only: refs, video_refs and audio_refs are not accepted in this mode.',
           ],
+          verified: { date: '2026-09-06', runId: 'task-unified-1788681109-pzf704jd', note: 'first_frame, 4s, 480p, adaptive; rendered in 262 s' },
         },
         reference: {
           providerModel: 'seedance-2.5-reference-to-video',

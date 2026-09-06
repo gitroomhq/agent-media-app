@@ -15,7 +15,7 @@ The premium video engine. Same inputs and pipeline as 2.0, the provider's newer 
 | Limits | 4 to 15 s (per mode below); worker waits up to 90 min |
 | User price | 50 credits/s at 480p, 99 credits/s at 720p, 180 credits/s at 1080p. Reference video seconds are billed at the same rate. |
 | Quality / speed | premium / slow |
-| Verified | modes: text, reference (see below) |
+| Verified | modes: text, image, reference (see below) |
 
 ## Modes
 
@@ -24,7 +24,7 @@ The mode is derived from the request: `first_frame` means image mode, `refs` / `
 | Mode | Provider model | Inputs | Seconds | Aspect | Quality | Seed | Verified |
 |---|---|---|---|---|---|---|---|
 | text | `seedance-2.5-text-to-video` | prompt only | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 480p, 720p, 1080p | no | 2026-09-05. generate_video, text only, 4s, 720p, 396 credits; the provider took about 25 min (run 431f82ba-9e9e-4644-beb3-b1f67c0de91e) |
-| image | `seedance-2.5-image-to-video` | first_frame (+ last_frame) | 4 to 15 | adaptive (default adaptive) | 480p, 720p, 1080p | no | no recorded run yet |
+| image | `seedance-2.5-image-to-video` | first_frame (+ last_frame) | 4 to 15 | adaptive (default adaptive) | 480p, 720p, 1080p | no | 2026-09-06. first_frame, 4s, 480p, adaptive; rendered in 262 s (run task-unified-1788681109-pzf704jd) |
 | reference | `seedance-2.5-reference-to-video` | 30 images, 10 clips (30 s total), 10 audio (30 s total) | 4 to 15 | 9:16, 16:9, 1:1, 4:3, 3:4, 21:9, adaptive (default 9:16) | 480p, 720p, 1080p | no | 2026-09-06. generate_video with a product image ref via Claude Code, 8s, 720p (perfume UGC run) |
 
 - text: No seed.
