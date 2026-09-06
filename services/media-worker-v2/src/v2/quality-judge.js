@@ -101,7 +101,7 @@ export function judgeInstructions({ kind, prompt, hasRefs }) {
  * Judge one completed job and upsert its generation_quality row.
  * Fire-and-forget from server-routes: resolves to the row or null, never throws.
  */
-export async function judgeAndRecord({ job_id, user_id, pipeline, model, provider_model, prompt, refs = [], output_url, render_ms }) {
+export async function judgeAndRecord({ job_id, user_id, pipeline, model, mode, provider_model, provider_usage = null, prompt, refs = [], output_url, render_ms }) {
   const kind = kindForPipeline(pipeline);
   if (!kind || !job_id || !user_id) return null;
   const base = {
@@ -110,10 +110,24 @@ export async function judgeAndRecord({ job_id, user_id, pipeline, model, provide
     operation: pipeline.replace('-', '_'),
     model_slug: model ?? (kind === 'video' ? 'seedance-2.0' : kind === 'image' ? 'gpt-image-2' : 'elevenlabs-tts'),
     kind,
+    mode: mode ?? null,
     provider_model: provider_model ?? null,
+    provider_usage,
     render_ms: Number.isFinite(render_ms) ? Math.round(render_ms) : null,
     updated_at: new Date().toISOString(),
   };
+
+  // What the provider billed goes on the job row too (generation_jobs.
+  // provider_cost_usd is INTERNAL; the public API never returns it). This
+  // is the ledger the price list is checked against.
+  if (provider_usage?.cost_usd !== null && provider_usage?.cost_usd !== undefined) {
+    try {
+      const { error } = await db().from('generation_jobs').update({ provider_cost_usd: provider_usage.cost_usd }).eq('id', job_id);
+      if (error) throw new Error(error.message);
+    } catch (err) {
+      console.warn(`[v2 judge:${job_id}] could not record provider cost: ${err?.message ?? err}`);
+    }
+  }
 
   let row = { ...base };
   if (kind !== 'audio' && output_url && process.env.OPENAI_API_KEY) {

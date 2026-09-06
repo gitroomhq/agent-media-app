@@ -25,7 +25,7 @@ import { processSelfie } from './selfie-adapter.js';
 import { processCharacterCreate } from './character-create-pipeline.js';
 import { processSubtitle } from './subtitle-pipeline.js';
 import { processCrazyLook } from './crazy-look-pipeline.js';
-import { processGenerateImage, processGenerateVideo, processGenerateAudio } from './generate-pipeline.js';
+import { processGenerateImage, processGenerateVideo, processGenerateAudio, probeDuration } from './generate-pipeline.js';
 import { judgeAndRecord } from './quality-judge.js';
 import { scheduleOrphanReclaim } from './orphan-reclaimer.js';
 import { classifyError } from '../error-classifier.js';
@@ -180,7 +180,9 @@ function runJob(key, jobEnvelope) {
   // Hard ceiling: Seedance's own 30-min timeout failed to release the
   // queue at least once (job wedged >40 min, everything behind it
   // starved). Whatever a provider client does, the queue advances.
-  const HARD_JOB_TIMEOUT_MS = 45 * 60_000;
+  // Per-job: the loose surface passes the catalog's per-model budget
+  // (seedance-2.5 renders take 25+ min); the hard ceiling sits above it.
+  const HARD_JOB_TIMEOUT_MS = (params.timeout_minutes ? Number(params.timeout_minutes) + 15 : 45) * 60_000;
   let settled = false;
   const settle = (fn) => {
     if (settled) return false;
@@ -237,7 +239,8 @@ function runJob(key, jobEnvelope) {
           ...base,
           output_url: result.outputUrl,
           ...(result.providerModel ? { provider_model: result.providerModel } : {}),
-          ...(result.seed !== undefined ? { seed: result.seed } : {}),
+          ...(result.mode ? { mode: result.mode } : {}),
+          ...(result.providerUsage ? { provider_usage: result.providerUsage } : {}),
         };
       } else {
         // Selfie (and future video pipelines): video + debug assets.
@@ -260,9 +263,11 @@ function runJob(key, jobEnvelope) {
           user_id: params.user_id,
           pipeline,
           model: params.model,
+          mode: result.mode,
           provider_model: result.providerModel,
+          provider_usage: result.providerUsage ?? null,
           prompt: params.prompt ?? params.text,
-          refs: Array.isArray(params.refs) ? params.refs : [],
+          refs: [...(Array.isArray(params.refs) ? params.refs : []), ...(params.first_frame ? [params.first_frame] : [])],
           output_url: result.outputUrl,
           render_ms: Date.now() - startedAt,
         }).catch(() => {});
@@ -552,6 +557,14 @@ export function registerV2Routes(app, verifySecret) {
   // api-v2 already validated the body against GenerateImage/Video/Audio
   // schemas and the live catalog; the worker checks only what it needs
   // to run and queues the envelope like every other v2 job.
+  // ── POST /v2/probe — durations of remote media, for quoting reference clips ──
+  app.post('/v2/probe', verifySecret, async (req, res) => {
+    const urls = Array.isArray(req.body?.urls) ? req.body.urls.filter((u) => typeof u === 'string' && u.startsWith('https://')).slice(0, 10) : [];
+    const durations = {};
+    await Promise.all(urls.map(async (u) => { durations[u] = await probeDuration(u); }));
+    res.json({ durations });
+  });
+
   const GENERATE_KINDS = { image: 'generate-image', video: 'generate-video', audio: 'generate-audio' };
   app.post('/v2/generate/:kind', verifySecret, async (req, res) => {
     const pipeline = GENERATE_KINDS[req.params.kind];
@@ -577,10 +590,18 @@ export function registerV2Routes(app, verifySecret) {
         text: body.text,
         refs: Array.isArray(body.refs) ? body.refs : [],
         size: body.size,
+        // video: the cell api-v2 resolved from the catalog + the inputs of that mode
+        mode: body.mode,
+        provider_model: body.provider_model,
+        first_frame: body.first_frame,
+        last_frame: body.last_frame,
+        video_refs: Array.isArray(body.video_refs) ? body.video_refs : [],
+        audio_refs: Array.isArray(body.audio_refs) ? body.audio_refs : [],
         seconds: body.seconds,
         aspect: body.aspect,
+        quality: body.quality,
         audio: body.audio,
-        seed: body.seed,
+        timeout_minutes: body.timeout_minutes,
         voice: body.voice,
         tone: body.tone,
       },

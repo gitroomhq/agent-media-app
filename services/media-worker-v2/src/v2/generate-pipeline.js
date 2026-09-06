@@ -5,19 +5,31 @@
  *
  * Three functions, one provider call each, no recipe:
  *   processGenerateImage  prompt (+refs) → gpt-image-2 → R2 png
- *   processGenerateVideo  prompt (+refs) → Seedance → R2 mp4
+ *   processGenerateVideo  prompt (+frames | +refs) → Seedance → R2 mp4
  *   processGenerateAudio  text → ElevenLabs → R2 mp3
  *
- * They reuse the exact provider calls the fixed pipelines make
- * (crazy-look-pipeline.js, text-to-video-pipeline.js, tts.js) so a
- * clip rendered here is the same clip the fixed skill would have
- * rendered — only the prompt is the agent's own. No realism rubric is
- * injected, no polish pass, no persona brief: the agent asked for
- * exactly this, and gets exactly this.
+ * No realism rubric is injected, no polish pass, no persona brief: the
+ * agent asked for exactly this, and gets exactly this.
  *
- * Model routing is data: api-v2 validated `model` against the live
- * catalog (@agentmedia/schema/v2 V2_MODELS) before dispatch; this file
- * maps that catalog id to the provider's id and nothing else.
+ * VIDEO ROUTING IS DATA FROM THE PROVIDER SPECS. api-v2 validated the
+ * request against the catalog (@agentmedia/schema/v2 V2_MODELS) and sent
+ * the resolved cell: `provider_model` and `mode` (text | image |
+ * reference). This file turns that into the exact request body the
+ * EvoLink spec for that provider model id defines:
+ *
+ *   text       {prompt, duration, aspect_ratio, quality, generate_audio}
+ *   image      + image_urls: [first_frame, last_frame?]           (1 to 2)
+ *   reference  + image_urls / video_urls / audio_urls  (omitted when empty:
+ *                the 2.5 spec has minItems 1, an empty array is a 400)
+ *
+ * Never sent: `seed` (no Seedance spec has it), `content_filter` (false
+ * bills +10%), `model_params.web_search` (per-search fee). A mode the
+ * catalog does not list for the model is refused here too, so an
+ * unexpected envelope never reaches the provider.
+ *
+ * After the render the EvoLink task's `usage` (what the provider billed)
+ * is returned to server-routes, which records it on the job and in
+ * generation_quality: the price list is checked against real bills.
  */
 
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -26,25 +38,36 @@ import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { generateImageFromText, generateImageEdit } from '../openai-image-client.js';
-import { runGeneration } from '../evolink-client.js';
+import { runGenerationDetailed } from '../evolink-client.js';
 import { r2Upload } from '../r2.js';
 import { generateElevenLabsTTS } from '../elevenlabs-tts.js';
 import { fetchToBuffer } from './http.js';
 
 const execFileAsync = promisify(execFile);
 const R2_BUCKET = 'generation-outputs';
-const VIDEO_TIMEOUT_MS = 30 * 60_000;
+const DEFAULT_VIDEO_TIMEOUT_MIN = 30;
 const DEFAULT_QUALITY = '720p';
 
-// Seedance model ids per catalog id and input shape. With reference
-// images the reference-to-video variant is used (identity is kept);
-// without, text-to-video. All four ids are verified: the 2.0 pair and
-// 2.5-reference-to-video by the fixed pipelines, seedance-2.5-text-to-video
-// by job 431f82ba (2026-09-05, see docs/models/seedance-2.5.md).
-const SEEDANCE = {
-  'seedance-2.0': { refs: 'seedance-2.0-reference-to-video', text: 'seedance-2.0-text-to-video' },
-  'seedance-2.5': { refs: 'seedance-2.5-reference-to-video', text: 'seedance-2.5-text-to-video' },
+/**
+ * Provider model id per (catalog model, mode). Mirrors V2_MODELS[id].video.modes
+ * in @agentmedia/schema/v2 (the source of truth, from the EvoLink specs);
+ * kept here so the worker can refuse an envelope that names a cell it
+ * does not know. A test asserts the two tables agree.
+ */
+export const SEEDANCE_MODES = {
+  'seedance-2.0': {
+    text: 'seedance-2.0-text-to-video',
+    image: 'seedance-2.0-image-to-video',
+    reference: 'seedance-2.0-reference-to-video',
+  },
+  'seedance-2.5': {
+    text: 'seedance-2.5-text-to-video',
+    image: 'seedance-2.5-image-to-video',
+    reference: 'seedance-2.5-reference-to-video',
+  },
 };
+
+const VIDEO_TIMEOUT_MIN = { 'seedance-2.0': 30, 'seedance-2.5': 90 };
 
 // Friendly voice names → ElevenLabs pre-made ids. Mirrors V2_VOICES in
 // @agentmedia/schema/v2 (generate.ts); a raw id passes through.
@@ -64,12 +87,48 @@ function requireJob(params, name) {
   return { job_id, user_id };
 }
 
-/** Pick the provider model id for a video request. Exported for tests. */
-export function resolveVideoModel(model, hasRefs) {
-  const m = SEEDANCE[model ?? 'seedance-2.0'];
+/** Which mode a video request is: the same rule as deriveVideoMode() in the schema. */
+export function deriveVideoMode(p) {
+  if (p.first_frame) return 'image';
+  if (p.refs?.length || p.video_refs?.length || p.audio_refs?.length) return 'reference';
+  return 'text';
+}
+
+/**
+ * Pick the provider model id for a video request. Exported for tests.
+ * @param {string} [model]  catalog id (default seedance-2.0)
+ * @param {'text'|'image'|'reference'} mode
+ */
+export function resolveVideoModel(model, mode) {
+  const m = SEEDANCE_MODES[model ?? 'seedance-2.0'];
   if (!m) throw new Error(`generate_video: unknown model "${model}"`);
-  if (process.env.SEEDANCE_V2_MODEL && hasRefs) return process.env.SEEDANCE_V2_MODEL;
-  return hasRefs ? m.refs : m.text;
+  const id = m[mode];
+  if (!id) throw new Error(`generate_video: ${model} has no ${mode} mode`);
+  return id;
+}
+
+/**
+ * The exact EvoLink request body for one resolved video request.
+ * Pure. Exported for tests: every field here is a field in the spec of
+ * the provider model id it targets.
+ */
+export function buildVideoBody(p) {
+  const mode = p.mode ?? deriveVideoMode(p);
+  const body = {
+    prompt: String(p.prompt ?? '').trim(),
+    duration: Number(p.seconds ?? 5),
+    aspect_ratio: p.aspect ?? (mode === 'image' ? 'adaptive' : '9:16'),
+    quality: p.quality ?? DEFAULT_QUALITY,
+    generate_audio: p.audio !== false,
+  };
+  if (mode === 'image') {
+    body.image_urls = [p.first_frame, ...(p.last_frame ? [p.last_frame] : [])];
+  } else if (mode === 'reference') {
+    if (p.refs?.length) body.image_urls = [...p.refs];
+    if (p.video_refs?.length) body.video_urls = [...p.video_refs];
+    if (p.audio_refs?.length) body.audio_urls = [...p.audio_refs];
+  }
+  return body;
 }
 
 /** Friendly voice name or raw id → ElevenLabs voice id. Exported for tests. */
@@ -107,7 +166,7 @@ export async function processGenerateImage(params) {
   const key = `${user_id}/${job_id}/image.png`;
   const imageUrl = await r2Upload(R2_BUCKET, key, buf, 'image/png');
   console.log(`[v2:generate-image:${job_id}] → ${imageUrl}`);
-  return { imageUrl, outputUrl: imageUrl };
+  return { imageUrl, outputUrl: imageUrl, providerModel: 'gpt-image-2' };
 }
 
 /**
@@ -115,43 +174,66 @@ export async function processGenerateImage(params) {
  * @param {string} params.job_id
  * @param {string} params.user_id
  * @param {string} params.prompt
- * @param {string} [params.model]        catalog id (seedance-2.0 | seedance-2.5)
- * @param {string[]} [params.refs]       https reference images (portrait, sheet, product)
+ * @param {string} [params.model]           catalog id (seedance-2.0 | seedance-2.5)
+ * @param {'text'|'image'|'reference'} [params.mode]  resolved by api-v2; derived here when absent
+ * @param {string} [params.provider_model]  resolved by api-v2; must match the catalog cell
+ * @param {string} [params.first_frame]     image mode
+ * @param {string} [params.last_frame]      image mode
+ * @param {string[]} [params.refs]          reference mode: images
+ * @param {string[]} [params.video_refs]    reference mode: clips
+ * @param {string[]} [params.audio_refs]    reference mode: audio
  * @param {number} [params.seconds]
- * @param {string} [params.aspect]       '9:16' | '1:1'
+ * @param {string} [params.aspect]
+ * @param {string} [params.quality]         '480p' | '720p' | '1080p'
  * @param {boolean} [params.audio]
- * @param {number} [params.seed]
- * @returns {Promise<{ videoUrl: string, seed?: number, providerModel: string }>}
+ * @param {number} [params.timeout_minutes]
+ * @returns {Promise<{ videoUrl: string, outputUrl: string, providerModel: string, mode: string, providerUsage: object|null }>}
  */
 export async function processGenerateVideo(params) {
   const { job_id, user_id } = requireJob(params, 'generate_video');
-  const { prompt, model, refs = [], seconds = 5, aspect = '9:16', audio = true, seed, onProgress } = params;
+  const { prompt, model = 'seedance-2.0', onProgress } = params;
   if (!prompt || !String(prompt).trim()) throw new Error('generate_video: prompt is required');
 
-  const providerModel = resolveVideoModel(model, refs.length > 0);
-  onProgress?.('rendering', { model: providerModel, seconds });
-  console.log(`[v2:generate-video:${job_id}] ${providerModel} ${seconds}s ${aspect} refs=${refs.length}`);
+  const mode = params.mode ?? deriveVideoMode(params);
+  const providerModel = resolveVideoModel(model, mode);
+  if (params.provider_model && params.provider_model !== providerModel) {
+    throw new Error(`generate_video: envelope names ${params.provider_model} but ${model} ${mode} mode is ${providerModel}`);
+  }
+  const body = buildVideoBody({ ...params, mode });
+  const timeoutMs = (params.timeout_minutes ?? VIDEO_TIMEOUT_MIN[model] ?? DEFAULT_VIDEO_TIMEOUT_MIN) * 60_000;
 
-  const providerUrl = await runGeneration(
-    providerModel,
-    {
-      prompt: String(prompt).trim(),
-      ...(refs.length ? { image_urls: refs } : {}),
-      duration: seconds,
-      aspect_ratio: aspect,
-      generate_audio: audio !== false,
-      quality: DEFAULT_QUALITY,
-      ...(seed !== undefined ? { seed } : {}),
-    },
-    { timeoutMs: VIDEO_TIMEOUT_MS },
-  );
+  onProgress?.('rendering', { model: providerModel, mode, seconds: body.duration, quality: body.quality });
+  console.log(`[v2:generate-video:${job_id}] ${providerModel} ${mode} ${body.duration}s ${body.aspect_ratio} ${body.quality} images=${body.image_urls?.length ?? 0} videos=${body.video_urls?.length ?? 0} audios=${body.audio_urls?.length ?? 0}`);
+
+  const { url: providerUrl, task } = await runGenerationDetailed(providerModel, body, { timeoutMs, endpoint: 'videos' });
+  const providerUsage = summarizeUsage(task);
+  if (providerUsage) console.log(`[v2:generate-video:${job_id}] provider usage ${JSON.stringify(providerUsage)}`);
 
   onProgress?.('storing');
   const buf = await fetchToBuffer(providerUrl);
   const key = `${user_id}/${job_id}/video.mp4`;
   const videoUrl = await r2Upload(R2_BUCKET, key, buf, 'video/mp4');
   console.log(`[v2:generate-video:${job_id}] → ${videoUrl}`);
-  return { videoUrl, outputUrl: videoUrl, seed, providerModel };
+  return { videoUrl, outputUrl: videoUrl, providerModel, mode, providerUsage };
+}
+
+/**
+ * The billing facts of a finished EvoLink task, as observed on real
+ * responses (usage.cost.usd, usage.credits_used, task_info.video_duration).
+ * Null when the task carries none. Exported for tests.
+ */
+export function summarizeUsage(task) {
+  if (!task || typeof task !== 'object') return null;
+  const usage = task.usage ?? {};
+  const cost = usage.cost?.usd ?? usage.cost_usd ?? null;
+  const out = {
+    task_id: task.id ?? null,
+    cost_usd: cost !== null && Number.isFinite(Number(cost)) ? Number(cost) : null,
+    credits_used: usage.credits_used ?? usage.credits ?? null,
+    billing_rule: usage.billing_rule ?? null,
+    video_duration: task.task_info?.video_duration ?? null,
+  };
+  return out.cost_usd === null && out.credits_used === null ? null : out;
 }
 
 /**
@@ -173,7 +255,7 @@ export async function processGenerateAudio(params) {
   const workDir = await mkdtemp(join(tmpdir(), `gen-audio-${job_id}-`));
   try {
     // generateElevenLabsTTS writes a WAV (it derives its temp mp3 name from a
-    // .wav outputPath — anything else makes ffmpeg read and write the same
+    // .wav outputPath; anything else makes ffmpeg read and write the same
     // file; that was the first live failure, job f927dcad). Deliver mp3.
     const wav = join(workDir, 'speech.wav');
     const mp3 = join(workDir, 'speech.mp3');
@@ -184,8 +266,23 @@ export async function processGenerateAudio(params) {
     const key = `${user_id}/${job_id}/audio.mp3`;
     const audioUrl = await r2Upload(R2_BUCKET, key, buf, 'audio/mpeg');
     console.log(`[v2:generate-audio:${job_id}] → ${audioUrl}`);
-    return { audioUrl, outputUrl: audioUrl };
+    return { audioUrl, outputUrl: audioUrl, providerModel: 'eleven_multilingual_v2' };
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * Duration in seconds of a remote media file, via ffprobe reading the URL
+ * (only the container headers are fetched). Null when it cannot be read.
+ * Used by /v2/probe so api-v2 can bill reference clips at submit.
+ */
+export async function probeDuration(url) {
+  try {
+    const { stdout } = await execFileAsync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', url], { timeout: 20_000 });
+    const d = Number(String(stdout).trim());
+    return Number.isFinite(d) && d > 0 ? d : null;
+  } catch {
+    return null;
   }
 }

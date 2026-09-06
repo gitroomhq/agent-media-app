@@ -48,6 +48,20 @@ function resolveApiKey(apiKey) {
   throw new Error('No EvoLink API key available — set EVOLINK_API_KEY or pass one explicitly');
 }
 
+/**
+ * Which EvoLink endpoint a model id lives on. Callers that know (the loose
+ * surface reads it from the catalog) pass it explicitly; legacy callers
+ * fall back to the name heuristic. Kling "image-to-video" ids are VIDEO
+ * models, so the heuristic checks for "video" first.
+ */
+export function endpointFor(model, kind) {
+  if (kind === 'videos' || kind === 'images' || kind === 'audios') return kind;
+  if (model.includes('video')) return 'videos';
+  if (/gemini|flux|nano|gpt-image|seedream|z-image/.test(model)) return 'images';
+  if (/audio|suno/.test(model)) return 'audios';
+  return 'videos';
+}
+
 function buildEvoLinkError(message, { transient = false } = {}) {
   const err = new Error(message);
   err.transient = transient || isTransientEvoLinkError(err);
@@ -66,17 +80,8 @@ export function isTransientEvoLinkError(err) {
  * @param {Object} params - { prompt, duration, aspect_ratio, image_url?, ... }
  * @returns {Promise<{id: string, status: string}>}
  */
-export async function submitGeneration(model, params, apiKey) {
-  // Image models use /images/generations, video models use /videos/generations
-  // Note: kling models with 'image-to-video' are VIDEO models, not image models
-  const isImageModel = !model.includes('video')
-    && (
-      model.includes('gemini')
-      || model.includes('flux')
-      || model.includes('nano')
-      || model.includes('gpt-image')
-    );
-  const endpoint = isImageModel ? `${BASE_URL}/images/generations` : `${BASE_URL}/videos/generations`;
+export async function submitGeneration(model, params, apiKey, endpointKind) {
+  const endpoint = `${BASE_URL}/${endpointFor(model, endpointKind)}/generations`;
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -129,15 +134,20 @@ export async function pollTask(taskId, timeoutMs = TIMEOUT_MS, apiKey) {
     const task = await response.json();
 
     if (task.status === 'completed') return task;
-    if (task.status === 'failed') {
-      const message = task.error?.message ?? JSON.stringify(task.error) ?? 'unknown';
-      throw buildEvoLinkError(`EvoLink task failed: ${message}`);
+    if (task.status === 'failed' || task.status === 'cancelled') {
+      const message = task.error?.message ?? JSON.stringify(task.error) ?? task.status;
+      throw buildEvoLinkError(`EvoLink task ${task.status}: ${message}`);
     }
 
     await sleep(POLL_INTERVAL_MS);
   }
 
-  throw buildEvoLinkError(`EvoLink task timed out after ${timeoutMs / 1000}s`, { transient: true });
+  // NOT transient on purpose: the provider is still rendering (and will
+  // bill) this task. A retry would submit a second one and pay twice.
+  const err = new Error(`EvoLink task ${taskId} still running after ${Math.round(timeoutMs / 60_000)} min`);
+  err.transient = false;
+  err.code = 'PROVIDER_TIMEOUT';
+  throw err;
 }
 
 /**
@@ -177,7 +187,32 @@ export async function downloadFile(url, outputPath) {
  * @returns {Promise<string>} The generated image or video URL
  */
 export async function runGeneration(model, params, options = {}) {
+  const r = await runGenerationDetailed(model, params, options);
+  return r.url;
+}
+
+/**
+ * Same as runGeneration, returning every output URL and the finished task
+ * (its `usage` is what the provider billed; the loose surface records it).
+ * @returns {Promise<{ url: string, urls: string[], task: object }>}
+ */
+export async function runGenerationDetailed(model, params, options = {}) {
   return evolinkLimiter.run((apiKey) => runGenerationInner(model, params, options, apiKey));
+}
+
+/** Every output URL of a completed task, in order. Exported for tests. */
+export function extractAssetUrls(completed) {
+  if (Array.isArray(completed.results) && completed.results.length) {
+    return completed.results.map((r) => (typeof r === 'string' ? r : r?.url ?? r?.video_url ?? r?.image_url ?? r?.audio_url)).filter(Boolean);
+  }
+  const one = completed.image_url
+    ?? completed.video_url
+    ?? completed.audio_url
+    ?? completed.result?.image_url
+    ?? completed.result?.video_url
+    ?? completed.output?.image_url
+    ?? completed.output?.video_url;
+  return one ? [one] : [];
 }
 
 async function runGenerationInner(model, params, options = {}, apiKey) {
@@ -187,7 +222,7 @@ async function runGenerationInner(model, params, options = {}, apiKey) {
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const submission = await submitGeneration(model, params, apiKey);
+      const submission = await submitGeneration(model, params, apiKey, options.endpoint);
 
       const taskId = submission.id;
       if (!taskId) {
@@ -197,20 +232,12 @@ async function runGenerationInner(model, params, options = {}, apiKey) {
       console.log(`    EvoLink task: ${taskId}, polling...`);
       const completed = await pollTask(taskId, options.timeoutMs, apiKey);
 
-      // Extract generated asset URL — EvoLink returns results as an array for both image and video tasks.
-      const assetUrl = completed.results?.[0]
-        ?? completed.image_url
-        ?? completed.video_url
-        ?? completed.result?.image_url
-        ?? completed.result?.video_url
-        ?? completed.output?.image_url
-        ?? completed.output?.video_url;
-
-      if (!assetUrl) {
+      const urls = extractAssetUrls(completed);
+      if (!urls.length) {
         throw new Error(`EvoLink task completed but no asset URL found in response: ${JSON.stringify(completed).substring(0, 200)}`);
       }
 
-      return assetUrl;
+      return { url: urls[0], urls, task: completed };
     } catch (err) {
       lastError = err;
       if (!isTransientEvoLinkError(err) || attempt >= attempts) {
