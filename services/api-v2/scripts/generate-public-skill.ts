@@ -24,10 +24,12 @@ import { LOOSE_SURFACE_TOOLS } from '../src/mcp/loose-tools.js';
 import { buildSiteData } from './generate-site-data.js';
 import {
   LOOSE_TOOLS,
+  limitsCell,
   looseSkillBody,
   looseReadme,
   loosePluginDescription,
   looseRefModels,
+  priceLadder,
   refPrompting,
   refRecipes,
   refTools,
@@ -120,10 +122,26 @@ const EXAMPLE_INPUTS: Record<string, unknown> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
+/**
+ * House style for everything the pack ships: no em dashes or en dashes.
+ * The sources this script owns are written that way; this guard covers
+ * text copied from elsewhere (the docs/models pages, catalog notes). A
+ * dash between two numbers becomes "to", a spaced dash becomes a comma,
+ * a bare table cell becomes "none", anything left becomes a comma.
+ */
+export function noDashes(text: string): string {
+  return text
+    .replace(/(\d)\s?[\u2013\u2014]\s?(\d)/g, '$1 to $2')
+    .replace(/\|\s*[\u2013\u2014]\s*\|/g, '| none |')
+    .replace(/^-\s*[\u2013\u2014]\s*$/gm, '- none')
+    .replace(/\s+[\u2013\u2014]\s+/g, ', ')
+    .replace(/[\u2013\u2014]/g, ',');
+}
+
 function writeFile(rel: string, body: string): void {
   const path = join(OUT, rel);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, body, 'utf-8');
+  writeFileSync(path, rel === 'LICENSE' ? body : noDashes(body), 'utf-8');
 }
 
 /** Write relative to the REPO ROOT rather than public-skill/ (marketplace manifest). */
@@ -391,7 +409,7 @@ function marketplaceJson(): string {
       metadata: {
         description:
           SURFACE === 'loose'
-            ? 'Agent-Media for Claude Code — AI video, images and voice with you as the director: your prompt, your model, your references.'
+            ? 'Agent-Media for Claude Code: AI video, images and voice with you as the director. Your prompt, your model, your modes (text, image-to-video, reference), your references.'
             : 'Agent-Media UGC Video for Claude Code — one tool: give a script + a person/image/character, get a finished captioned vertical UGC video.',
         version: pluginVersion(),
       },
@@ -546,9 +564,9 @@ function refModels(): string {
   const live = liveModels();
   const cands = Object.values(V2_MODELS).filter((m) => m.status === 'candidate');
   const price = (m: (typeof live)[number]) =>
-    m.credits ? (m.credits.perUnit === 0 ? 'inside generator credits' : `${m.credits.perUnit} credits/${m.credits.unit}`) : 'no price';
+    m.credits ? (m.credits.perUnit === 0 ? 'inside generator credits' : m.kind === 'video' ? priceLadder(m) : `${m.credits.perUnit} credits/${m.credits.unit}`) : 'no price';
   const row = (m: (typeof live)[number]) =>
-    `| [${m.id}](models/${m.id}.md) | ${m.kind} | ${m.tier} | ${price(m)} | ${m.limits.maxSeconds ? `≤${m.limits.maxSeconds}s` : '–'} | ${m.bestFor[0]} |`;
+    `| [${m.id}](models/${m.id}.md) | ${m.kind} | ${m.tier} | ${price(m)} | ${limitsCell(m)} | ${m.bestFor[0]} |`;
   return [
     '# Choosing a model',
     '',
@@ -556,46 +574,46 @@ function refModels(): string {
     '',
     '## The one rule',
     '',
-    '**Default to `seedance-2.0`.** It is the right engine for talking-head UGC, product-in-hands and crazy-look at 30 credits/second. `seedance-2.5` is about 3x the credits (99/second); pick it only when the user asks for the best possible single clip. Never pick it for drafts or bulk.',
+    `**Default to \`seedance-2.0\`.** It is the right engine for talking-head UGC, product-in-hands and crazy-look at ${priceLadder(V2_MODELS['seedance-2.0'])}. \`seedance-2.5\` is about 3x the credits (${priceLadder(V2_MODELS['seedance-2.5'])}); pick it only when the user asks for the best possible single clip. Never pick it for drafts or bulk.`,
     '',
     'Today the engine is selectable on the CLI (`agent-media selfie --engine seedance-2.5`, `agent-media crazy-look --engine seedance-2.5`) and REST (`POST /v2/selfie`, `POST /v2/crazy-look` with `"engine"`). Over MCP, `make_ugc` has no engine field yet and always renders on seedance-2.0; that arrives in P2. Image and audio models are used inside the pipelines and are not selectable.',
     '',
     '## Live models',
     '',
-    '| Model | Kind | Tier | User price | Max | Best for |',
+    '| Model | Kind | Tier | User price | Modes and limits | Best for |',
     '|---|---|---|---|---|---|',
     ...live.map(row),
     '',
     '## Planned (not selectable, no price yet)',
     '',
-    'Each goes live only after a real run is recorded and its cost is confirmed against the provider\'s detailed table.',
+    'Each goes live only after a real run is recorded and a user price is set.',
     '',
     '| Model | Kind | Tier | Best for |',
     '|---|---|---|---|',
     ...cands.map((m) => `| [${m.id}](models/${m.id}.md) | ${m.kind} | ${m.tier} | ${m.bestFor[0]} |`),
     '',
-    '1 credit = $0.01.',
+    '100 credits = 1 USD.',
     '',
   ].join('\n');
 }
 
 function refAuth(): string {
   return [
-    '# Auth — first-time setup',
+    '# Auth, first-time setup',
     '',
     '## Easiest: the hosted connector (no API key)',
     '',
-    'If you are Claude, Claude Code, Cursor or Codex, you do not need an API key or the CLI at all. Add the hosted MCP connector — one URL, browser sign-in, OAuth 2.1 with dynamic client registration:',
+    'If you are Claude, Claude Code, Cursor or Codex, you do not need an API key or the CLI at all. Add the hosted MCP connector: one URL, browser sign-in, OAuth 2.1 with dynamic client registration:',
     '',
     '```',
     'https://api.agent-media.ai/mcp',
     '```',
     '',
-    '- Claude (web or desktop): Settings → Connectors → Add custom connector → paste the URL → Connect',
+    '- Claude (web or desktop): Settings > Connectors > Add custom connector > paste the URL > Connect',
     '- Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`',
     '- Cursor (`~/.cursor/mcp.json`) / Codex (`~/.codex/config.toml`): the same URL as a remote server',
     '',
-    'Full guide: <https://agent-media.ai/connect>. After submitting a generation over MCP, call `get_run_status` with the id you were given — generation is async and the submit response only confirms the job started.',
+    'Full guide: <https://agent-media.ai/connect>. After submitting a generation over MCP, call `get_run_status` with the id you were given: generation is async and the submit response only confirms the job started.',
     '',
     'If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.',
     '',
@@ -740,7 +758,7 @@ if (SURFACE === 'loose') {
     frontmatter({
       name: 'Agent-Media',
       description:
-        'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at ~3x; gpt-image-2 for images; elevenlabs-tts for speech), pass reference images for identity, quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image. Use for UGC clips, product-in-hand, reaction clips, portraits, voiceover, and series with one face.',
+        'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at about 3x; gpt-image-2 for images; elevenlabs-tts for speech), pick the video mode (text; image-to-video with first_frame and optional last_frame; reference with refs, video_refs, audio_refs addressed as @image1 @video1 @audio1), pick the quality (480p, 720p default, 1080p), quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. Use for UGC clips, product-in-hand, animating a still, first-to-last-frame moves, matching a reference clip, reaction clips, portraits, voiceover, and series with one face.',
       'allowed-tools': LOOSE_TOOLS.map((n) => `mcp__agent-media__${n}`),
       'x-skill-slug': 'agent-media',
       'x-skill-version': '2.0.0',
@@ -912,7 +930,7 @@ function socialBody(): string {
   return [
     '# Publish to Social',
     '',
-    'Post a finished agent-media video (an R2 `video_url` from any of the video skills) to the user\'s connected social channels — **TikTok, Instagram, or X**. Works from three surfaces: REST, the CLI (`agent-media social ...`), and MCP tools (`social_channels` / `social_connect` / `social_publish`). All calls use the user\'s `Authorization: Bearer ma_...` token against `https://api.agent-media.ai`.',
+    'Post a finished agent-media video (an R2 `video_url` from any of the video skills) to the user\'s connected social channels: **TikTok, Instagram, or X**. Works from three surfaces: REST, the CLI (`agent-media social ...`), and MCP tools (`social_channels` / `social_connect` / `social_publish`). All calls use the user\'s `Authorization: Bearer ma_...` token against `https://api.agent-media.ai`.',
     '',
     '## 1. Connect a channel (one-time, requires the human)',
     '',
@@ -923,7 +941,7 @@ function socialBody(): string {
     'DELETE /v1/social/channels/:channelId   -> disconnect',
     '```',
     '',
-    'The connect step returns an OAuth URL the **human** must open and authorize — an agent cannot complete OAuth itself. Once authorized, the channel appears in `/v1/social/channels` with an `id` you pass to publish.',
+    'The connect step returns an OAuth URL the **human** must open and authorize; an agent cannot complete OAuth itself. Once authorized, the channel appears in `/v1/social/channels` with an `id` you pass to publish.',
     '',
     'CLI: `agent-media social providers` · `agent-media social connect x` · `agent-media social channels`.',
     'MCP: `social_connect { provider }` (returns the URL for the user) · `social_channels`.',
@@ -942,17 +960,17 @@ function socialBody(): string {
     'CLI: `agent-media social publish --video <url> --channels <id,id> --caption "..."` (add `--at <iso>` to schedule).',
     'MCP: `social_publish { video_url, channel_ids, caption, type }`.',
     '',
-    '`video_url` must be an agent-media R2 URL (the output of a video skill) — agent-media re-hosts it on the publishing provider for you. `channel_ids` come from `/v1/social/channels`. Per-network requirements (e.g. X reply settings) are filled in server-side; you don\'t send them.',
+    '`video_url` must be an agent-media R2 URL (the output of a video skill); agent-media re-hosts it on the publishing provider for you. `channel_ids` come from `/v1/social/channels`. Per-network requirements (e.g. X reply settings) are filled in server-side; you don\'t send them.',
     '',
-    '**Returns** `{ success: true, media_id, post_ids: ["..."] }`. A real post was created only when `post_ids` is non-empty — treat an empty `post_ids` as a failure, not a success.',
+    '**Returns** `{ success: true, media_id, post_ids: ["..."] }`. A real post was created only when `post_ids` is non-empty; treat an empty `post_ids` as a failure, not a success.',
     '',
     '## Typical flow',
     '',
-    '1. Produce a video → `make_ugc` → `final_output.video_url`.',
-    '2. If the user has no connected channel, send them to connect (step 1) — you can\'t OAuth for them.',
+    '1. Produce a video with `make_ugc` and take `final_output.video_url`.',
+    '2. If the user has no connected channel, send them to connect (step 1); you can\'t OAuth for them.',
     '3. Publish that `video_url` to the chosen `channel_ids`; confirm `post_ids` came back.',
     '',
-    'Note: social operations run on a shared rate budget — don\'t poll; connect once and publish on demand.',
+    'Note: social operations run on a shared rate budget: don\'t poll; connect once and publish on demand.',
     '',
   ].join('\n');
 }

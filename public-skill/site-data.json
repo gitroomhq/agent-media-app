@@ -9,7 +9,7 @@
       {
         "id": "claude",
         "label": "Claude.ai / Claude Desktop",
-        "how": "Settings → Connectors → Add custom connector → paste the URL → Connect."
+        "how": "Settings > Connectors > Add custom connector > paste the URL > Connect."
       },
       {
         "id": "claude-code",
@@ -41,7 +41,7 @@
       }
     ],
     "prompt": "Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: https://api.agent-media.ai/mcp (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call list_models and tell me what you can make.",
-    "polling": "Every generate tool returns a job id. Call get_run_status with wait:true; each call blocks up to ~45 seconds, a video usually needs several calls (seedance-2.0 renders 5s in about 3 minutes, seedance-2.5 takes far longer). Never report a result before get_run_status returned its URL."
+    "polling": "Every generate tool returns a job id. Call get_run_status with wait:true; each call blocks up to about 45 seconds, a video usually needs several calls (seedance-2.0: about 3 minutes for a 5 s clip at 720p; seedance-2.5: 12 to 25 minutes per clip; plan the wait). Never report a result before get_run_status returned its URL."
   },
   "tools": [
     {
@@ -49,7 +49,7 @@
       "title": "Generate Video",
       "read_only": false,
       "spends_credits": true,
-      "description": "Render a video clip from YOUR prompt on the model YOU choose. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Pass reference images (a portrait, a character sheet from list_characters, a product photo) as https URLs in `refs` and the model keeps that identity/look. Models: seedance-2.0, seedance-2.5 (default seedance-2.0; call list_models for what each is good for, the price per second and its recent results, seedance-2.5 is ~3x the credits and only worth it for a hero clip; or pass model:\"auto\" to let agent-media choose from the last 30 days of scored runs). Spends credits (seconds x the model's per-second rate; call `quote` first if the user cares about cost). Returns a job id, then call get_run_status until it is done and hand the user the URL.\n\nIMAGES: pass an https URL. If you only have raw bytes or a data: URL, call `upload_image` FIRST and pass the URL it returns. Never paste base64 into these arguments, the client prints tool arguments in the conversation, so a base64 image becomes a wall of text for the user and is re-sent on every retry.",
+      "description": "Render a video clip from YOUR prompt on the model YOU choose, in one of three MODES that follow from the fields you pass: TEXT (prompt only), IMAGE-TO-VIDEO (`first_frame`: an https still that becomes frame one, optionally `last_frame` to end on; the clip animates the still) or REFERENCE (`refs`: https images such as a portrait, a character sheet from list_characters or a product photo whose identity/look is kept; `video_refs`: clips whose motion or framing is followed; `audio_refs`: a voice or sound to carry; address them in the prompt as @image1, @video1, @audio1). Frames and refs cannot be mixed. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Models: seedance-2.0, seedance-2.5 (default seedance-2.0; call list_models for each model's modes, limits, prices and recent results; or pass model:\"auto\"). Aspect: 9:16 default, also 16:9, 1:1, 4:3, 3:4, 21:9, adaptive. Quality: 480p, 720p (default), 1080p; the price per second follows the quality (seedance-2.0: 15 credits/s at 480p, 30 credits/s at 720p, 75 credits/s at 1080p). Reference clip seconds are billed like output seconds. Call `quote` first if the user cares about cost. Returns a job id, then call get_run_status until it is done and hand the user the URL.\n\nIMAGES: pass an https URL. If you only have raw bytes or a data: URL, call `upload_image` FIRST and pass the URL it returns. Never paste base64 into these arguments, the client prints tool arguments in the conversation, so a base64 image becomes a wall of text for the user and is re-sent on every retry.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -57,11 +57,21 @@
             "type": "string",
             "minLength": 3,
             "maxLength": 4000,
-            "description": "The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and, if anyone speaks, the exact words in quotes. ~2.3 words per second."
+            "description": "The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and, if anyone speaks, the exact words in quotes. About 2.3 words per second. With references, address them as @image1, @video1, @audio1."
           },
           "model": {
             "type": "string",
-            "description": "A live video model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits, hero clips only."
+            "description": "A live video model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default. Call list_models for what each model is good for, its modes, limits and price."
+          },
+          "first_frame": {
+            "type": "string",
+            "format": "uri",
+            "description": "IMAGE-TO-VIDEO: an https image that becomes frame one of the clip (a still you want animated, a product shot, a portrait). Cannot be combined with refs, video_refs or audio_refs on Seedance."
+          },
+          "last_frame": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional with first_frame: the image the clip ends on; the model animates from first to last."
           },
           "refs": {
             "type": "array",
@@ -69,24 +79,56 @@
               "type": "string",
               "format": "uri"
             },
-            "maxItems": 4,
-            "description": "Reference images (https URLs, up to 4): a portrait, a character sheet, a product shot. The model keeps that identity/look across clips. Omit to let the model invent the person."
+            "maxItems": 30,
+            "description": "REFERENCE-TO-VIDEO: image references (https URLs): a portrait, a character sheet from list_characters, a product photo. The model keeps that identity/look. Address them in the prompt as @image1, @image2..."
+          },
+          "video_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "maxItems": 10,
+            "description": "Reference clips (https mp4/mov) whose motion, framing or look the model should follow; @video1... in the prompt. Their seconds are billed like output seconds."
+          },
+          "audio_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "maxItems": 10,
+            "description": "Reference audio (https wav/mp3): a voice or a sound the clip should carry; @audio1... in the prompt."
           },
           "seconds": {
             "type": "integer",
-            "minimum": 4,
-            "maximum": 15,
+            "minimum": 1,
+            "maximum": 60,
             "default": 5,
-            "description": "Clip length in seconds, 4–15. Credits = seconds x the model rate."
+            "description": "Clip length in seconds (the model sets the range; seedance: 4 to 15). Credits = seconds x the per-second rate at the chosen quality."
           },
           "aspect": {
             "type": "string",
             "enum": [
               "9:16",
-              "1:1"
+              "16:9",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9",
+              "adaptive"
             ],
-            "default": "9:16",
-            "description": "9:16 vertical (default) or 1:1."
+            "description": "9:16 (default for text and reference), 16:9, 1:1, 4:3, 3:4, 21:9, or adaptive (follows the first frame or reference; the default and the only option in image mode on seedance-2.5)."
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "480p",
+              "720p",
+              "1080p"
+            ],
+            "default": "720p",
+            "description": "480p (cheapest), 720p (default), 1080p (dearest). Price per second differs; see list_models."
           },
           "audio": {
             "type": "boolean",
@@ -97,7 +139,7 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 2147483647,
-            "description": "Same seed + same inputs = the same clip (best effort). Reuse across a series."
+            "description": "Only for models whose mode lists seed support (none of the live Seedance modes). Refused elsewhere."
           }
         },
         "required": [
@@ -156,7 +198,7 @@
       "title": "Generate Audio",
       "read_only": false,
       "spends_credits": true,
-      "description": "Speak text in a named voice (jessica, sarah, liam, chris, lily, bill, matilda, or a raw ElevenLabs voice id). Emotion tags like [excited] or [whispers] are honoured. For a talking-head clip you usually do NOT need this: generate_video renders native speech when the words are in the prompt. Use it for voiceover over b-roll or a standalone audio file. Models: elevenlabs-tts. Spends 1 credit per 100 characters. Returns a job id, poll get_run_status for the mp3 URL.",
+      "description": "Speak text in a named voice (jessica, sarah, liam, chris, lily, bill, matilda, or a raw ElevenLabs voice id). Emotion tags like [excited] or [whispers] are honoured. For a talking-head clip you usually do NOT need this: generate_video renders native speech when the words are in the prompt. Use it for voiceover over b-roll or a standalone audio file. Models: elevenlabs-tts. Spends 1 credit per 100 characters, rounded up. Returns a job id, poll get_run_status for the mp3 URL. The mp3 URL can be passed as an audio_ref to generate_video.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -164,7 +206,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 4000,
-            "description": "The words to speak. Emotion tags like [excited] or [whispers] are honoured. 1 credit per 100 characters."
+            "description": "The words to speak. Emotion tags like [excited] or [whispers] are honoured. Priced per character; see list_models."
           },
           "model": {
             "type": "string",
@@ -246,7 +288,7 @@
       "title": "Get Run Status",
       "read_only": true,
       "spends_credits": false,
-      "description": "Check a generation you already submitted, and get its output URL (video, image or audio) when it is done. Pass the id ANY agent-media tool returned (run id, skill run id, or job id), this resolves all of them. Set wait:true to block until the job reaches a terminal state (up to ~45 seconds per call; if it is still running, just call again, a video usually needs several such calls). ALWAYS call this after submitting: without it you cannot tell whether the video succeeded, and cannot give the user a link.",
+      "description": "Check a generation you already submitted, and get its output URL (video, image or audio) when it is done. Pass the id ANY agent-media tool returned (run id, skill run id, or job id), this resolves all of them. Set wait:true to block until the job reaches a terminal state (up to ~45 seconds per call; if it is still running, just call again: seedance-2.0 needs about 3 minutes for a 5 s clip, seedance-2.5 12 to 25 minutes, so keep calling until it is done). ALWAYS call this after submitting: without it you cannot tell whether the video succeeded, and cannot give the user a link.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -291,7 +333,7 @@
       "title": "List Models",
       "read_only": true,
       "spends_credits": false,
-      "description": "List the generation models agent-media can use, with what each costs the user (credits per second), its limits, what it is good and bad at, and how to select it, plus `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model for generate_video / generate_image / generate_audio: the default seedance-2.0 is right for most jobs; seedance-2.5 is about 3x the credits and only worth it for a hero clip. Pass the id as `model`, or `model:\"auto\"` and the printed policy picks from the stats. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.",
+      "description": "List the generation models agent-media can use: for each, its MODES (video: text, image-to-video via first_frame, reference via refs / video_refs / audio_refs) with the exact inputs, limits, aspects, qualities and credits per second of every mode, a \"pick when\" line, prompting tips, expected latency, how to select it, plus `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model or a mode for generate_video / generate_image / generate_audio: the default seedance-2.0 is right for most jobs. Pass the id as `model`, or `model:\"auto\"` and the printed policy picks from the stats. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -308,7 +350,7 @@
       "title": "Rate Run",
       "read_only": false,
       "spends_credits": false,
-      "description": "Rate a finished generate_video / generate_image / generate_audio run 1–5, with an optional note (what was wrong or right). Costs nothing. Do this when the user reacts to an output, \"perfect\", \"her face changed\", \"too slow\", or when you can see a defect yourself. Ratings feed the per-model stats in list_models and the model:\"auto\" choice, so an honest 2 helps more than a polite 4.",
+      "description": "Rate a finished generate_video / generate_image / generate_audio run 1 to 5, with an optional note (what was wrong or right). Costs nothing. Do this when the user reacts to an output, \"perfect\", \"her face changed\", \"too slow\", or when you can see a defect yourself. Ratings feed the per-model stats in list_models and the model:\"auto\" choice, so an honest 2 helps more than a polite 4.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -352,50 +394,191 @@
         "status": "live",
         "provider": "evolink",
         "modes": [
-          "reference-to-video",
-          "text-to-video"
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video"
         ],
         "features": [
           "native-audio",
           "lip-sync",
-          "character-sheet-reference"
+          "first-frame",
+          "first-and-last-frame",
+          "image-references",
+          "video-references",
+          "audio-references"
         ],
-        "limits": {
-          "minSeconds": 4,
-          "maxSeconds": 15,
-          "aspect": [
-            "9:16",
-            "1:1"
+        "limits": {},
+        "video": {
+          "modes": [
+            {
+              "mode": "text",
+              "how": "prompt only",
+              "inputs": {
+                "prompt": "required"
+              },
+              "seconds": {
+                "min": 4,
+                "max": 15
+              },
+              "aspects": [
+                "9:16",
+                "16:9",
+                "1:1",
+                "4:3",
+                "3:4",
+                "21:9",
+                "adaptive"
+              ],
+              "aspect_default": "9:16",
+              "qualities": [
+                "480p",
+                "720p",
+                "1080p"
+              ],
+              "credits_per_second": {
+                "480p": 15,
+                "720p": 30,
+                "1080p": 75
+              },
+              "seed": false,
+              "prompt_syntax": null,
+              "notes": [
+                "No seed. Every render is new; keep a series consistent with references, not seeds."
+              ],
+              "verified": null
+            },
+            {
+              "mode": "image",
+              "how": "pass first_frame (and optionally last_frame)",
+              "inputs": {
+                "first_frame": "required (https image)",
+                "last_frame": "optional (https image)"
+              },
+              "seconds": {
+                "min": 4,
+                "max": 15
+              },
+              "aspects": [
+                "9:16",
+                "16:9",
+                "1:1",
+                "4:3",
+                "3:4",
+                "21:9",
+                "adaptive"
+              ],
+              "aspect_default": "adaptive",
+              "qualities": [
+                "480p",
+                "720p",
+                "1080p"
+              ],
+              "credits_per_second": {
+                "480p": 15,
+                "720p": 30,
+                "1080p": 75
+              },
+              "seed": false,
+              "prompt_syntax": null,
+              "notes": [
+                "first_frame becomes frame one of the clip; last_frame (optional) becomes the final frame and the model animates between them.",
+                "Frames only: refs, video_refs and audio_refs are not accepted in this mode. To keep an identity AND set the frame, put the frame image in refs and describe it as @image1.",
+                "aspect \"adaptive\" (default) follows the first frame. Frame images: jpeg/png/webp, ratio between 0.4 and 2.5, 300 to 6000 px, up to 30 MB."
+              ],
+              "verified": null
+            },
+            {
+              "mode": "reference",
+              "how": "pass refs, video_refs and/or audio_refs",
+              "inputs": {
+                "refs": "up to 9 https images",
+                "video_refs": "up to 3 https clips, 15 s in total; their seconds are billed like output seconds",
+                "audio_refs": "up to 3 https audio files, 15 s in total; needs an image or video reference beside it"
+              },
+              "seconds": {
+                "min": 4,
+                "max": 15
+              },
+              "aspects": [
+                "9:16",
+                "16:9",
+                "1:1",
+                "4:3",
+                "3:4",
+                "21:9",
+                "adaptive"
+              ],
+              "aspect_default": "9:16",
+              "qualities": [
+                "480p",
+                "720p",
+                "1080p"
+              ],
+              "credits_per_second": {
+                "480p": 15,
+                "720p": 30,
+                "1080p": 75
+              },
+              "seed": false,
+              "prompt_syntax": "@image1 @video1 @audio1 (numbered per list, from 1)",
+              "notes": [
+                "Address references in the prompt: \"@image1 holds @image2 and says ...\". Numbering is per list: refs are @image1.., video_refs are @video1.., audio_refs are @audio1...",
+                "Reference clips: 2 to 15 s each, 15 s in total, mp4/mov 480p to 1080p, 24 to 60 fps, up to 50 MB. Their seconds are billed like output seconds.",
+                "Audio references: wav/mp3, 2 to 15 s each, 15 s in total, up to 15 MB. Audio alone is not accepted: add an image or video reference.",
+                "aspect \"adaptive\" follows the first video reference, else the first image, else the prompt."
+              ],
+              "verified": {
+                "date": "2026-09-05",
+                "runId": "b0011e92",
+                "note": "generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded"
+              }
+            }
           ],
-          "resolutions": [
-            "480p",
-            "720p",
-            "1080p"
-          ],
-          "refs": "image"
+          "credits_per_second": {
+            "480p": 15,
+            "720p": 30,
+            "1080p": 75
+          },
+          "default_quality": "720p",
+          "timeout_minutes": 30
         },
         "credits": {
           "unit": "second",
           "perUnit": 30
         },
+        "price_default": "30 credits per second at 720p",
         "quality": "good",
         "speed": "medium",
         "best_for": [
           "talking-head UGC",
           "product in hands",
           "crazy look",
-          "bulk daily posts"
+          "bulk daily posts",
+          "animating a still (first frame) into a clip"
         ],
         "avoid_for": [
           "clips over 15s",
-          "hero shots where 2.5 detail is worth 3x the price"
+          "hero shots where 2.5 detail is worth 3x the price",
+          "anything that needs a seed"
         ],
-        "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/seedance-2.0.md",
-        "verified": {
-          "date": "2026-09-05",
-          "runId": "2749ee84-1835-4e69-947d-67034ead0890",
-          "note": "make_ugc via Claude Code over the hosted connector, 5s, succeeded"
+        "usage": {
+          "pick_when": "you need a real-looking person saying real words, or a still brought to life, at a normal budget",
+          "prompt_tips": [
+            "Write the shot as a director: who (age, look), where (setting, light), what happens, phone framing, and the exact spoken words in quotes. About 2.3 words per second.",
+            "Keep a person consistent across clips with refs (a portrait or a character sheet), addressed as @image1; the model has no seed.",
+            "To animate a specific still, pass it as first_frame; add last_frame to control where the motion ends."
+          ],
+          "latency": "about 3 minutes for a 5 s clip at 720p"
         },
+        "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/seedance-2.0.md",
+        "verified": [
+          {
+            "mode": "reference",
+            "date": "2026-09-05",
+            "runId": "b0011e92",
+            "note": "generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded"
+          }
+        ],
         "select_with": {
           "field": "model",
           "value": "seedance-2.0",
@@ -420,32 +603,155 @@
         "status": "live",
         "provider": "evolink",
         "modes": [
-          "reference-to-video",
-          "text-to-video"
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video"
         ],
         "features": [
           "native-audio",
           "lip-sync",
-          "character-sheet-reference"
+          "first-frame",
+          "first-and-last-frame",
+          "image-references",
+          "video-references",
+          "audio-references"
         ],
-        "limits": {
-          "minSeconds": 4,
-          "maxSeconds": 15,
-          "aspect": [
-            "9:16",
-            "1:1"
+        "limits": {},
+        "video": {
+          "modes": [
+            {
+              "mode": "text",
+              "how": "prompt only",
+              "inputs": {
+                "prompt": "required"
+              },
+              "seconds": {
+                "min": 4,
+                "max": 15
+              },
+              "aspects": [
+                "9:16",
+                "16:9",
+                "1:1",
+                "4:3",
+                "3:4",
+                "21:9",
+                "adaptive"
+              ],
+              "aspect_default": "9:16",
+              "qualities": [
+                "480p",
+                "720p",
+                "1080p"
+              ],
+              "credits_per_second": {
+                "480p": 50,
+                "720p": 99,
+                "1080p": 180
+              },
+              "seed": false,
+              "prompt_syntax": null,
+              "notes": [
+                "No seed."
+              ],
+              "verified": {
+                "date": "2026-09-05",
+                "runId": "431f82ba-9e9e-4644-beb3-b1f67c0de91e",
+                "note": "generate_video, text only, 4s, 720p, 396 credits; the provider took about 25 min"
+              }
+            },
+            {
+              "mode": "image",
+              "how": "pass first_frame (and optionally last_frame)",
+              "inputs": {
+                "first_frame": "required (https image)",
+                "last_frame": "optional (https image)"
+              },
+              "seconds": {
+                "min": 4,
+                "max": 15
+              },
+              "aspects": [
+                "adaptive"
+              ],
+              "aspect_default": "adaptive",
+              "qualities": [
+                "480p",
+                "720p",
+                "1080p"
+              ],
+              "credits_per_second": {
+                "480p": 50,
+                "720p": 99,
+                "1080p": 180
+              },
+              "seed": false,
+              "prompt_syntax": null,
+              "notes": [
+                "first_frame becomes frame one; last_frame (optional) becomes the final frame.",
+                "aspect must be \"adaptive\" on this model in image mode: the clip takes the frame's ratio. Any other aspect is refused.",
+                "Frames only: refs, video_refs and audio_refs are not accepted in this mode."
+              ],
+              "verified": null
+            },
+            {
+              "mode": "reference",
+              "how": "pass refs, video_refs and/or audio_refs",
+              "inputs": {
+                "refs": "up to 30 https images",
+                "video_refs": "up to 10 https clips, 30 s in total; their seconds are billed like output seconds",
+                "audio_refs": "up to 10 https audio files, 30 s in total"
+              },
+              "seconds": {
+                "min": 4,
+                "max": 15
+              },
+              "aspects": [
+                "9:16",
+                "16:9",
+                "1:1",
+                "4:3",
+                "3:4",
+                "21:9",
+                "adaptive"
+              ],
+              "aspect_default": "9:16",
+              "qualities": [
+                "480p",
+                "720p",
+                "1080p"
+              ],
+              "credits_per_second": {
+                "480p": 50,
+                "720p": 99,
+                "1080p": 180
+              },
+              "seed": false,
+              "prompt_syntax": "@image1 @video1 @audio1 (numbered per list, from 1)",
+              "notes": [
+                "Address references as @image1.., @video1.., @audio1.. (numbered per list).",
+                "Reference clips: 2 to 30 s each, 30 s in total, up to 4K, up to 200 MB; their seconds are billed like output seconds. Audio references may stand alone here.",
+                "Never write edit or extend intent (\"edit the video\", \"add\", \"remove\", \"replace\", \"extend\", \"continue\") into a reference prompt: the provider reclassifies the task and fails it minutes later. Describe the NEW clip you want."
+              ],
+              "verified": {
+                "date": "2026-09-06",
+                "note": "generate_video with a product image ref via Claude Code, 8s, 720p (perfume UGC run)"
+              }
+            }
           ],
-          "resolutions": [
-            "480p",
-            "720p",
-            "1080p"
-          ],
-          "refs": "image"
+          "credits_per_second": {
+            "480p": 50,
+            "720p": 99,
+            "1080p": 180
+          },
+          "default_quality": "720p",
+          "timeout_minutes": 90
         },
         "credits": {
           "unit": "second",
           "perUnit": 99
         },
+        "price_default": "99 credits per second at 720p",
         "quality": "premium",
         "speed": "slow",
         "best_for": [
@@ -456,14 +762,32 @@
         "avoid_for": [
           "drafts",
           "bulk",
-          "anything where 2.0 is good enough: it is ~3x the credits"
+          "anything where 2.0 is good enough: it is about 3x the credits",
+          "anyone who cannot wait 15 to 30 minutes"
         ],
-        "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/seedance-2.5.md",
-        "verified": {
-          "date": "2026-09-05",
-          "runId": "431f82ba-9e9e-4644-beb3-b1f67c0de91e",
-          "note": "generate_video, text-only (seedance-2.5-text-to-video), 4s, 396 credits; EvoLink render took ~25 min"
+        "usage": {
+          "pick_when": "the user asked for the best possible single clip and accepts the wait and about 3x the price",
+          "prompt_tips": [
+            "Same director-style prompt and @image1 references as seedance-2.0.",
+            "In image mode leave aspect out (it is adaptive); the frame decides the ratio.",
+            "Do not put edit or extend wording in a reference prompt."
+          ],
+          "latency": "12 to 25 minutes per clip; plan the wait"
         },
+        "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/seedance-2.5.md",
+        "verified": [
+          {
+            "mode": "text",
+            "date": "2026-09-05",
+            "runId": "431f82ba-9e9e-4644-beb3-b1f67c0de91e",
+            "note": "generate_video, text only, 4s, 720p, 396 credits; the provider took about 25 min"
+          },
+          {
+            "mode": "reference",
+            "date": "2026-09-06",
+            "note": "generate_video with a product image ref via Claude Code, 8s, 720p (perfume UGC run)"
+          }
+        ],
         "select_with": {
           "field": "model",
           "value": "seedance-2.5",
@@ -499,26 +823,38 @@
         ],
         "limits": {
           "resolutions": [
-            "1024",
-            "1536"
+            "1024x1024",
+            "1024x1536",
+            "1536x1024"
           ],
-          "refs": "image"
+          "refsMax": 4
         },
+        "video": null,
         "credits": {
           "unit": "image",
           "perUnit": 20
         },
+        "price_default": "20 credits per image",
         "quality": "good",
         "speed": "fast",
         "best_for": [
           "portraits",
           "character sheets",
           "framing wireframes",
-          "product placement frames"
+          "product placement frames",
+          "a first frame for generate_video"
         ],
         "avoid_for": [
           "photoreal 4K hero stills"
         ],
+        "usage": {
+          "pick_when": "you are building the reference or the first frame a video will use",
+          "prompt_tips": [
+            "Concrete subject, age, framing, light, what the hands do; it follows layout instructions like \"headroom for a caption\".",
+            "With refs it EDITS or composes from them (a product into a hand, a portrait re-lit); without refs it paints from the prompt alone."
+          ],
+          "latency": "under a minute"
+        },
         "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/gpt-image-2.md",
         "verified": {
           "date": "2026-09-05",
@@ -550,20 +886,31 @@
           "dubbing"
         ],
         "limits": {},
+        "video": null,
         "credits": {
           "unit": "character",
           "perUnit": 0.01
         },
+        "price_default": "0.01 credits per character",
         "quality": "good",
         "speed": "fast",
         "best_for": [
           "voiceover on b-roll",
-          "dubbing",
-          "when Seedance native audio is not used"
+          "narration",
+          "a standalone voice file",
+          "an audio reference for generate_video"
         ],
         "avoid_for": [
-          "lip-synced talking head: Seedance native audio is the default there"
+          "lip-synced talking head: generate_video renders speech natively"
         ],
+        "usage": {
+          "pick_when": "you need a clean voice track and no face",
+          "prompt_tips": [
+            "Emotion tags like [excited] or [whispers] are honoured; keep sentences short for pacing.",
+            "Seven named voices (sarah default) or a raw ElevenLabs voice id."
+          ],
+          "latency": "seconds"
+        },
         "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/elevenlabs-tts.md",
         "verified": {
           "date": "2026-09-05",
@@ -580,101 +927,426 @@
         }
       }
     ],
+    "video_modes": {
+      "seedance-2.0": [
+        {
+          "mode": "text",
+          "how": "prompt only",
+          "inputs": {
+            "prompt": "required"
+          },
+          "seconds": {
+            "min": 4,
+            "max": 15
+          },
+          "aspects": [
+            "9:16",
+            "16:9",
+            "1:1",
+            "4:3",
+            "3:4",
+            "21:9",
+            "adaptive"
+          ],
+          "aspect_default": "9:16",
+          "qualities": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "credits_per_second": {
+            "480p": 15,
+            "720p": 30,
+            "1080p": 75
+          },
+          "seed": false,
+          "prompt_syntax": null,
+          "notes": [
+            "No seed. Every render is new; keep a series consistent with references, not seeds."
+          ],
+          "verified": null
+        },
+        {
+          "mode": "image",
+          "how": "pass first_frame (and optionally last_frame)",
+          "inputs": {
+            "first_frame": "required (https image)",
+            "last_frame": "optional (https image)"
+          },
+          "seconds": {
+            "min": 4,
+            "max": 15
+          },
+          "aspects": [
+            "9:16",
+            "16:9",
+            "1:1",
+            "4:3",
+            "3:4",
+            "21:9",
+            "adaptive"
+          ],
+          "aspect_default": "adaptive",
+          "qualities": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "credits_per_second": {
+            "480p": 15,
+            "720p": 30,
+            "1080p": 75
+          },
+          "seed": false,
+          "prompt_syntax": null,
+          "notes": [
+            "first_frame becomes frame one of the clip; last_frame (optional) becomes the final frame and the model animates between them.",
+            "Frames only: refs, video_refs and audio_refs are not accepted in this mode. To keep an identity AND set the frame, put the frame image in refs and describe it as @image1.",
+            "aspect \"adaptive\" (default) follows the first frame. Frame images: jpeg/png/webp, ratio between 0.4 and 2.5, 300 to 6000 px, up to 30 MB."
+          ],
+          "verified": null
+        },
+        {
+          "mode": "reference",
+          "how": "pass refs, video_refs and/or audio_refs",
+          "inputs": {
+            "refs": "up to 9 https images",
+            "video_refs": "up to 3 https clips, 15 s in total; their seconds are billed like output seconds",
+            "audio_refs": "up to 3 https audio files, 15 s in total; needs an image or video reference beside it"
+          },
+          "seconds": {
+            "min": 4,
+            "max": 15
+          },
+          "aspects": [
+            "9:16",
+            "16:9",
+            "1:1",
+            "4:3",
+            "3:4",
+            "21:9",
+            "adaptive"
+          ],
+          "aspect_default": "9:16",
+          "qualities": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "credits_per_second": {
+            "480p": 15,
+            "720p": 30,
+            "1080p": 75
+          },
+          "seed": false,
+          "prompt_syntax": "@image1 @video1 @audio1 (numbered per list, from 1)",
+          "notes": [
+            "Address references in the prompt: \"@image1 holds @image2 and says ...\". Numbering is per list: refs are @image1.., video_refs are @video1.., audio_refs are @audio1...",
+            "Reference clips: 2 to 15 s each, 15 s in total, mp4/mov 480p to 1080p, 24 to 60 fps, up to 50 MB. Their seconds are billed like output seconds.",
+            "Audio references: wav/mp3, 2 to 15 s each, 15 s in total, up to 15 MB. Audio alone is not accepted: add an image or video reference.",
+            "aspect \"adaptive\" follows the first video reference, else the first image, else the prompt."
+          ],
+          "verified": {
+            "date": "2026-09-05",
+            "runId": "b0011e92",
+            "note": "generate_video with a portrait ref via Claude Code over the hosted connector, 5s, 720p, succeeded"
+          }
+        }
+      ],
+      "seedance-2.5": [
+        {
+          "mode": "text",
+          "how": "prompt only",
+          "inputs": {
+            "prompt": "required"
+          },
+          "seconds": {
+            "min": 4,
+            "max": 15
+          },
+          "aspects": [
+            "9:16",
+            "16:9",
+            "1:1",
+            "4:3",
+            "3:4",
+            "21:9",
+            "adaptive"
+          ],
+          "aspect_default": "9:16",
+          "qualities": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "credits_per_second": {
+            "480p": 50,
+            "720p": 99,
+            "1080p": 180
+          },
+          "seed": false,
+          "prompt_syntax": null,
+          "notes": [
+            "No seed."
+          ],
+          "verified": {
+            "date": "2026-09-05",
+            "runId": "431f82ba-9e9e-4644-beb3-b1f67c0de91e",
+            "note": "generate_video, text only, 4s, 720p, 396 credits; the provider took about 25 min"
+          }
+        },
+        {
+          "mode": "image",
+          "how": "pass first_frame (and optionally last_frame)",
+          "inputs": {
+            "first_frame": "required (https image)",
+            "last_frame": "optional (https image)"
+          },
+          "seconds": {
+            "min": 4,
+            "max": 15
+          },
+          "aspects": [
+            "adaptive"
+          ],
+          "aspect_default": "adaptive",
+          "qualities": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "credits_per_second": {
+            "480p": 50,
+            "720p": 99,
+            "1080p": 180
+          },
+          "seed": false,
+          "prompt_syntax": null,
+          "notes": [
+            "first_frame becomes frame one; last_frame (optional) becomes the final frame.",
+            "aspect must be \"adaptive\" on this model in image mode: the clip takes the frame's ratio. Any other aspect is refused.",
+            "Frames only: refs, video_refs and audio_refs are not accepted in this mode."
+          ],
+          "verified": null
+        },
+        {
+          "mode": "reference",
+          "how": "pass refs, video_refs and/or audio_refs",
+          "inputs": {
+            "refs": "up to 30 https images",
+            "video_refs": "up to 10 https clips, 30 s in total; their seconds are billed like output seconds",
+            "audio_refs": "up to 10 https audio files, 30 s in total"
+          },
+          "seconds": {
+            "min": 4,
+            "max": 15
+          },
+          "aspects": [
+            "9:16",
+            "16:9",
+            "1:1",
+            "4:3",
+            "3:4",
+            "21:9",
+            "adaptive"
+          ],
+          "aspect_default": "9:16",
+          "qualities": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "credits_per_second": {
+            "480p": 50,
+            "720p": 99,
+            "1080p": 180
+          },
+          "seed": false,
+          "prompt_syntax": "@image1 @video1 @audio1 (numbered per list, from 1)",
+          "notes": [
+            "Address references as @image1.., @video1.., @audio1.. (numbered per list).",
+            "Reference clips: 2 to 30 s each, 30 s in total, up to 4K, up to 200 MB; their seconds are billed like output seconds. Audio references may stand alone here.",
+            "Never write edit or extend intent (\"edit the video\", \"add\", \"remove\", \"replace\", \"extend\", \"continue\") into a reference prompt: the provider reclassifies the task and fails it minutes later. Describe the NEW clip you want."
+          ],
+          "verified": {
+            "date": "2026-09-06",
+            "note": "generate_video with a product image ref via Claude Code, 8s, 720p (perfume UGC run)"
+          }
+        }
+      ]
+    },
     "candidates": [
       {
         "id": "seedance-2.0-mini",
         "kind": "video",
         "tier": "draft",
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video"
+        ],
         "best_for": [
           "drafts",
           "previews",
           "bulk variants before picking one to render on 2.0"
         ],
-        "note": "FROM price on evolink.ai/models; confirm 720p + image-ref rate on the detailed table before going live."
+        "avoid_for": [
+          "final deliverables",
+          "1080p (not offered)"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "kling-o3",
         "kind": "video",
         "tier": "premium",
-        "best_for": [
-          "second premium option next to seedance-2.5",
-          "edit an existing clip"
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video"
         ],
-        "note": "FROM price on evolink.ai/models; confirm before going live."
+        "best_for": [
+          "1080p hero shots with a non-Seedance look",
+          "first-to-last-frame moves"
+        ],
+        "avoid_for": [
+          "bulk",
+          "speech-driven UGC until verified"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "wan-3.0",
         "kind": "video",
         "tier": "standard",
-        "best_for": [
-          "clips longer than 15s in one take"
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video"
         ],
-        "note": "FROM price on evolink.ai/models; confirm before going live."
+        "best_for": [
+          "single takes of 15 to 30 s",
+          "reproducible series via seed"
+        ],
+        "avoid_for": [
+          "lip-synced speech until verified",
+          "21:9"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "omnihuman-1.5",
         "kind": "video",
         "tier": "premium",
-        "best_for": [
-          "talking head driven by an existing voice track"
+        "modes": [
+          "lipsync"
         ],
-        "note": "FROM price on evolink.ai/models; confirm before going live."
+        "best_for": [
+          "lip-syncing one photo to an existing recording"
+        ],
+        "avoid_for": [
+          "silent clips",
+          "audio over 35 s",
+          "more than one person"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "sora-2",
         "kind": "video",
         "tier": "premium",
+        "modes": [
+          "text-to-video",
+          "image-to-video"
+        ],
         "best_for": [
           "cinematic b-roll without a locked face"
         ],
-        "note": "FROM price on evolink.ai/models; no reference input listed, so character consistency is unproven."
+        "avoid_for": [
+          "anything that must keep a saved character identity",
+          "real people"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "nano-banana-2",
         "kind": "image",
         "tier": "standard",
+        "modes": [
+          "text-to-image",
+          "image-edit"
+        ],
         "best_for": [
           "product placement into a character frame",
-          "character sheet edits"
+          "character sheet edits",
+          "composites with many references"
         ],
-        "note": "FROM price on evolink.ai/models."
+        "avoid_for": [
+          "more than 4 real-person images per request"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "seedream-5.0-pro",
         "kind": "image",
         "tier": "premium",
+        "modes": [
+          "text-to-image",
+          "image-edit"
+        ],
         "best_for": [
           "multi-reference composites: person + product + setting"
         ],
-        "note": "FROM price on evolink.ai/models."
+        "avoid_for": [
+          "wireframes"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "z-image-turbo",
         "kind": "image",
         "tier": "draft",
+        "modes": [
+          "text-to-image"
+        ],
         "best_for": [
           "framing wireframes",
           "throwaway previews"
         ],
-        "note": "FROM price on evolink.ai/models."
+        "avoid_for": [
+          "anything a user sees",
+          "edits (no references)"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "doubao-seed-audio-1.0",
         "kind": "audio",
         "tier": "draft",
-        "best_for": [
-          "cheap voiceover and ambience beds"
+        "modes": [
+          "text-to-speech"
         ],
-        "note": "FROM price on evolink.ai/models."
+        "best_for": [
+          "cloning a voice from a short reference clip",
+          "up to 120 s of speech per request"
+        ],
+        "avoid_for": [
+          "plain narration (elevenlabs-tts is live and cheaper for the user)"
+        ],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       },
       {
         "id": "suno",
         "kind": "audio",
         "tier": "standard",
+        "modes": [
+          "music"
+        ],
         "best_for": [
           "a music bed under a clip"
         ],
-        "note": "FROM price on evolink.ai/models: $0.118 per 2 tracks."
+        "avoid_for": [],
+        "note": "planned: not selectable and unpriced until a real run is recorded"
       }
     ],
     "recent_url": "https://api.agent-media.ai/v1/models"
@@ -685,12 +1357,24 @@
       {
         "model": "seedance-2.0",
         "kind": "video",
-        "rate": "30 credits per second"
+        "rate": "15 credits/s at 480p, 30 at 720p, 75 at 1080p, per output second; default quality 720p",
+        "per_quality": {
+          "480p": 15,
+          "720p": 30,
+          "1080p": 75
+        },
+        "reference_clips": "seconds of video_refs are measured at submit and billed at the same per-second rate as output seconds"
       },
       {
         "model": "seedance-2.5",
         "kind": "video",
-        "rate": "99 credits per second"
+        "rate": "50 credits/s at 480p, 99 at 720p, 180 at 1080p, per output second; default quality 720p",
+        "per_quality": {
+          "480p": 50,
+          "720p": 99,
+          "1080p": 180
+        },
+        "reference_clips": "seconds of video_refs are measured at submit and billed at the same per-second rate as output seconds"
       },
       {
         "model": "gpt-image-2",
@@ -711,27 +1395,67 @@
     "examples": [
       {
         "model": "seedance-2.0",
+        "mode": "text",
+        "quality": "720p",
         "credits": 150,
         "usd": 1.5,
-        "breakdown": "5s on seedance-2.0 at 30 credits/second"
+        "breakdown": "5s on seedance-2.0 (text mode, 720p) at 30 credits/second"
       },
       {
         "model": "seedance-2.0",
+        "mode": "text",
+        "quality": "720p",
         "credits": 300,
         "usd": 3,
-        "breakdown": "10s on seedance-2.0 at 30 credits/second"
+        "breakdown": "10s on seedance-2.0 (text mode, 720p) at 30 credits/second"
       },
       {
         "model": "seedance-2.0",
+        "mode": "text",
+        "quality": "720p",
         "credits": 450,
         "usd": 4.5,
-        "breakdown": "15s on seedance-2.0 at 30 credits/second"
+        "breakdown": "15s on seedance-2.0 (text mode, 720p) at 30 credits/second"
+      },
+      {
+        "model": "seedance-2.0",
+        "mode": "text",
+        "quality": "480p",
+        "credits": 75,
+        "usd": 0.75,
+        "breakdown": "5s on seedance-2.0 (text mode, 480p) at 15 credits/second"
+      },
+      {
+        "model": "seedance-2.0",
+        "mode": "text",
+        "quality": "1080p",
+        "credits": 375,
+        "usd": 3.75,
+        "breakdown": "5s on seedance-2.0 (text mode, 1080p) at 75 credits/second"
+      },
+      {
+        "model": "seedance-2.0",
+        "mode": "image",
+        "quality": "720p",
+        "credits": 150,
+        "usd": 1.5,
+        "breakdown": "5s on seedance-2.0 (image mode, 720p) at 30 credits/second"
+      },
+      {
+        "model": "seedance-2.0",
+        "mode": "reference",
+        "quality": "720p",
+        "credits": 300,
+        "usd": 3,
+        "breakdown": "5s on seedance-2.0 (reference mode, 720p) at 30 credits/second + 5s of reference video at the same rate"
       },
       {
         "model": "seedance-2.5",
+        "mode": "text",
+        "quality": "720p",
         "credits": 495,
         "usd": 4.95,
-        "breakdown": "5s on seedance-2.5 at 99 credits/second"
+        "breakdown": "5s on seedance-2.5 (text mode, 720p) at 99 credits/second"
       },
       {
         "model": "gpt-image-2",
@@ -750,18 +1474,205 @@
   },
   "limits": {
     "video": {
-      "seconds": [
-        4,
-        15
-      ],
-      "aspect": [
+      "modes": "first_frame (and optional last_frame) selects image-to-video; refs, video_refs or audio_refs select reference; neither is text. Frames and refs cannot be mixed on Seedance.",
+      "seconds": {
+        "seedance-2.0": {
+          "text": [
+            4,
+            15
+          ],
+          "image": [
+            4,
+            15
+          ],
+          "reference": [
+            4,
+            15
+          ]
+        },
+        "seedance-2.5": {
+          "text": [
+            4,
+            15
+          ],
+          "image": [
+            4,
+            15
+          ],
+          "reference": [
+            4,
+            15
+          ]
+        }
+      },
+      "aspects": [
         "9:16",
-        "1:1"
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9",
+        "adaptive"
       ],
-      "refs_max": 4
+      "qualities": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "quality_default": "720p",
+      "per_model": {
+        "seedance-2.0": {
+          "text": {
+            "seconds": [
+              4,
+              15
+            ],
+            "aspects": [
+              "9:16",
+              "16:9",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9",
+              "adaptive"
+            ],
+            "aspect_default": "9:16",
+            "qualities": [
+              "480p",
+              "720p",
+              "1080p"
+            ]
+          },
+          "image": {
+            "seconds": [
+              4,
+              15
+            ],
+            "aspects": [
+              "9:16",
+              "16:9",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9",
+              "adaptive"
+            ],
+            "aspect_default": "adaptive",
+            "qualities": [
+              "480p",
+              "720p",
+              "1080p"
+            ],
+            "last_frame": true
+          },
+          "reference": {
+            "seconds": [
+              4,
+              15
+            ],
+            "aspects": [
+              "9:16",
+              "16:9",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9",
+              "adaptive"
+            ],
+            "aspect_default": "9:16",
+            "qualities": [
+              "480p",
+              "720p",
+              "1080p"
+            ],
+            "refs": {
+              "images": 9,
+              "videos": 3,
+              "audios": 3,
+              "video_seconds_total": 15,
+              "audio_seconds_total": 15,
+              "audio_alone": false
+            }
+          }
+        },
+        "seedance-2.5": {
+          "text": {
+            "seconds": [
+              4,
+              15
+            ],
+            "aspects": [
+              "9:16",
+              "16:9",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9",
+              "adaptive"
+            ],
+            "aspect_default": "9:16",
+            "qualities": [
+              "480p",
+              "720p",
+              "1080p"
+            ]
+          },
+          "image": {
+            "seconds": [
+              4,
+              15
+            ],
+            "aspects": [
+              "adaptive"
+            ],
+            "aspect_default": "adaptive",
+            "qualities": [
+              "480p",
+              "720p",
+              "1080p"
+            ],
+            "last_frame": true
+          },
+          "reference": {
+            "seconds": [
+              4,
+              15
+            ],
+            "aspects": [
+              "9:16",
+              "16:9",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9",
+              "adaptive"
+            ],
+            "aspect_default": "9:16",
+            "qualities": [
+              "480p",
+              "720p",
+              "1080p"
+            ],
+            "refs": {
+              "images": 30,
+              "videos": 10,
+              "audios": 10,
+              "video_seconds_total": 30,
+              "audio_seconds_total": 30,
+              "audio_alone": true
+            }
+          }
+        }
+      },
+      "consistency": "keep a series consistent with refs (the same portrait or character sheet in every call); there is no other handle"
     },
     "image": {
       "sizes": [
+        "1024x1024",
+        "1024x1536",
+        "1536x1024"
+      ],
+      "resolutions": [
         "1024x1024",
         "1024x1536",
         "1536x1024"
@@ -807,7 +1718,7 @@
       ],
       "max_chars": 4000
     },
-    "refs": "https URLs only. Use upload_image (PNG/JPEG, 10 MB) to turn bytes or a foreign URL into one. Never inline base64."
+    "refs": "https URLs only. Use upload_image (PNG/JPEG, 10 MB) to turn bytes or a foreign URL into one. Never inline base64. Reference clips and audio are https URLs too."
   },
   "rest": {
     "base": "https://api.agent-media.ai",
@@ -817,13 +1728,13 @@
         "method": "POST",
         "path": "/v2/generate/{video|image|audio}",
         "body": "the tool arguments",
-        "returns": "201 { job_id, model, credits_deducted, breakdown, auto?, status_url }"
+        "returns": "201 { job_id, model, mode?, quality?, credits_deducted, breakdown, auto?, status_url }"
       },
       {
         "method": "POST",
         "path": "/v2/quote/{video|image|audio}",
         "body": "the same arguments",
-        "returns": "200 { credits, usd, model, breakdown, auto? }"
+        "returns": "200 { credits, usd, model, mode?, quality?, breakdown, auto? }"
       },
       {
         "method": "GET",
@@ -835,7 +1746,7 @@
         "method": "GET",
         "path": "/v1/models",
         "body": "",
-        "returns": "the catalog with recent stats; public"
+        "returns": "the catalog with modes, prices per quality and recent stats; public"
       },
       {
         "method": "POST",
@@ -865,11 +1776,11 @@
     {
       "id": "talking-head",
       "title": "Talking-head UGC clip",
-      "credits": "150 credits for 5s on seedance-2.0",
+      "credits": "150 credits for 5 s on seedance-2.0 at 720p",
       "steps": [
         {
           "tool": "generate_video",
-          "text": "Script in quotes in the prompt; seconds from the word count (about 2.3 per second); refs = a portrait if the face must persist."
+          "text": "Script in quotes in the prompt; seconds from the word count (about 2.3 per second); refs = a portrait if the face must persist, addressed as @image1."
         },
         {
           "tool": "get_run_status",
@@ -880,7 +1791,7 @@
     {
       "id": "product-in-hand",
       "title": "Product in hand",
-      "credits": "20 credits for the frame, then the clip",
+      "credits": "20 credits for the frame, then 150 for a 5 s clip at 720p",
       "steps": [
         {
           "tool": "upload_image",
@@ -892,18 +1803,71 @@
         },
         {
           "tool": "generate_video",
-          "text": "The frame URL in refs, the pitch in quotes. The product stays the product."
+          "text": "The frame URL in refs as @image1, the pitch in quotes. The product stays the product."
+        }
+      ]
+    },
+    {
+      "id": "animate-still",
+      "title": "Animate a still (image-to-video)",
+      "credits": "150 credits for 5 s on seedance-2.0 at 720p (same rate as text mode)",
+      "steps": [
+        {
+          "tool": "generate_image",
+          "text": "The still: a portrait, a product shot, a scene. Or upload_image a photo the user has."
+        },
+        {
+          "tool": "generate_video",
+          "text": "That URL as first_frame; the prompt says what moves and what is said. Leave aspect out (adaptive follows the frame). No refs in this call: frames and refs cannot be mixed on Seedance."
+        },
+        {
+          "tool": "get_run_status",
+          "text": "Poll until completed. The clip opens on the exact still."
+        }
+      ]
+    },
+    {
+      "id": "first-last-frame",
+      "title": "First and last frame",
+      "credits": "150 credits for 5 s on seedance-2.0 at 720p; two stills first (20 credits each with generate_image)",
+      "steps": [
+        {
+          "tool": "generate_image",
+          "text": "Twice: the opening still and the closing still, same person and setting wording, a different pose or state."
+        },
+        {
+          "tool": "generate_video",
+          "text": "first_frame = the opening still, last_frame = the closing still; the prompt describes the move between them. The model animates from one to the other."
+        }
+      ]
+    },
+    {
+      "id": "match-motion",
+      "title": "Match a reference clip's motion (video_refs)",
+      "credits": "300 credits for a 5 s clip plus a 5 s reference clip on seedance-2.0 at 720p: the reference clip's seconds are billed at the same per-second rate",
+      "steps": [
+        {
+          "tool": "quote",
+          "text": "With video_refs the quote adds the reference clip seconds at the same rate (measured at submit); price it first."
+        },
+        {
+          "tool": "generate_video",
+          "text": "The clip in video_refs (https mp4/mov), a portrait in refs, and a prompt like \"@image1 performs the same move as @video1, in a bright kitchen ...\". Describe the NEW clip; never write edit or extend wording."
+        },
+        {
+          "tool": "get_run_status",
+          "text": "Poll until completed."
         }
       ]
     },
     {
       "id": "crazy-look",
       "title": "Crazy look (silent reaction clip)",
-      "credits": "150 credits per 5s clip",
+      "credits": "150 credits per 5 s clip at 720p",
       "steps": [
         {
           "tool": "generate_video",
-          "text": "\"Extreme close-up, face fills the frame, one exaggerated bug-eyed shock held straight into the lens, slow lean-in, no speech\"; audio: false; seconds: 5; a portrait in refs so it is the same face every time."
+          "text": "\"Extreme close-up, face fills the frame, one exaggerated bug-eyed shock held straight into the lens, slow lean-in, no speech\"; audio: false; seconds: 5; a portrait in refs (@image1) so it is the same face every time."
         },
         {
           "tool": null,
@@ -922,14 +1886,14 @@
         },
         {
           "tool": null,
-          "text": "Lay it over the footage in the editor. Muxing external video is not on this surface; the fixed make_subtitles and make_ugc REST routes still exist for that."
+          "text": "Lay it over the footage in the editor. Muxing external video is not on this surface; the fixed make_subtitles and make_ugc REST routes still exist for that. The mp3 URL also works as an audio_refs entry for generate_video."
         }
       ]
     },
     {
       "id": "series",
       "title": "A series with one face",
-      "credits": "20 credits once, then 150 per 5s clip",
+      "credits": "20 credits once, then 150 per 5 s clip at 720p",
       "steps": [
         {
           "tool": "generate_image",
@@ -937,7 +1901,7 @@
         },
         {
           "tool": "generate_video",
-          "text": "Every clip: the same portrait URL in refs, the same person/setting wording, a different script."
+          "text": "Every clip: the same portrait URL in refs as @image1, the same person/setting wording, a different script. The reference is what keeps the face."
         },
         {
           "tool": "list_characters",
@@ -948,26 +1912,26 @@
     {
       "id": "two-people",
       "title": "Two people",
-      "credits": "150–450 credits per exchange",
+      "credits": "150 to 450 credits per exchange at 720p",
       "steps": [
         {
           "tool": "generate_video",
-          "text": "Both portraits in refs and a prompt that names who says what: \"Two friends on a couch. The one on the left says: ... The one on the right laughs and says: ...\". Keep it to 10–15s per exchange."
+          "text": "Both portraits in refs and a prompt that names who says what: \"@image1 and @image2 on a couch. @image1 says: ... @image2 laughs and says: ...\". Keep it to 10 to 15 s per exchange."
         }
       ]
     },
     {
       "id": "hero",
       "title": "The hero clip",
-      "credits": "about 3x the credits of seedance-2.0",
+      "credits": "about 3x the credits of seedance-2.0 (50 credits/s at 480p, 99 at 720p, 180 at 1080p)",
       "steps": [
         {
           "tool": "quote",
-          "text": "Price it first: model \"seedance-2.5\", seconds up to 10."
+          "text": "Price it first: model \"seedance-2.5\", seconds up to 10, the quality the user asked for."
         },
         {
           "tool": "generate_video",
-          "text": "One take, a strong reference. Expect a longer render than 2.0."
+          "text": "One take, a strong reference. In image mode leave aspect out (adaptive only). Expect a much longer render than seedance-2.0 (12 to 25 minutes per clip; plan the wait)."
         }
       ]
     }
@@ -978,14 +1942,17 @@
     "rules": [
       "Write the shot as prose, not tags. The models read sentences better than keyword lists.",
       "Order: who (age, look), where (setting, light), what they do with their hands, camera (phone framing, slight off-axis), the spoken words in quotes.",
-      "Pick 4–6 rubric lines that matter for THIS shot and fold them in naturally: \"natural skin texture, soft window light, slight head tilt, hands busy with the bottle\".",
+      "Pick 4 to 6 rubric lines that matter for THIS shot and fold them in naturally: \"natural skin texture, soft window light, slight head tilt, hands busy with the bottle\".",
       "For a series, keep the wording of the person and setting identical across calls and pass the same refs.",
+      "With references, name them: @image1 is the person, @image2 the product, @video1 the move to copy, @audio1 the voice. Numbering is per list, from 1.",
+      "With a first frame, describe the motion, not the frame: the frame already sets who and where. Say what changes between the first and the last frame.",
+      "Never put edit or extend wording (\"edit the video\", \"remove\", \"replace\", \"extend\", \"continue\") in a prompt that carries video_refs. Describe the new clip.",
       "Do not say \"selfie\" or \"phone\" unless a phone should be in the frame; say \"talking to camera\".",
-      "Speech: quote the words verbatim; about 2.3 words per second. 5s is 10–12 words, 10s is 20–25, 15s is 30–35."
+      "Speech: quote the words verbatim; about 2.3 words per second. 5 s is 10 to 12 words, 10 s is 20 to 25, 15 s is 30 to 35."
     ],
     "examples": [
       {
-        "title": "Talking head, 5s, seedance-2.0",
+        "title": "Talking head, 5 s, seedance-2.0, text mode",
         "tool": "generate_video",
         "prompt": "A 28-year-old woman in a bright apartment kitchen, phone-camera framing slightly off-axis, natural skin texture with a little T-zone sheen, soft window daylight from the left and a warm lamp behind her. She holds a small amber serum bottle up near her cheek, tilts her head and says: \"Okay. I did not expect this to actually work.\" Eyes just off the lens, mouth caught mid-word."
       },
@@ -993,6 +1960,16 @@
         "title": "Product frame, with the product photo in refs",
         "tool": "generate_image",
         "prompt": "The same woman holding THIS bottle (from the reference) up to the lens with both hands, label facing camera, bedroom corner, soft window light, phone photo, natural skin, no beauty-filter glow."
+      },
+      {
+        "title": "Reference mode, a portrait and a product",
+        "tool": "generate_video",
+        "prompt": "@image1 sits at a kitchen counter, phone-camera framing, holds @image2 up to the lens with the label facing camera and says: \"This is the one I kept coming back to.\" Natural skin, soft window light, a slight lean-in on the last word."
+      },
+      {
+        "title": "Image-to-video, from a still",
+        "tool": "generate_video",
+        "prompt": "The woman in the frame lowers the bottle, looks straight into the lens and says: \"Told you.\" Handheld drift, the window light stays where it is, nothing else in the room moves."
       }
     ]
   },

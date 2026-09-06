@@ -1,5 +1,5 @@
 <!--
-  AUTO-GENERATED — do not hand-edit.
+  AUTO-GENERATED, do not hand-edit.
   Source: packages/schema/src/v2/generators.ts
   Regenerate: pnpm --filter @agentmedia/schema gen:v2-docs
 -->
@@ -92,5 +92,5 @@ agent-media character create --name "sofia" --description "..." --photo me.png
 
 ## Related references
 
-- [`../conversation-flow.md`](../conversation-flow.md) — MUST-READ before calling this command
-- [`./selfie.md`](./selfie.md) — once you have a `char_…`, use it here
+- [`../conversation-flow.md`](../conversation-flow.md), MUST-READ before calling this command
+- [`./selfie.md`](./selfie.md), once you have a `char_…`, use it here

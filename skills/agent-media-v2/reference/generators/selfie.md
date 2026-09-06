@@ -1,5 +1,5 @@
 <!--
-  AUTO-GENERATED — do not hand-edit.
+  AUTO-GENERATED, do not hand-edit.
   Source: packages/schema/src/v2/generators.ts
   Regenerate: pnpm --filter @agentmedia/schema gen:v2-docs
 -->
@@ -130,6 +130,6 @@ agent-media selfie --photo me.png --description "25yo creator, casual black tee"
 
 ## Related references
 
-- [`../conversation-flow.md`](../conversation-flow.md) — MUST-READ before calling this command
-- [`../subtitle-styles.md`](../subtitle-styles.md) — all 17 subtitle styles
-- [`../realism-rubric.md`](../realism-rubric.md) — visual-quality guard
+- [`../conversation-flow.md`](../conversation-flow.md), MUST-READ before calling this command
+- [`../subtitle-styles.md`](../subtitle-styles.md), all 17 subtitle styles
+- [`../realism-rubric.md`](../realism-rubric.md), visual-quality guard

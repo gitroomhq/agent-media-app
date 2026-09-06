@@ -20,12 +20,17 @@ import {
   V2_GENERATORS,
   V2_MODELS,
   V2_DEFAULT_MODEL,
+  V2_DEFAULT_VIDEO_QUALITY,
+  V2_VIDEO_ASPECTS,
+  V2_VIDEO_QUALITIES,
   GenerateAudioSchema,
   GenerateImageSchema,
   GenerateVideoSchema,
   liveModels,
   quoteGenerate,
   type V2GeneratorRecord,
+  type V2ModelRecord,
+  type V2VideoMode,
 } from '../src/v2/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -71,35 +76,74 @@ function fmtLooseSchema(schema: unknown, name: string): string {
  * quote. Same zod as the routes and the MCP tools, so this section can
  * never describe a field the server does not accept.
  */
+const VIDEO_MODE_ORDER: V2VideoMode[] = ['text', 'image', 'reference'];
+
+function priceLadder(m: V2ModelRecord): string {
+  const c = m.video?.creditsPerSecond;
+  if (!c) return 'no price';
+  return V2_VIDEO_QUALITIES.filter((q) => c[q] !== undefined)
+    .map((q, i) => `${c[q]}${i === 0 ? ' credits/s' : ''} at ${q}`)
+    .join(', ');
+}
+
+function modeRow(m: V2ModelRecord, mode: V2VideoMode): string {
+  const s = m.video!.modes[mode]!;
+  const inputs =
+    mode === 'text'
+      ? 'prompt only'
+      : mode === 'image'
+        ? `first_frame${s.lastFrame ? ' + optional last_frame' : ''}`
+        : s.refs
+          ? `refs up to ${s.refs.images}, video_refs up to ${s.refs.videos}${s.refs.videoSecondsTotal ? ` (${s.refs.videoSecondsTotal} s total)` : ''}, audio_refs up to ${s.refs.audios}${s.refs.audioSecondsTotal ? ` (${s.refs.audioSecondsTotal} s total)` : ''}${s.refs.audioAlone ? '' : '; audio needs an image or video beside it'}`
+          : 'refs';
+  return `| \`${m.id}\` | ${mode} | ${inputs} | ${s.seconds[0]} to ${s.seconds[1]} | ${s.aspects.join(', ')} (default ${s.aspectDefault}) | ${s.qualities.join(', ')} |`;
+}
+
 function renderLooseSurface(): string {
   const v5 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5 })).credits;
+  const v5lo = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5, quality: '480p' })).credits;
+  const v5hi = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5, quality: '1080p' })).credits;
+  const vRef = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5, video_refs: ['https://example.com/ref.mp4'] }), { inputVideoSeconds: 5 }).credits;
   const p5 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: 'x'.repeat(10), seconds: 5, model: 'seedance-2.5' })).credits;
   const img = quoteGenerate('image', GenerateImageSchema.parse({ prompt: 'portrait' })).credits;
+  const liveVideo = liveModels().filter((m) => m.kind === 'video' && m.video);
   const kinds: Array<['image' | 'video' | 'audio', unknown]> = [
     ['video', GenerateVideoSchema],
     ['image', GenerateImageSchema],
     ['audio', GenerateAudioSchema],
   ];
   return [
-    '## The loose surface — `POST /v2/generate/{kind}`',
+    '## The loose surface: `POST /v2/generate/{kind}`',
     '',
-    'Three primitives with no recipe: your prompt, your model, your reference images. This is what the hosted MCP connector exposes as `generate_video`, `generate_image`, `generate_audio` and `quote`. The fixed generators above stay on REST for the dashboard.',
+    'Three primitives with no recipe: your prompt, your model, your frames or references. This is what the hosted MCP connector exposes as `generate_video`, `generate_image`, `generate_audio` and `quote`. The fixed generators above stay on REST for the dashboard.',
     '',
     '| Route | Body | Credits |',
     '|---|---|---|',
-    `| \`POST /v2/generate/video\` | GenerateVideo (below) | seconds × the model rate — ${v5} for 5s on \`${V2_DEFAULT_MODEL.video}\`, ${p5} on \`seedance-2.5\` |`,
+    `| \`POST /v2/generate/video\` | GenerateVideo (below) | seconds x the model rate at the chosen quality: ${v5} for 5s on \`${V2_DEFAULT_MODEL.video}\` at ${V2_DEFAULT_VIDEO_QUALITY} (${v5lo} at 480p, ${v5hi} at 1080p), ${p5} on \`seedance-2.5\` at ${V2_DEFAULT_VIDEO_QUALITY}; reference clip seconds (video_refs) are billed at the same rate (${vRef} for 5s plus a 5s reference clip) |`,
     `| \`POST /v2/generate/image\` | GenerateImage | ${img} per image on \`${V2_DEFAULT_MODEL.image}\` |`,
     `| \`POST /v2/generate/audio\` | GenerateAudio | 1 per 100 characters on \`${V2_DEFAULT_MODEL.audio}\`, rounded up |`,
-    '| `POST /v2/quote/{kind}` | the same body | 0 — returns `{ credits, usd, model, breakdown, auto? }` without running |',
-    '| `POST /v1/runs/{job_id}/rate` | `{ score: 1..5, note? }` | 0 — records the user\'s verdict on a finished loose-surface run |',
+    '| `POST /v2/quote/{kind}` | the same body | 0: returns `{ credits, usd, model, mode?, quality?, breakdown, auto? }` without running |',
+    "| `POST /v1/runs/{job_id}/rate` | `{ score: 1..5, note? }` | 0: records the user's verdict on a finished loose-surface run |",
     '',
-    'Response: `201 { job_id, status: "submitted", kind, model, credits_deducted, breakdown, auto?, status_url }`. Poll `GET /v1/videos/{job_id}`; `video_url` holds the output URL for every kind (png, mp4 or mp3). A failed job refunds automatically.',
+    'Response: `201 { job_id, status: "submitted", kind, model, mode?, quality?, credits_deducted, breakdown, auto?, status_url }`. Poll `GET /v1/videos/{job_id}`; `video_url` holds the output URL for every kind (png, mp4 or mp3). A failed job refunds automatically.',
     '',
-    '`model` must be a **live** catalog id of the right kind (`GET /v1/models`), or `"auto"`; a planned id is a `400 VALIDATION_ERROR` whose message lists the live ones. Omit it for the default. `refs` must be https URLs (`POST /v1/uploads/image` turns bytes into one). Bodies are strict: an unknown field is a 400, never silently ignored.',
+    '`model` must be a **live** catalog id of the right kind (`GET /v1/models`), or `"auto"`; a planned id is a `400 VALIDATION_ERROR` whose message lists the live ones. Omit it for the default. Every URL (`refs`, `first_frame`, `last_frame`, `video_refs`, `audio_refs`) must be https (`POST /v1/uploads/image` turns image bytes into one). Bodies are strict: an unknown field is a 400, never silently ignored.',
+    '',
+    '### Video modes',
+    '',
+    'The mode is derived from the body, one provider model per (catalog model, mode): `first_frame` (and optional `last_frame`) is **image-to-video**, the still becomes frame one and the clip animates it; `refs` / `video_refs` / `audio_refs` is **reference**, the identity, look, motion or sound is kept and the prompt addresses them as `@image1`, `@video1`, `@audio1` (numbered per list); neither is **text**. Frames and refs cannot be mixed on Seedance. Every limit of the (model, mode) cell is checked at submit, so an out-of-range `seconds`, `aspect`, `quality` or ref count is a 400 naming the allowed values, never a provider failure minutes later.',
+    '',
+    `\`aspect\` is one of ${V2_VIDEO_ASPECTS.map((a) => '`' + a + '`').join(', ')} (default 9:16 for text and reference, adaptive for image-to-video; \`seedance-2.5\` accepts adaptive only in image mode). \`quality\` is one of ${V2_VIDEO_QUALITIES.map((q) => '`' + q + '`').join(', ')} (default ${V2_DEFAULT_VIDEO_QUALITY}); the price per second follows it: ${liveVideo.map((m) => '`' + m.id + '` ' + priceLadder(m)).join('; ')}. No live model accepts a seed; the field exists for planned models only and is refused on every live one.`,
+    '',
+    '| Model | Mode | Inputs | Seconds | Aspects | Qualities |',
+    '|---|---|---|---|---|---|',
+    ...liveVideo.flatMap((m) => VIDEO_MODE_ORDER.filter((mode) => m.video!.modes[mode]).map((mode) => modeRow(m, mode))),
+    '',
+    'A reference prompt that carries `video_refs` must not read as an edit or extend request ("edit the video", "remove", "replace", "extend", "continue the clip"): the schema refuses it, because the provider would reclassify the job and fail it after rendering. Describe the new clip you want.',
     '',
     '### The quality loop',
     '',
-    'Every completed loose-surface job is scored by an auto-judge in media-worker-v2 (3 frames or the image, graded against the realism rubric, prompt adherence and — with refs — identity match; `gpt-4o-mini`, JSON verdict) into `generation_quality`, alongside any `rate` call. `GET /v1/models` exposes the last 30 days per model as `recent` (`runs`, `fail_rate`, `auto_score`, `scored`, `user_score`, `rated`, `p50_seconds`) and prints the `auto_policy`. `model: "auto"` applies that policy: the default unless it fails >25% of ≥10 runs and another live model is healthy, or a live model within 1.5x the price beats its auto score by ≥0.10 over ≥10 judged runs; the response carries `auto: { model, reason }`.',
+    'Every completed loose-surface job is scored by an auto-judge in media-worker-v2 (3 frames or the image, graded against the realism rubric, prompt adherence and, with refs, identity match; `gpt-4o-mini`, JSON verdict) into `generation_quality`, alongside any `rate` call. `GET /v1/models` exposes the last 30 days per model as `recent` (`runs`, `fail_rate`, `auto_score`, `scored`, `user_score`, `rated`, `p50_seconds`) and prints the `auto_policy`. `model: "auto"` applies that policy: the default unless it fails more than 25% of at least 10 runs and another live model is healthy, or a live model within 1.5x the price beats its auto score by 0.10 or more over at least 10 judged runs; only models that have the request\'s mode are candidates; the response carries `auto: { model, reason }`.',
     '',
     ...kinds.flatMap(([kind, schema]) => [
       `### Generate${kind[0].toUpperCase()}${kind.slice(1)}`,
@@ -111,7 +155,8 @@ function renderLooseSurface(): string {
     'curl -X POST https://api.agent-media.ai/v2/generate/video \\',
     '  -H "Authorization: Bearer ma_..." -H "Content-Type: application/json" \\',
     '  -d \'{ "prompt": "A 28-year-old woman in a bright kitchen, phone framing, holds a serum bottle to the lens and says: \\"Okay, I did not expect this to work.\\"", "seconds": 5 }\'',
-    '# -> 201 { "job_id": "...", "credits_deducted": ' + String(v5) + ', ... }',
+    '# -> 201 { "job_id": "...", "mode": "text", "quality": "' + V2_DEFAULT_VIDEO_QUALITY + '", "credits_deducted": ' + String(v5) + ', ... }',
+    '# image-to-video: add "first_frame": "https://.../still.png"; reference: add "refs": ["https://.../portrait.png"] and say @image1 in the prompt',
     'curl https://api.agent-media.ai/v1/videos/<job_id> -H "Authorization: Bearer ma_..."',
     '```',
     '',
@@ -206,16 +251,17 @@ function renderApiReference(): string {
     '',
     '### Models',
     '',
-    '`GET /v1/models` (public, no key) and the `list_models` MCP tool return the model catalog with user prices, limits and what each model is good and bad at. Live today:',
+    '`GET /v1/models` (public, no key) and the `list_models` MCP tool return the model catalog with user prices per quality, the modes and limits of every video model, a usage card (pick when, prompting tips, latency) and what each model is good and bad at. Live today:',
     '',
-    '| Model | Kind | Tier | User price | Selectable via |',
-    '|---|---|---|---|---|',
+    '| Model | Kind | Tier | User price | Modes | Selectable via |',
+    '|---|---|---|---|---|---|',
     ...liveModels().map((m) => {
-      const price = m.credits ? `${m.credits.perUnit} credits/${m.credits.unit}` : 'no price';
+      const price = m.credits ? (m.kind === 'video' ? priceLadder(m) : `${m.credits.perUnit} credits/${m.credits.unit}`) : 'no price';
+      const modes = m.video ? VIDEO_MODE_ORDER.filter((mode) => m.video!.modes[mode]).map((mode) => `${mode} ${m.video!.modes[mode]!.seconds[0]} to ${m.video!.modes[mode]!.seconds[1]} s`).join('; ') : m.modes.join(', ');
       const sel =
         `\`model\` on \`/v2/generate/${m.kind}\` and the \`generate_${m.kind}\` MCP tool` +
         (m.kind === 'video' ? '; `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine`' : '');
-      return `| \`${m.id}\`${V2_DEFAULT_MODEL[m.kind] === m.id ? ' (default)' : ''} | ${m.kind} | ${m.tier} | ${price} | ${sel} |`;
+      return `| \`${m.id}\`${V2_DEFAULT_MODEL[m.kind] === m.id ? ' (default)' : ''} | ${m.kind} | ${m.tier} | ${price} | ${modes} | ${sel} |`;
     }),
     '',
     `Planned, not selectable and unpriced until a real run is recorded: ${Object.values(V2_MODELS).filter((m) => m.status === 'candidate').map((m) => '`' + m.id + '`').join(', ')}. One page per model lives under \`docs/models/\`.`,
@@ -308,7 +354,7 @@ function renderSkillIndex(): string {
     'https://api.agent-media.ai/mcp',
     '```',
     '',
-    'Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: <https://agent-media.ai/connect>. Over MCP the surface is different from the CLI: the connector lists `generate_video`, `generate_image`, `generate_audio`, `quote`, `list_models`, `list_characters`, `get_run_status` and `upload_image` — you write the prompt and pick the model yourself (see the public skill at `public-skill/skills/agent-media/SKILL.md`). After submitting you MUST call `get_run_status` to get the finished URL.',
+    'Claude (web or desktop): Settings → Connectors → Add custom connector. Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. Full guide: <https://agent-media.ai/connect>. Over MCP the surface is different from the CLI: the connector lists `generate_video`, `generate_image`, `generate_audio`, `quote`, `list_models`, `list_characters`, `get_run_status`, `upload_image` and `rate_run`: you write the prompt, pick the model and the video mode (text, image-to-video with `first_frame`, reference with `refs` / `video_refs` / `audio_refs`) yourself (see the public skill at `public-skill/skills/agent-media/SKILL.md`). After submitting you MUST call `get_run_status` to get the finished URL.',
     '',
     '## 🛑 HARD GATE — read this first, every conversation',
     '',
@@ -753,10 +799,23 @@ function emitSkillTree(): EmittedFile[] {
 
 // ── Run ────────────────────────────────────────────────────────────────────
 
+/**
+ * House style for generated text: no em dashes or en dashes. The strings
+ * in this file are written that way; this guard also covers text that
+ * flows in from the registry (generator descriptions, model notes).
+ */
+function noDashes(text: string): string {
+  return text
+    .replace(/(\d)\s?[\u2013\u2014]\s?(\d)/g, '$1 to $2')
+    .replace(/\|\s*[\u2013\u2014]\s*\|/g, '| none |')
+    .replace(/\s+[\u2013\u2014]\s+/g, ', ')
+    .replace(/[\u2013\u2014]/g, ',');
+}
+
 function main() {
   // 1. API reference (unchanged — still a single file)
   mkdirSync(dirname(DOCS_OUT), { recursive: true });
-  const docs = renderApiReference();
+  const docs = noDashes(renderApiReference());
   writeFileSync(DOCS_OUT, docs, 'utf8');
   console.log(`✓ wrote ${DOCS_OUT} (${docs.length} bytes)`);
 
@@ -770,9 +829,10 @@ function main() {
   for (const f of files) {
     const abs = resolve(SKILL_DIR, f.relPath);
     mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, f.content, 'utf8');
-    totalBytes += f.content.length;
-    console.log(`✓ wrote ${f.relPath} (${f.content.length} bytes)`);
+    const content = noDashes(f.content);
+    writeFileSync(abs, content, 'utf8');
+    totalBytes += content.length;
+    console.log(`✓ wrote ${f.relPath} (${content.length} bytes)`);
   }
   console.log(`  total: ${files.length} files, ${totalBytes} bytes`);
   console.log(`  generators emitted: ${Object.keys(V2_GENERATORS).length}`);

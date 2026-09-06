@@ -1,5 +1,5 @@
 <!--
-  AUTO-GENERATED — do not hand-edit.
+  AUTO-GENERATED, do not hand-edit.
   Source: packages/schema/src/v2/generators.ts
   Regenerate: pnpm --filter @agentmedia/schema gen:v2-docs
 -->
@@ -22,5 +22,5 @@
 | `VALIDATION_ERROR` | Input body failed schema. Check the `issues` array in the response. | Adjust args to match the input schema. |
 | `UNAUTHORIZED` | Bearer token missing or invalid. | Re-run `agent-media login`. |
 | `INSUFFICIENT_CREDITS` | Not enough credits on the account. | Run `agent-media subscribe` to top up. |
-| `WORKER_NOT_CONFIGURED` | Server-side misconfig — should not normally occur. | Ping support. |
+| `WORKER_NOT_CONFIGURED` | Server-side misconfig, should not normally occur. | Ping support. |
 | `DATABASE_ERROR` | Server insert failed (often missing models row). | Ping support, report the job request. |

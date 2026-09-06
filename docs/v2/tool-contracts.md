@@ -1,4 +1,4 @@
-<!-- AUTO-GENERATED — do not hand-edit. -->
+<!-- AUTO-GENERATED, do not hand-edit. -->
 # V1 tool contracts
 
 Tooling-First V1 mandatory tool contracts, generated from `@agentmedia/schema`.
@@ -334,6 +334,747 @@ Create one realistic portrait with gpt-image-2.
     "job_id",
     "status",
     "portrait_url",
+    "provider",
+    "credits_deducted"
+  ],
+  "additionalProperties": false
+}
+```
+
+## character_sheet_gpt2
+
+Create a multi-angle character sheet from a portrait using gpt-image-2.
+
+### Input schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "portrait_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "1:1",
+        "9:16"
+      ],
+      "default": "1:1"
+    }
+  },
+  "required": [
+    "portrait_url"
+  ],
+  "additionalProperties": false
+}
+```
+
+### Output schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "const": "submitted"
+    },
+    "character_sheet_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "const": "gpt-image-2"
+    },
+    "credits_deducted": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "job_id",
+    "status",
+    "character_sheet_url",
+    "provider",
+    "credits_deducted"
+  ],
+  "additionalProperties": false
+}
+```
+
+## wireframe_gpt2
+
+Create a photographic storyboard / wireframe board from a character sheet + script, with numbered panels showing the action progression.
+
+### Input schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "character_sheet_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "script": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 600
+    },
+    "n_panels": {
+      "type": "number",
+      "enum": [
+        4,
+        6,
+        8,
+        10
+      ],
+      "default": 6
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1",
+        "16:9"
+      ],
+      "default": "9:16"
+    }
+  },
+  "required": [
+    "character_sheet_url",
+    "script"
+  ],
+  "additionalProperties": false
+}
+```
+
+### Output schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "const": "submitted"
+    },
+    "wireframe_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "const": "gpt-image-2"
+    },
+    "credits_deducted": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "job_id",
+    "status",
+    "wireframe_url",
+    "provider",
+    "credits_deducted"
+  ],
+  "additionalProperties": false
+}
+```
+
+## simple_selfie
+
+Generate a 5/10/15s vertical UGC selfie video from a character sheet, with native lip-synced audio. Waist-up, no object held.
+
+### Input schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "character_sheet_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "duration": {
+      "type": "number",
+      "enum": [
+        5,
+        10,
+        15
+      ],
+      "default": 10
+    },
+    "script": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600,
+      "description": "Spoken line (lip-synced). Keep it SHORT for natural, unhurried pacing, about 1.5 words/sec: ~8 words for 5s, ~15 for 10s, ~22 for 15s (never more than ~2.2/sec or it sounds rushed). Trim the user's line if it is longer."
+    },
+    "scene_action": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 400
+    },
+    "background_music": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "maxLength": 120
+        }
+      ]
+    },
+    "location": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "pose": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1"
+      ],
+      "default": "9:16"
+    }
+  },
+  "required": [
+    "character_sheet_url"
+  ],
+  "additionalProperties": false
+}
+```
+
+### Output schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "const": "submitted"
+    },
+    "video_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "const": "seedance-2-0"
+    },
+    "credits_deducted": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "job_id",
+    "status",
+    "video_url",
+    "provider",
+    "credits_deducted"
+  ],
+  "additionalProperties": false
+}
+```
+
+## product_in_hands
+
+Generate a 5/10/15s vertical UGC video where the character holds and shows a product (from a second reference image) in their hands, with native lip-synced audio (script) or a silent demo (scene_action).
+
+### Input schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "character_sheet_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "product_image_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "duration": {
+      "type": "number",
+      "enum": [
+        5,
+        10,
+        15
+      ],
+      "default": 10
+    },
+    "script": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600,
+      "description": "Spoken line (lip-synced). Keep it SHORT for natural, unhurried pacing, about 1.5 words/sec: ~8 words for 5s, ~15 for 10s, ~22 for 15s (never more than ~2.2/sec or it sounds rushed). Trim the user's line if it is longer."
+    },
+    "scene_action": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 400
+    },
+    "subject": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "framing": {
+      "type": "string",
+      "enum": [
+        "close_up",
+        "full_body"
+      ],
+      "default": "close_up"
+    },
+    "background_music": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "maxLength": 120
+        }
+      ]
+    },
+    "location": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "pose": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1"
+      ],
+      "default": "9:16"
+    }
+  },
+  "required": [
+    "character_sheet_url",
+    "product_image_url"
+  ],
+  "additionalProperties": false
+}
+```
+
+### Output schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "const": "submitted"
+    },
+    "video_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "const": "seedance-2-0"
+    },
+    "credits_deducted": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "job_id",
+    "status",
+    "video_url",
+    "provider",
+    "credits_deducted"
+  ],
+  "additionalProperties": false
+}
+```
+
+## broll_talking_head
+
+Generate an up-to-30s vertical talking-head video (seamless via last-frame-chained <=10s clips) with a user-supplied square b-roll video looping as a bottom-half overlay. Speech from script (Seedance voice) or a provided audio_url.
+
+### Input schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "actor_image_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "portrait_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/",
+      "description": "Optional clean close-up portrait of the same person as actor_image_url, a second identity reference for higher-fidelity faces. Auto-resolved from the saved character when omitted."
+    },
+    "broll_video_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/",
+      "description": "Optional. A square-ish b-roll video overlaid on the lower half while the actor narrates. Omit for a plain multi-take talking head (no overlay), the long-form monologue path."
+    },
+    "script": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200,
+      "description": "What the actor says (lip-synced). Up to ~30s of speech, keep it ~1.5 words/sec for natural pacing (~45 words for 30s)."
+    },
+    "audio_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "duration": {
+      "type": "number",
+      "enum": [
+        10,
+        15,
+        20,
+        25,
+        30
+      ],
+      "default": 20
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1",
+        "16:9"
+      ],
+      "default": "9:16"
+    },
+    "subtitles": {
+      "type": "boolean",
+      "default": false
+    },
+    "broll_width_rate": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 1
+    },
+    "broll_start_time": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 25
+    },
+    "broll_fade_out": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "actor_image_url"
+  ],
+  "additionalProperties": false
+}
+```
+
+### Output schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "const": "submitted"
+    },
+    "video_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "const": "seedance-2-0"
+    },
+    "duration_seconds": {
+      "type": "integer",
+      "exclusiveMinimum": 0
+    },
+    "credits_deducted": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "job_id",
+    "status",
+    "video_url",
+    "provider",
+    "duration_seconds",
+    "credits_deducted"
+  ],
+  "additionalProperties": false
+}
+```
+
+## subtitles_v2
+
+Burn TikTok/Hormozi-style captions onto a vNext video. Auto-transcribes via Whisper when transcript is omitted.
+
+### Input schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "video_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "transcript": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 5000
+    },
+    "style": {
+      "type": "string",
+      "enum": [
+        "hormozi",
+        "tiktok",
+        "minimal"
+      ],
+      "default": "hormozi"
+    },
+    "language": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1",
+        "16:9"
+      ],
+      "default": "9:16"
+    }
+  },
+  "required": [
+    "video_url"
+  ],
+  "additionalProperties": false
+}
+```
+
+### Output schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "const": "submitted"
+    },
+    "video_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "const": "whisper-ffmpeg"
+    },
+    "credits_deducted": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "job_id",
+    "status",
+    "video_url",
+    "provider",
+    "credits_deducted"
+  ],
+  "additionalProperties": false
+}
+```
+
+## lip_sync
+
+Lip-sync a face (image or existing clip) to a provided audio track (your own recording). No TTS/voice-clone needed, bring your own audio.
+
+### Input schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "image_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "audio_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/"
+    },
+    "duration": {
+      "type": "number",
+      "enum": [
+        5,
+        10,
+        15
+      ],
+      "default": 10
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1"
+      ],
+      "default": "9:16"
+    }
+  },
+  "required": [
+    "image_url",
+    "audio_url"
+  ],
+  "additionalProperties": false
+}
+```
+
+### Output schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "const": "submitted"
+    },
+    "video_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "const": "seedance-2-0"
+    },
+    "credits_deducted": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "job_id",
+    "status",
+    "video_url",
     "provider",
     "credits_deducted"
   ],

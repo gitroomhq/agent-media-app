@@ -1,5 +1,5 @@
 <!--
-  AUTO-GENERATED — do not hand-edit.
+  AUTO-GENERATED, do not hand-edit.
   Source: packages/schema/src/v2/generators.ts
   Regenerate: pnpm --filter @agentmedia/schema gen:v2-docs
 -->
@@ -81,4 +81,4 @@ agent-media subs --video https://r2/clip.mp4 --transcript "exact script text" --
 
 ## Related references
 
-- [`../subtitle-styles.md`](../subtitle-styles.md) — all 17 styles
+- [`../subtitle-styles.md`](../subtitle-styles.md), all 17 styles

@@ -1,18 +1,18 @@
-# Auth — first-time setup
+# Auth, first-time setup
 
 ## Easiest: the hosted connector (no API key)
 
-If you are Claude, Claude Code, Cursor or Codex, you do not need an API key or the CLI at all. Add the hosted MCP connector — one URL, browser sign-in, OAuth 2.1 with dynamic client registration:
+If you are Claude, Claude Code, Cursor or Codex, you do not need an API key or the CLI at all. Add the hosted MCP connector: one URL, browser sign-in, OAuth 2.1 with dynamic client registration:
 
 ```
 https://api.agent-media.ai/mcp
 ```
 
-- Claude (web or desktop): Settings → Connectors → Add custom connector → paste the URL → Connect
+- Claude (web or desktop): Settings > Connectors > Add custom connector > paste the URL > Connect
 - Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`
 - Cursor (`~/.cursor/mcp.json`) / Codex (`~/.codex/config.toml`): the same URL as a remote server
 
-Full guide: <https://agent-media.ai/connect>. After submitting a generation over MCP, call `get_run_status` with the id you were given — generation is async and the submit response only confirms the job started.
+Full guide: <https://agent-media.ai/connect>. After submitting a generation over MCP, call `get_run_status` with the id you were given: generation is async and the submit response only confirms the job started.
 
 If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
 

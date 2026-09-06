@@ -2,6 +2,8 @@
 
 The hosted connector's `tools/list` on the loose surface, with each input schema rendered from the same zod definitions the server validates with (`packages/schema/src/v2/generate.ts`). If this page and `tools/list` ever disagree, `tools/list` wins and CI is broken.
 
+The JSON schema is the envelope; the per-model, per-mode limits (seconds, aspects, qualities, how many refs of each kind) are checked at submit against the catalog cell, see [models.md](models.md).
+
 ## generate_video
 
 ```json
@@ -12,11 +14,21 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
       "type": "string",
       "minLength": 3,
       "maxLength": 4000,
-      "description": "The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and, if anyone speaks, the exact words in quotes. ~2.3 words per second."
+      "description": "The shot, as a director would say it: who (age, look), where (setting, light), what happens, camera (phone framing), and, if anyone speaks, the exact words in quotes. About 2.3 words per second. With references, address them as @image1, @video1, @audio1."
     },
     "model": {
       "type": "string",
-      "description": "A live video model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default (seedance-2.0). seedance-2.5 is ~3x the credits, hero clips only."
+      "description": "A live video model id from list_models, or \"auto\" to let agent-media pick from recent results. Omit for the default. Call list_models for what each model is good for, its modes, limits and price."
+    },
+    "first_frame": {
+      "type": "string",
+      "format": "uri",
+      "description": "IMAGE-TO-VIDEO: an https image that becomes frame one of the clip (a still you want animated, a product shot, a portrait). Cannot be combined with refs, video_refs or audio_refs on Seedance."
+    },
+    "last_frame": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional with first_frame: the image the clip ends on; the model animates from first to last."
     },
     "refs": {
       "type": "array",
@@ -24,24 +36,56 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
         "type": "string",
         "format": "uri"
       },
-      "maxItems": 4,
-      "description": "Reference images (https URLs, up to 4): a portrait, a character sheet, a product shot. The model keeps that identity/look across clips. Omit to let the model invent the person."
+      "maxItems": 30,
+      "description": "REFERENCE-TO-VIDEO: image references (https URLs): a portrait, a character sheet from list_characters, a product photo. The model keeps that identity/look. Address them in the prompt as @image1, @image2..."
+    },
+    "video_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "maxItems": 10,
+      "description": "Reference clips (https mp4/mov) whose motion, framing or look the model should follow; @video1... in the prompt. Their seconds are billed like output seconds."
+    },
+    "audio_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "maxItems": 10,
+      "description": "Reference audio (https wav/mp3): a voice or a sound the clip should carry; @audio1... in the prompt."
     },
     "seconds": {
       "type": "integer",
-      "minimum": 4,
-      "maximum": 15,
+      "minimum": 1,
+      "maximum": 60,
       "default": 5,
-      "description": "Clip length in seconds, 4–15. Credits = seconds x the model rate."
+      "description": "Clip length in seconds (the model sets the range; seedance: 4 to 15). Credits = seconds x the per-second rate at the chosen quality."
     },
     "aspect": {
       "type": "string",
       "enum": [
         "9:16",
-        "1:1"
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9",
+        "adaptive"
       ],
-      "default": "9:16",
-      "description": "9:16 vertical (default) or 1:1."
+      "description": "9:16 (default for text and reference), 16:9, 1:1, 4:3, 3:4, 21:9, or adaptive (follows the first frame or reference; the default and the only option in image mode on seedance-2.5)."
+    },
+    "quality": {
+      "type": "string",
+      "enum": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "default": "720p",
+      "description": "480p (cheapest), 720p (default), 1080p (dearest). Price per second differs; see list_models."
     },
     "audio": {
       "type": "boolean",
@@ -52,7 +96,7 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
       "type": "integer",
       "minimum": 0,
       "maximum": 2147483647,
-      "description": "Same seed + same inputs = the same clip (best effort). Reuse across a series."
+      "description": "Only for models whose mode lists seed support (none of the live Seedance modes). Refused elsewhere."
     }
   },
   "required": [
@@ -115,7 +159,7 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
       "type": "string",
       "minLength": 1,
       "maxLength": 4000,
-      "description": "The words to speak. Emotion tags like [excited] or [whispers] are honoured. 1 credit per 100 characters."
+      "description": "The words to speak. Emotion tags like [excited] or [whispers] are honoured. Priced per character; see list_models."
     },
     "model": {
       "type": "string",

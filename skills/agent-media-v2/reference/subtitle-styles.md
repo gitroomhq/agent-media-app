@@ -1,5 +1,5 @@
 <!--
-  AUTO-GENERATED — do not hand-edit.
+  AUTO-GENERATED, do not hand-edit.
   Source: packages/schema/src/v2/generators.ts
   Regenerate: pnpm --filter @agentmedia/schema gen:v2-docs
 -->

@@ -23,17 +23,28 @@ Critical realism rules (must all be visible in the frame):
 
 - Write the shot as prose, not tags. The models read sentences better than keyword lists.
 - Order: who (age, look), where (setting, light), what they do with their hands, camera (phone framing, slight off-axis), the spoken words in quotes.
-- Pick 4–6 rubric lines that matter for THIS shot and fold them in naturally: "natural skin texture, soft window light, slight head tilt, hands busy with the bottle".
+- Pick 4 to 6 rubric lines that matter for THIS shot and fold them in naturally: "natural skin texture, soft window light, slight head tilt, hands busy with the bottle".
 - For a series, keep the wording of the person and setting identical across calls and pass the same refs.
+- With references, name them: @image1 is the person, @image2 the product, @video1 the move to copy, @audio1 the voice. Numbering is per list, from 1.
+- With a first frame, describe the motion, not the frame: the frame already sets who and where. Say what changes between the first and the last frame.
+- Never put edit or extend wording ("edit the video", "remove", "replace", "extend", "continue") in a prompt that carries video_refs. Describe the new clip.
 - Do not say "selfie" or "phone" unless a phone should be in the frame; say "talking to camera".
-- Speech: quote the words verbatim; about 2.3 words per second. 5s is 10–12 words, 10s is 20–25, 15s is 30–35.
+- Speech: quote the words verbatim; about 2.3 words per second. 5 s is 10 to 12 words, 10 s is 20 to 25, 15 s is 30 to 35.
 
 ## Worked prompts
 
-**Talking head, 5s, seedance-2.0** (generate_video)
+**Talking head, 5 s, seedance-2.0, text mode** (generate_video)
 
 > A 28-year-old woman in a bright apartment kitchen, phone-camera framing slightly off-axis, natural skin texture with a little T-zone sheen, soft window daylight from the left and a warm lamp behind her. She holds a small amber serum bottle up near her cheek, tilts her head and says: "Okay. I did not expect this to actually work." Eyes just off the lens, mouth caught mid-word.
 
 **Product frame, with the product photo in refs** (generate_image)
 
 > The same woman holding THIS bottle (from the reference) up to the lens with both hands, label facing camera, bedroom corner, soft window light, phone photo, natural skin, no beauty-filter glow.
+
+**Reference mode, a portrait and a product** (generate_video)
+
+> @image1 sits at a kitchen counter, phone-camera framing, holds @image2 up to the lens with the label facing camera and says: "This is the one I kept coming back to." Natural skin, soft window light, a slight lean-in on the last word.
+
+**Image-to-video, from a still** (generate_video)
+
+> The woman in the frame lowers the bottle, looks straight into the lens and says: "Told you." Handheld drift, the window light stays where it is, nothing else in the room moves.

@@ -9,19 +9,14 @@ Image editing with references. Candidate for product placement into a character 
 | Kind | image |
 | Tier | standard |
 | Status | **candidate** |
-| Provider | evolink (`nano-banana-2`) |
+| Provider | evolink (`gemini-3.1-flash-image-preview`) |
 | Modes | text-to-image, image-edit |
 | Features | editing, reference, prompt-adherence |
-| Limits | 1K; refs: image |
-| Our cost | $0.036 per image. FROM price on evolink.ai/models. |
+| Limits | 1K, 2K; up to 14 refs |
 | User price | none (candidate) |
 | Quality / speed | good / fast |
 | Verified | no recorded run yet |
-
-## Best for
-
-- product placement into a character frame
-- character sheet edits
+<!-- /generated -->
 
 ## Usage notes
 

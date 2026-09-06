@@ -39,7 +39,7 @@ function renderDocs(): string {
   });
 
   return [
-    '<!-- AUTO-GENERATED — do not hand-edit. -->',
+    '<!-- AUTO-GENERATED, do not hand-edit. -->',
     '# V1 tool contracts',
     '',
     'Tooling-First V1 mandatory tool contracts, generated from `@agentmedia/schema`.',
@@ -48,11 +48,19 @@ function renderDocs(): string {
   ].join('\n');
 }
 
+/** House style for generated docs: no em dashes or en dashes (the JSON contract file is left verbatim). */
+function noDashes(text: string): string {
+  return text
+    .replace(/(\d)\s?[\u2013\u2014]\s?(\d)/g, '$1 to $2')
+    .replace(/\s+[\u2013\u2014]\s+/g, ', ')
+    .replace(/[\u2013\u2014]/g, ',');
+}
+
 function main(): void {
   mkdirSync(dirname(DOC_OUT), { recursive: true });
   mkdirSync(dirname(JSON_OUT), { recursive: true });
 
-  const docs = renderDocs();
+  const docs = noDashes(renderDocs());
   const json = JSON.stringify(generateV1ToolContractSchemas(), null, 2);
 
   writeFileSync(DOC_OUT, docs, 'utf8');
