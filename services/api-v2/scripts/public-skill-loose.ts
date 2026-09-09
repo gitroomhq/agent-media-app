@@ -412,6 +412,8 @@ export function looseSkillBody(repoRoot: string): string {
     '- `INSUFFICIENT_CREDITS`, the account is out; point the user to agent-media.ai billing.',
     '- `TOO_MANY_ACTIVE_VIDEOS`, wait for one to finish.',
     '- `CONTENT_POLICY_BLOCKED`, the provider refused the prompt or the reference; rephrase, or use a different image.',
+    '- `INVALID_REFERENCE_IMAGE`, one of your reference images does not decode; the message names the URL. Nothing was rendered and nothing was charged. It almost always means the file was uploaded through a truncated base64 string: re-upload the ORIGINAL with `upload_image` and `file_bytes`.',
+    '- `INVALID_INPUT` from `upload_image` saying the image is incomplete or corrupt: same cause, caught at the door. Do not retry the same bytes, and do not shrink the file to make it fit; send it whole with `file_bytes`.',
     '',
   ].join('\n');
 }
