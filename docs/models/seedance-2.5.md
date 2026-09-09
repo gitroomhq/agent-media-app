@@ -13,7 +13,7 @@ The premium video engine. Same inputs and pipeline as 2.0, the provider's newer 
 | Modes | text-to-video, image-to-video, reference-to-video |
 | Features | native-audio, lip-sync, first-frame, first-and-last-frame, image-references, video-references, audio-references |
 | Limits | 4 to 15 s (per mode below); worker waits up to 90 min |
-| User price | 50 credits/s at 480p, 99 credits/s at 720p, 180 credits/s at 1080p. Reference video seconds are billed at the same rate. |
+| User price | 60 credits/s at 480p, 125 credits/s at 720p, 225 credits/s at 1080p. Reference video seconds are billed at the same rate. |
 | Quality / speed | premium / slow |
 | Verified | modes: text, image, reference (see below) |
 
@@ -38,11 +38,11 @@ The mode is derived from the request: `first_frame` means image mode, `refs` / `
 
 ## How to use it
 
-**Pick this when** the user asked for the best possible single clip and accepts the wait and about 3x the price.
+**Pick this when** the user asked for the best possible single clip and accepts the wait and about 2x the price.
 
 **Best for:** hero product ads; close-up faces; one clip that has to be the best.
 
-**Avoid for:** drafts; bulk; anything where 2.0 is good enough: it is about 3x the credits; anyone who cannot wait 15 to 30 minutes.
+**Avoid for:** drafts; bulk; anything where 2.0 is good enough: it is about 2x the credits; anyone who cannot wait 15 to 30 minutes.
 
 **Prompting:**
 

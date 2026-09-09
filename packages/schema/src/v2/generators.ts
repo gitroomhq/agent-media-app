@@ -125,8 +125,8 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
     pricing: {
       basis: 'per_clip',
       baseCredits: 75,
-      perSecondCredits: 30,
-      engines: { 'seedance-2.5': { baseCredits: 75, perSecondCredits: 99 } },
+      perSecondCredits: 60,
+      engines: { 'seedance-2.5': { baseCredits: 75, perSecondCredits: 125 } },
     },
   },
 
@@ -256,8 +256,8 @@ export const V2_GENERATORS: Record<string, V2GeneratorRecord> = {
     pricing: {
       basis: 'per_clip',
       baseCredits: 50,
-      perSecondCredits: 30,
-      engines: { 'seedance-2.5': { baseCredits: 50, perSecondCredits: 99 } },
+      perSecondCredits: 60,
+      engines: { 'seedance-2.5': { baseCredits: 50, perSecondCredits: 125 } },
     },
   },
 } as const;

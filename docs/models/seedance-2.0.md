@@ -13,7 +13,7 @@ The default video engine for every agent-media video. It takes a character sheet
 | Modes | text-to-video, image-to-video, reference-to-video |
 | Features | native-audio, lip-sync, first-frame, first-and-last-frame, image-references, video-references, audio-references |
 | Limits | 4 to 15 s (per mode below); worker waits up to 30 min |
-| User price | 15 credits/s at 480p, 30 credits/s at 720p, 75 credits/s at 1080p. Reference video seconds are billed at the same rate. |
+| User price | 30 credits/s at 480p, 60 credits/s at 720p, 150 credits/s at 1080p. Reference video seconds are billed at the same rate. |
 | Quality / speed | good / medium |
 | Verified | modes: text, image, reference (see below) |
 
@@ -43,7 +43,7 @@ The mode is derived from the request: `first_frame` means image mode, `refs` / `
 
 **Best for:** talking-head UGC; product in hands; crazy look; bulk daily posts; animating a still (first frame) into a clip.
 
-**Avoid for:** clips over 15s; hero shots where 2.5 detail is worth 3x the price; anything that needs a seed.
+**Avoid for:** clips over 15s; hero shots where 2.5 detail is worth 2x the price; anything that needs a seed.
 
 **Prompting:**
 

@@ -40,7 +40,7 @@ OAuth (above) is the default and needs no key. You need credits on the account, 
 
 | Tool | What it does | Credits |
 |---|---|---|
-| `generate_video` | A clip from your prompt on the model you pick, in one of three modes: text (prompt only), image-to-video (`first_frame`, optional `last_frame`) or reference (`refs`, `video_refs`, `audio_refs`, addressed as @image1 @video1 @audio1). Native speech when the words are in the prompt. | seconds x the per-second rate at the chosen quality (seedance-2.0: 15 credits/s at 480p, 30 at 720p, 75 at 1080p; seedance-2.5: 50 credits/s at 480p, 99 at 720p, 180 at 1080p); reference clip seconds are billed like output seconds |
+| `generate_video` | A clip from your prompt on the model you pick, in one of three modes: text (prompt only), image-to-video (`first_frame`, optional `last_frame`) or reference (`refs`, `video_refs`, `audio_refs`, addressed as @image1 @video1 @audio1). Native speech when the words are in the prompt. | seconds x the per-second rate at the chosen quality (seedance-2.0: 30 credits/s at 480p, 60 at 720p, 150 at 1080p; seedance-2.5: 60 credits/s at 480p, 125 at 720p, 225 at 1080p); reference clip seconds are billed like output seconds |
 | `generate_image` | One image from your prompt; with refs it edits/composes from them. The way to build a portrait, a product frame or a first frame for a video. | 20 per image |
 | `generate_audio` | Text to speech in a named voice. For voiceover over b-roll, or an audio reference for a clip; a talking head does not need it. | 1 per 100 characters |
 | `quote` | The price of any of the above without running it. | 0 |
@@ -54,7 +54,7 @@ OAuth (above) is the default and needs no key. You need credits on the account, 
 
 ```text
 generate_video { "prompt": "A 28-year-old woman in a bright kitchen, phone-camera framing, holds a small serum bottle up to the lens and says: \"Okay, I did not expect this to actually work.\" Natural skin, soft window light, slight head tilt.", "seconds": 5 }
--> job_id ... (150 credits at 720p)
+-> job_id ... (300 credits at 720p)
 get_run_status { "run_id": "...", "wait": true }   (repeat until completed)
 -> Video: https://.../video.mp4
 ```
@@ -65,8 +65,8 @@ Same face across a series: `generate_image` a portrait once, then pass that URL 
 
 | Model | Kind | Price | Modes and limits | Best for |
 |---|---|---|---|---|
-| `seedance-2.0` (default) | video | 15 credits/s at 480p, 30 at 720p, 75 at 1080p | text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p; image-to-video (first_frame + optional last_frame): 4 to 15 s, default aspect adaptive, 480p/720p/1080p; reference (refs / video_refs / audio_refs, up to 9 images, 3 clips, 15 s total, 3 audio, 15 s total, not alone): 4 to 15 s, default aspect 9:16, 480p/720p/1080p | talking-head UGC; product in hands |
-| `seedance-2.5` | video | 50 credits/s at 480p, 99 at 720p, 180 at 1080p | text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p; image-to-video (first_frame + optional last_frame): 4 to 15 s, aspect adaptive only, 480p/720p/1080p; reference (refs / video_refs / audio_refs, up to 30 images, 10 clips, 30 s total, 10 audio, 30 s total): 4 to 15 s, default aspect 9:16, 480p/720p/1080p | hero product ads; close-up faces |
+| `seedance-2.0` (default) | video | 30 credits/s at 480p, 60 at 720p, 150 at 1080p | text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p; image-to-video (first_frame + optional last_frame): 4 to 15 s, default aspect adaptive, 480p/720p/1080p; reference (refs / video_refs / audio_refs, up to 9 images, 3 clips, 15 s total, 3 audio, 15 s total, not alone): 4 to 15 s, default aspect 9:16, 480p/720p/1080p | talking-head UGC; product in hands |
+| `seedance-2.5` | video | 60 credits/s at 480p, 125 at 720p, 225 at 1080p | text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p; image-to-video (first_frame + optional last_frame): 4 to 15 s, aspect adaptive only, 480p/720p/1080p; reference (refs / video_refs / audio_refs, up to 30 images, 10 clips, 30 s total, 10 audio, 30 s total): 4 to 15 s, default aspect 9:16, 480p/720p/1080p | hero product ads; close-up faces |
 | `gpt-image-2.5` (default) | image | 20 credits per image | 1024x1024, 1024x1536, 1536x1024; refs up to 4 | portraits and character sheets that a video has to keep; the first frame of a clip |
 | `gpt-image-2.5-flare` | image | 20 credits per image | 1024x1024, 1024x1536, 1536x1024; refs up to 4 | variants and drafts at the same quality tier; batches of frames |
 | `gpt-image-2` | image | 20 credits per image | 1024x1024, 1024x1536, 1536x1024; refs up to 4 | the previous generation, kept selectable for runs that were built on it |

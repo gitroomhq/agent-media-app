@@ -143,12 +143,12 @@ describe('video modes (from the provider specs)', () => {
 });
 
 describe('loose surface: credit maths', () => {
-  it('video: seconds x the per-quality rate; 2.5 is about 3x', () => {
+  it('video: seconds x the per-quality rate; 2.5 is about 2x', () => {
     const v20 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: P, seconds: 5 }));
     const v25 = quoteGenerate('video', GenerateVideoSchema.parse({ prompt: P, seconds: 5, model: 'seedance-2.5' }));
     expect(v20.credits).toBe(5 * V2_MODELS['seedance-2.0'].credits!.perUnit);
     expect(v25.credits).toBe(5 * V2_MODELS['seedance-2.5'].credits!.perUnit);
-    expect(v25.credits / v20.credits).toBeGreaterThan(3);
+    expect(v25.credits / v20.credits).toBeGreaterThan(2);
     expect(v20.breakdown).toContain('seedance-2.0');
     expect(v20.mode).toBe('text');
   });
@@ -163,10 +163,10 @@ describe('loose surface: credit maths', () => {
   it('video: reference clip seconds are billed at the same rate once measured', () => {
     const v = GenerateVideoSchema.parse({ prompt: '@video1 style, she waves', seconds: 5, video_refs: [MP4] });
     const unmeasured = quoteGenerate('video', v);
-    expect(unmeasured.credits).toBe(150);
+    expect(unmeasured.credits).toBe(300);
     expect(unmeasured.breakdown).toMatch(/measured at submit/);
     const measured = quoteGenerate('video', v, { inputVideoSeconds: 4.2 });
-    expect(measured.credits).toBe(30 * (5 + 5));
+    expect(measured.credits).toBe(60 * (5 + 5));
     expect(measured.breakdown).toMatch(/5s of reference video/);
   });
 
@@ -187,7 +187,7 @@ describe('loose surface: credit maths', () => {
     const bad = quoteAny('video', { prompt: P, model: 'sora-2' });
     expect(bad.ok).toBe(false);
     const good = quoteAny('video', { prompt: P, seconds: 8 });
-    expect(good.ok && good.quote.credits).toBe(240);
+    expect(good.ok && good.quote.credits).toBe(480);
   });
 });
 
@@ -221,7 +221,7 @@ describe('model: "auto"', () => {
   it('quoteAny resolves auto before pricing, re-validates against the pick, and reports it', () => {
     const q = quoteAny('video', { prompt: P, seconds: 5, model: 'auto' }, {});
     expect(q.ok && q.quote.model).toBe('seedance-2.0');
-    expect(q.ok && q.quote.credits).toBe(150);
+    expect(q.ok && q.quote.credits).toBe(300);
     expect(q.ok && q.auto?.reason).toBeTruthy();
     expect(q.ok && (q.input as { model?: string }).model).toBe('seedance-2.0');
   });

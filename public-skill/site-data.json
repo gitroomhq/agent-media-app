@@ -49,7 +49,7 @@
       "title": "Generate Video",
       "read_only": false,
       "spends_credits": true,
-      "description": "Render a video clip from YOUR prompt on the model YOU choose, in one of three MODES that follow from the fields you pass: TEXT (prompt only), IMAGE-TO-VIDEO (`first_frame`: an https still that becomes frame one, optionally `last_frame` to end on; the clip animates the still) or REFERENCE (`refs`: https images such as a portrait, a character sheet from list_characters or a product photo whose identity/look is kept; `video_refs`: clips whose motion or framing is followed; `audio_refs`: a voice or sound to carry; address them in the prompt as @image1, @video1, @audio1). Frames and refs cannot be mixed. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Models: seedance-2.0, seedance-2.5 (default seedance-2.0; call list_models for each model's modes, limits, prices and recent results; or pass model:\"auto\"). Aspect: 9:16 default, also 16:9, 1:1, 4:3, 3:4, 21:9, adaptive. Quality: 480p, 720p (default), 1080p; the price per second follows the quality (seedance-2.0: 15 credits/s at 480p, 30 credits/s at 720p, 75 credits/s at 1080p). Reference clip seconds are billed like output seconds. Call `quote` first if the user cares about cost. Returns a job id, then call get_run_status until it is done and hand the user the URL.\n\nIMAGES: pass an https URL. If you only have raw bytes or a data: URL, call `upload_image` FIRST and pass the URL it returns. Never paste base64 into these arguments, the client prints tool arguments in the conversation, so a base64 image becomes a wall of text for the user and is re-sent on every retry.",
+      "description": "Render a video clip from YOUR prompt on the model YOU choose, in one of three MODES that follow from the fields you pass: TEXT (prompt only), IMAGE-TO-VIDEO (`first_frame`: an https still that becomes frame one, optionally `last_frame` to end on; the clip animates the still) or REFERENCE (`refs`: https images such as a portrait, a character sheet from list_characters or a product photo whose identity/look is kept; `video_refs`: clips whose motion or framing is followed; `audio_refs`: a voice or sound to carry; address them in the prompt as @image1, @video1, @audio1). Frames and refs cannot be mixed. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Models: seedance-2.0, seedance-2.5 (default seedance-2.0; call list_models for each model's modes, limits, prices and recent results; or pass model:\"auto\"). Aspect: 9:16 default, also 16:9, 1:1, 4:3, 3:4, 21:9, adaptive. Quality: 480p, 720p (default), 1080p; the price per second follows the quality (seedance-2.0: 30 credits/s at 480p, 60 credits/s at 720p, 150 credits/s at 1080p). Reference clip seconds are billed like output seconds. Call `quote` first if the user cares about cost. Returns a job id, then call get_run_status until it is done and hand the user the URL.\n\nIMAGES: pass an https URL. If you only have raw bytes or a data: URL, call `upload_image` FIRST and pass the URL it returns. Never paste base64 into these arguments, the client prints tool arguments in the conversation, so a base64 image becomes a wall of text for the user and is re-sent on every retry.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -448,9 +448,9 @@
                 "1080p"
               ],
               "credits_per_second": {
-                "480p": 15,
-                "720p": 30,
-                "1080p": 75
+                "480p": 30,
+                "720p": 60,
+                "1080p": 150
               },
               "seed": false,
               "prompt_syntax": null,
@@ -490,9 +490,9 @@
                 "1080p"
               ],
               "credits_per_second": {
-                "480p": 15,
-                "720p": 30,
-                "1080p": 75
+                "480p": 30,
+                "720p": 60,
+                "1080p": 150
               },
               "seed": false,
               "prompt_syntax": null,
@@ -535,9 +535,9 @@
                 "1080p"
               ],
               "credits_per_second": {
-                "480p": 15,
-                "720p": 30,
-                "1080p": 75
+                "480p": 30,
+                "720p": 60,
+                "1080p": 150
               },
               "seed": false,
               "prompt_syntax": "@image1 @video1 @audio1 (numbered per list, from 1)",
@@ -555,18 +555,18 @@
             }
           ],
           "credits_per_second": {
-            "480p": 15,
-            "720p": 30,
-            "1080p": 75
+            "480p": 30,
+            "720p": 60,
+            "1080p": 150
           },
           "default_quality": "720p",
           "timeout_minutes": 30
         },
         "credits": {
           "unit": "second",
-          "perUnit": 30
+          "perUnit": 60
         },
-        "price_default": "30 credits per second at 720p",
+        "price_default": "60 credits per second at 720p",
         "quality": "good",
         "speed": "medium",
         "best_for": [
@@ -578,7 +578,7 @@
         ],
         "avoid_for": [
           "clips over 15s",
-          "hero shots where 2.5 detail is worth 3x the price",
+          "hero shots where 2.5 detail is worth 2x the price",
           "anything that needs a seed"
         ],
         "usage": {
@@ -677,9 +677,9 @@
                 "1080p"
               ],
               "credits_per_second": {
-                "480p": 50,
-                "720p": 99,
-                "1080p": 180
+                "480p": 60,
+                "720p": 125,
+                "1080p": 225
               },
               "seed": false,
               "prompt_syntax": null,
@@ -713,9 +713,9 @@
                 "1080p"
               ],
               "credits_per_second": {
-                "480p": 50,
-                "720p": 99,
-                "1080p": 180
+                "480p": 60,
+                "720p": 125,
+                "1080p": 225
               },
               "seed": false,
               "prompt_syntax": null,
@@ -758,9 +758,9 @@
                 "1080p"
               ],
               "credits_per_second": {
-                "480p": 50,
-                "720p": 99,
-                "1080p": 180
+                "480p": 60,
+                "720p": 125,
+                "1080p": 225
               },
               "seed": false,
               "prompt_syntax": "@image1 @video1 @audio1 (numbered per list, from 1)",
@@ -776,18 +776,18 @@
             }
           ],
           "credits_per_second": {
-            "480p": 50,
-            "720p": 99,
-            "1080p": 180
+            "480p": 60,
+            "720p": 125,
+            "1080p": 225
           },
           "default_quality": "720p",
           "timeout_minutes": 90
         },
         "credits": {
           "unit": "second",
-          "perUnit": 99
+          "perUnit": 125
         },
-        "price_default": "99 credits per second at 720p",
+        "price_default": "125 credits per second at 720p",
         "quality": "premium",
         "speed": "slow",
         "best_for": [
@@ -798,11 +798,11 @@
         "avoid_for": [
           "drafts",
           "bulk",
-          "anything where 2.0 is good enough: it is about 3x the credits",
+          "anything where 2.0 is good enough: it is about 2x the credits",
           "anyone who cannot wait 15 to 30 minutes"
         ],
         "usage": {
-          "pick_when": "the user asked for the best possible single clip and accepts the wait and about 3x the price",
+          "pick_when": "the user asked for the best possible single clip and accepts the wait and about 2x the price",
           "prompt_tips": [
             "Same director-style prompt and @image1 references as seedance-2.0.",
             "In image mode leave aspect out (it is adaptive); the frame decides the ratio.",
@@ -1118,9 +1118,9 @@
             "1080p"
           ],
           "credits_per_second": {
-            "480p": 15,
-            "720p": 30,
-            "1080p": 75
+            "480p": 30,
+            "720p": 60,
+            "1080p": 150
           },
           "seed": false,
           "prompt_syntax": null,
@@ -1160,9 +1160,9 @@
             "1080p"
           ],
           "credits_per_second": {
-            "480p": 15,
-            "720p": 30,
-            "1080p": 75
+            "480p": 30,
+            "720p": 60,
+            "1080p": 150
           },
           "seed": false,
           "prompt_syntax": null,
@@ -1205,9 +1205,9 @@
             "1080p"
           ],
           "credits_per_second": {
-            "480p": 15,
-            "720p": 30,
-            "1080p": 75
+            "480p": 30,
+            "720p": 60,
+            "1080p": 150
           },
           "seed": false,
           "prompt_syntax": "@image1 @video1 @audio1 (numbered per list, from 1)",
@@ -1251,9 +1251,9 @@
             "1080p"
           ],
           "credits_per_second": {
-            "480p": 50,
-            "720p": 99,
-            "1080p": 180
+            "480p": 60,
+            "720p": 125,
+            "1080p": 225
           },
           "seed": false,
           "prompt_syntax": null,
@@ -1287,9 +1287,9 @@
             "1080p"
           ],
           "credits_per_second": {
-            "480p": 50,
-            "720p": 99,
-            "1080p": 180
+            "480p": 60,
+            "720p": 125,
+            "1080p": 225
           },
           "seed": false,
           "prompt_syntax": null,
@@ -1332,9 +1332,9 @@
             "1080p"
           ],
           "credits_per_second": {
-            "480p": 50,
-            "720p": 99,
-            "1080p": 180
+            "480p": 60,
+            "720p": 125,
+            "1080p": 225
           },
           "seed": false,
           "prompt_syntax": "@image1 @video1 @audio1 (numbered per list, from 1)",
@@ -1532,22 +1532,22 @@
       {
         "model": "seedance-2.0",
         "kind": "video",
-        "rate": "15 credits/s at 480p, 30 at 720p, 75 at 1080p, per output second; default quality 720p",
+        "rate": "30 credits/s at 480p, 60 at 720p, 150 at 1080p, per output second; default quality 720p",
         "per_quality": {
-          "480p": 15,
-          "720p": 30,
-          "1080p": 75
+          "480p": 30,
+          "720p": 60,
+          "1080p": 150
         },
         "reference_clips": "seconds of video_refs are measured at submit and billed at the same per-second rate as output seconds"
       },
       {
         "model": "seedance-2.5",
         "kind": "video",
-        "rate": "50 credits/s at 480p, 99 at 720p, 180 at 1080p, per output second; default quality 720p",
+        "rate": "60 credits/s at 480p, 125 at 720p, 225 at 1080p, per output second; default quality 720p",
         "per_quality": {
-          "480p": 50,
-          "720p": 99,
-          "1080p": 180
+          "480p": 60,
+          "720p": 125,
+          "1080p": 225
         },
         "reference_clips": "seconds of video_refs are measured at submit and billed at the same per-second rate as output seconds"
       },
@@ -1582,65 +1582,65 @@
         "model": "seedance-2.0",
         "mode": "text",
         "quality": "720p",
-        "credits": 150,
-        "usd": 1.5,
-        "breakdown": "5s on seedance-2.0 (text mode, 720p) at 30 credits/second"
-      },
-      {
-        "model": "seedance-2.0",
-        "mode": "text",
-        "quality": "720p",
         "credits": 300,
         "usd": 3,
-        "breakdown": "10s on seedance-2.0 (text mode, 720p) at 30 credits/second"
+        "breakdown": "5s on seedance-2.0 (text mode, 720p) at 60 credits/second"
       },
       {
         "model": "seedance-2.0",
         "mode": "text",
         "quality": "720p",
-        "credits": 450,
-        "usd": 4.5,
-        "breakdown": "15s on seedance-2.0 (text mode, 720p) at 30 credits/second"
+        "credits": 600,
+        "usd": 6,
+        "breakdown": "10s on seedance-2.0 (text mode, 720p) at 60 credits/second"
+      },
+      {
+        "model": "seedance-2.0",
+        "mode": "text",
+        "quality": "720p",
+        "credits": 900,
+        "usd": 9,
+        "breakdown": "15s on seedance-2.0 (text mode, 720p) at 60 credits/second"
       },
       {
         "model": "seedance-2.0",
         "mode": "text",
         "quality": "480p",
-        "credits": 75,
-        "usd": 0.75,
-        "breakdown": "5s on seedance-2.0 (text mode, 480p) at 15 credits/second"
+        "credits": 150,
+        "usd": 1.5,
+        "breakdown": "5s on seedance-2.0 (text mode, 480p) at 30 credits/second"
       },
       {
         "model": "seedance-2.0",
         "mode": "text",
         "quality": "1080p",
-        "credits": 375,
-        "usd": 3.75,
-        "breakdown": "5s on seedance-2.0 (text mode, 1080p) at 75 credits/second"
+        "credits": 750,
+        "usd": 7.5,
+        "breakdown": "5s on seedance-2.0 (text mode, 1080p) at 150 credits/second"
       },
       {
         "model": "seedance-2.0",
         "mode": "image",
         "quality": "720p",
-        "credits": 150,
-        "usd": 1.5,
-        "breakdown": "5s on seedance-2.0 (image mode, 720p) at 30 credits/second"
+        "credits": 300,
+        "usd": 3,
+        "breakdown": "5s on seedance-2.0 (image mode, 720p) at 60 credits/second"
       },
       {
         "model": "seedance-2.0",
         "mode": "reference",
         "quality": "720p",
-        "credits": 300,
-        "usd": 3,
-        "breakdown": "5s on seedance-2.0 (reference mode, 720p) at 30 credits/second + 5s of reference video at the same rate"
+        "credits": 600,
+        "usd": 6,
+        "breakdown": "5s on seedance-2.0 (reference mode, 720p) at 60 credits/second + 5s of reference video at the same rate"
       },
       {
         "model": "seedance-2.5",
         "mode": "text",
         "quality": "720p",
-        "credits": 495,
-        "usd": 4.95,
-        "breakdown": "5s on seedance-2.5 (text mode, 720p) at 99 credits/second"
+        "credits": 625,
+        "usd": 6.25,
+        "breakdown": "5s on seedance-2.5 (text mode, 720p) at 125 credits/second"
       },
       {
         "model": "gpt-image-2.5",
@@ -1961,7 +1961,7 @@
     {
       "id": "talking-head",
       "title": "Talking-head UGC clip",
-      "credits": "150 credits for 5 s on seedance-2.0 at 720p",
+      "credits": "300 credits for 5 s on seedance-2.0 at 720p",
       "steps": [
         {
           "tool": "generate_video",
@@ -1976,7 +1976,7 @@
     {
       "id": "product-in-hand",
       "title": "Product in hand",
-      "credits": "20 credits for the frame, then 150 for a 5 s clip at 720p",
+      "credits": "20 credits for the frame, then 300 for a 5 s clip at 720p",
       "steps": [
         {
           "tool": "upload_image",
@@ -1995,7 +1995,7 @@
     {
       "id": "animate-still",
       "title": "Animate a still (image-to-video)",
-      "credits": "150 credits for 5 s on seedance-2.0 at 720p (same rate as text mode)",
+      "credits": "300 credits for 5 s on seedance-2.0 at 720p (same rate as text mode)",
       "steps": [
         {
           "tool": "generate_image",
@@ -2014,7 +2014,7 @@
     {
       "id": "first-last-frame",
       "title": "First and last frame",
-      "credits": "150 credits for 5 s on seedance-2.0 at 720p; two stills first (20 credits each with generate_image)",
+      "credits": "300 credits for 5 s on seedance-2.0 at 720p; two stills first (20 credits each with generate_image)",
       "steps": [
         {
           "tool": "generate_image",
@@ -2029,7 +2029,7 @@
     {
       "id": "match-motion",
       "title": "Match a reference clip's motion (video_refs)",
-      "credits": "300 credits for a 5 s clip plus a 5 s reference clip on seedance-2.0 at 720p: the reference clip's seconds are billed at the same per-second rate",
+      "credits": "600 credits for a 5 s clip plus a 5 s reference clip on seedance-2.0 at 720p: the reference clip's seconds are billed at the same per-second rate",
       "steps": [
         {
           "tool": "quote",
@@ -2048,7 +2048,7 @@
     {
       "id": "crazy-look",
       "title": "Crazy look (silent reaction clip)",
-      "credits": "150 credits per 5 s clip at 720p",
+      "credits": "300 credits per 5 s clip at 720p",
       "steps": [
         {
           "tool": "generate_video",
@@ -2078,7 +2078,7 @@
     {
       "id": "series",
       "title": "A series with one face",
-      "credits": "20 credits once, then 150 per 5 s clip at 720p",
+      "credits": "20 credits once, then 300 per 5 s clip at 720p",
       "steps": [
         {
           "tool": "generate_image",
@@ -2097,7 +2097,7 @@
     {
       "id": "two-people",
       "title": "Two people",
-      "credits": "150 to 450 credits per exchange at 720p",
+      "credits": "300 to 900 credits per exchange at 720p",
       "steps": [
         {
           "tool": "generate_video",
@@ -2108,7 +2108,7 @@
     {
       "id": "hero",
       "title": "The hero clip",
-      "credits": "about 3x the credits of seedance-2.0 (50 credits/s at 480p, 99 at 720p, 180 at 1080p)",
+      "credits": "about 2x the credits of seedance-2.0 (60 credits/s at 480p, 125 at 720p, 225 at 1080p)",
       "steps": [
         {
           "tool": "quote",

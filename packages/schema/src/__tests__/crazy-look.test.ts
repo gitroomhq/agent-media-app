@@ -174,20 +174,21 @@ describe('video engine', () => {
     expect(accepts({ ...CHAR, engine: 'sora' })).toBe(false);
   });
 
-  it('prices 2.5 at its real cost and leaves the 2.0 price untouched', () => {
-    // 2.0 must still quote exactly what it did before the engine existed.
-    expect(quoteV2Credits('crazy_look', { durationSeconds: 5 })).toBe(200);
-    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'seedance-2.0' })).toBe(200);
-    expect(quoteV2Credits('selfie', { durationSeconds: 10 })).toBe(375);
+  it('prices both engines off the same per-second rate the catalog charges at 720p', () => {
+    // The fixed skills render at 720p on the same engines as the loose
+    // surface, so they bill the same per-second rate: 60 for 2.0, 125 for
+    // 2.5, plus each skill's fixed prelude (portrait, sheet, captions).
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5 })).toBe(350);
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'seedance-2.0' })).toBe(350);
+    expect(quoteV2Credits('selfie', { durationSeconds: 10 })).toBe(675);
 
-    // 2.5 costs ~3x per second at 720p with image refs.
-    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'seedance-2.5' })).toBe(545);
-    expect(quoteV2Credits('crazy_look', { durationSeconds: 10, engine: 'seedance-2.5' })).toBe(1040);
-    expect(quoteV2Credits('selfie', { durationSeconds: 15, engine: 'seedance-2.5' })).toBe(1560);
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'seedance-2.5' })).toBe(675);
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 10, engine: 'seedance-2.5' })).toBe(1300);
+    expect(quoteV2Credits('selfie', { durationSeconds: 15, engine: 'seedance-2.5' })).toBe(1950);
   });
 
   it('an unknown engine falls back to the default rate instead of throwing', () => {
-    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'nope' })).toBe(200);
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5, engine: 'nope' })).toBe(350);
   });
 
   it('2.5 is always more expensive than 2.0 — never quote the upgrade cheaper', () => {
@@ -215,9 +216,9 @@ describe('V2_GENERATORS · crazy_look', () => {
     expect(def.status).toBe('beta');
   });
 
-  it('prices per clip: 200 credits @ 5s, 350 @ 10s — cheaper than selfie', () => {
-    expect(quoteV2Credits('crazy_look', { durationSeconds: 5 })).toBe(200);
-    expect(quoteV2Credits('crazy_look', { durationSeconds: 10 })).toBe(350);
+  it('prices per clip: 350 credits @ 5s, 650 @ 10s, cheaper than selfie', () => {
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 5 })).toBe(350);
+    expect(quoteV2Credits('crazy_look', { durationSeconds: 10 })).toBe(650);
     expect(quoteV2Credits('crazy_look', { durationSeconds: 5 })).toBeLessThan(
       quoteV2Credits('selfie', { durationSeconds: 5 }),
     );

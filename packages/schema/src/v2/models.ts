@@ -251,7 +251,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     features: ['native-audio', 'lip-sync', 'first-frame', 'first-and-last-frame', 'image-references', 'video-references', 'audio-references'],
     video: {
       timeoutMinutes: 30,
-      creditsPerSecond: { '480p': 15, '720p': 30, '1080p': 75 },
+      creditsPerSecond: { '480p': 30, '720p': 60, '1080p': 150 },
       modes: {
         text: {
           providerModel: 'seedance-2.0-text-to-video',
@@ -297,11 +297,11 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
         },
       },
     },
-    credits: { unit: 'second', perUnit: 30 },
+    credits: { unit: 'second', perUnit: 60 },
     quality: 'good',
     speed: 'medium',
     bestFor: ['talking-head UGC', 'product in hands', 'crazy look', 'bulk daily posts', 'animating a still (first frame) into a clip'],
-    avoidFor: ['clips over 15s', 'hero shots where 2.5 detail is worth 3x the price', 'anything that needs a seed'],
+    avoidFor: ['clips over 15s', 'hero shots where 2.5 detail is worth 2x the price', 'anything that needs a seed'],
     usage: {
       pickWhen: 'you need a real-looking person saying real words, or a still brought to life, at a normal budget',
       promptTips: [
@@ -325,7 +325,7 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     features: ['native-audio', 'lip-sync', 'first-frame', 'first-and-last-frame', 'image-references', 'video-references', 'audio-references'],
     video: {
       timeoutMinutes: 90,
-      creditsPerSecond: { '480p': 50, '720p': 99, '1080p': 180 },
+      creditsPerSecond: { '480p': 60, '720p': 125, '1080p': 225 },
       modes: {
         text: {
           providerModel: 'seedance-2.5-text-to-video',
@@ -370,13 +370,13 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
         },
       },
     },
-    credits: { unit: 'second', perUnit: 99 },
+    credits: { unit: 'second', perUnit: 125 },
     quality: 'premium',
     speed: 'slow',
     bestFor: ['hero product ads', 'close-up faces', 'one clip that has to be the best'],
-    avoidFor: ['drafts', 'bulk', 'anything where 2.0 is good enough: it is about 3x the credits', 'anyone who cannot wait 15 to 30 minutes'],
+    avoidFor: ['drafts', 'bulk', 'anything where 2.0 is good enough: it is about 2x the credits', 'anyone who cannot wait 15 to 30 minutes'],
     usage: {
-      pickWhen: 'the user asked for the best possible single clip and accepts the wait and about 3x the price',
+      pickWhen: 'the user asked for the best possible single clip and accepts the wait and about 2x the price',
       promptTips: [
         'Same director-style prompt and @image1 references as seedance-2.0.',
         'In image mode leave aspect out (it is adaptive); the frame decides the ratio.',

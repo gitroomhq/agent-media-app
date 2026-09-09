@@ -1,6 +1,6 @@
 ---
 name: 'agent-media'
-description: 'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at about 3x; gpt-image-2 for images; elevenlabs-tts for speech), pick the video mode (text; image-to-video with first_frame and optional last_frame; reference with refs, video_refs, audio_refs addressed as @image1 @video1 @audio1), pick the quality (480p, 720p default, 1080p), quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. Use for UGC clips, product-in-hand, animating a still, first-to-last-frame moves, matching a reference clip, reaction clips, portraits, voiceover, and series with one face.'
+description: 'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at about 2x; gpt-image-2.5 for images; elevenlabs-tts for speech), pick the video mode (text; image-to-video with first_frame and optional last_frame; reference with refs, video_refs, audio_refs addressed as @image1 @video1 @audio1), pick the quality (480p, 720p default, 1080p), quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. Use for UGC clips, product-in-hand, animating a still, first-to-last-frame moves, matching a reference clip, reaction clips, portraits, voiceover, and series with one face.'
 allowed-tools: ['mcp__agent-media__generate_video', 'mcp__agent-media__generate_image', 'mcp__agent-media__generate_audio', 'mcp__agent-media__quote', 'mcp__agent-media__list_models', 'mcp__agent-media__list_characters', 'mcp__agent-media__get_run_status', 'mcp__agent-media__upload_image', 'mcp__agent-media__rate_run']
 x-skill-slug: 'agent-media'
 x-skill-version: '2.0.0'
@@ -21,7 +21,7 @@ You are the director. agent-media gives you three primitives and a model catalog
 
 ## The tools
 
-### generate_video, 150 / 300 / 450 credits for 5 / 10 / 15 s on seedance-2.0 at 720p (75 at 480p, 375 at 1080p for 5 s; 495 for 5 s on seedance-2.5)
+### generate_video, 300 / 600 / 900 credits for 5 / 10 / 15 s on seedance-2.0 at 720p (150 at 480p, 750 at 1080p for 5 s; 625 for 5 s on seedance-2.5)
 
 Three modes, chosen by the fields you pass:
 
@@ -53,7 +53,7 @@ Image-to-video:
 ```
 
 - `seconds` 4 to 15 on the live Seedance models (the exact range per model and mode is below), `aspect` `9:16`, `16:9`, `1:1`, `4:3`, `3:4`, `21:9`, `adaptive`, `quality` `480p`, `720p`, `1080p` (default 720p), `audio` true by default, `model` a live video id.
-- Price ladder, credits per output second: seedance-2.0: 15 credits/s at 480p, 30 at 720p, 75 at 1080p; seedance-2.5: 50 credits/s at 480p, 99 at 720p, 180 at 1080p. A 5 s clip plus a 5 s reference clip on seedance-2.0 at 720p is 300 credits.
+- Price ladder, credits per output second: seedance-2.0: 30 credits/s at 480p, 60 at 720p, 150 at 1080p; seedance-2.5: 60 credits/s at 480p, 125 at 720p, 225 at 1080p. A 5 s clip plus a 5 s reference clip on seedance-2.0 at 720p is 600 credits.
 - seedance-2.0 modes: text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p; image-to-video (first_frame + optional last_frame): 4 to 15 s, default aspect adaptive, 480p/720p/1080p; reference (refs / video_refs / audio_refs, up to 9 images, 3 clips, 15 s total, 3 audio, 15 s total, not alone): 4 to 15 s, default aspect 9:16, 480p/720p/1080p.
 - seedance-2.5 modes: text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p; image-to-video (first_frame + optional last_frame): 4 to 15 s, aspect adaptive only, 480p/720p/1080p; reference (refs / video_refs / audio_refs, up to 30 images, 10 clips, 30 s total, 10 audio, 30 s total): 4 to 15 s, default aspect 9:16, 480p/720p/1080p.
 - Speech: put the exact words in quotes in the prompt and leave `audio: true`. The model renders the voice and lip-sync natively, you do not need `generate_audio` for a talking head.
@@ -97,9 +97,9 @@ From the catalog `usage` card. `list_models` returns the same text plus the last
 
 - **Pick it when** you need a real-looking person saying real words, or a still brought to life, at a normal budget.
 - **Best for:** talking-head UGC; product in hands; crazy look; bulk daily posts; animating a still (first frame) into a clip.
-- **Avoid for:** clips over 15s; hero shots where 2.5 detail is worth 3x the price; anything that needs a seed.
+- **Avoid for:** clips over 15s; hero shots where 2.5 detail is worth 2x the price; anything that needs a seed.
 - **Latency:** about 3 minutes for a 5 s clip at 720p.
-- **Price:** 15 credits/s at 480p, 30 at 720p, 75 at 1080p; reference clip seconds (video_refs) are billed at the same per-second rate as output seconds.
+- **Price:** 30 credits/s at 480p, 60 at 720p, 150 at 1080p; reference clip seconds (video_refs) are billed at the same per-second rate as output seconds.
 - **Modes:**
   - text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p
   - image-to-video (first_frame + optional last_frame): 4 to 15 s, default aspect adaptive, 480p/720p/1080p
@@ -111,11 +111,11 @@ From the catalog `usage` card. `list_models` returns the same text plus the last
 
 ### seedance-2.5
 
-- **Pick it when** the user asked for the best possible single clip and accepts the wait and about 3x the price.
+- **Pick it when** the user asked for the best possible single clip and accepts the wait and about 2x the price.
 - **Best for:** hero product ads; close-up faces; one clip that has to be the best.
-- **Avoid for:** drafts; bulk; anything where 2.0 is good enough: it is about 3x the credits; anyone who cannot wait 15 to 30 minutes.
+- **Avoid for:** drafts; bulk; anything where 2.0 is good enough: it is about 2x the credits; anyone who cannot wait 15 to 30 minutes.
 - **Latency:** 12 to 25 minutes per clip; plan the wait.
-- **Price:** 50 credits/s at 480p, 99 at 720p, 180 at 1080p; reference clip seconds (video_refs) are billed at the same per-second rate as output seconds.
+- **Price:** 60 credits/s at 480p, 125 at 720p, 225 at 1080p; reference clip seconds (video_refs) are billed at the same per-second rate as output seconds.
 - **Modes:**
   - text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p
   - image-to-video (first_frame + optional last_frame): 4 to 15 s, aspect adaptive only, 480p/720p/1080p
@@ -204,7 +204,7 @@ The things the old fixed skills did, as prompts you write yourself, see [referen
 - **Crazy look**, silent 5 s extreme close-up, one exaggerated expression held to the lens, `audio: false`; burn the caption in your editor or ask for it in the prompt.
 - **B-roll voiceover**, generate_audio the narration; the user overlays it on their footage (agent-media does not mux external video on this surface).
 - **A series with one face**, one generate_image portrait, then N generate_video calls with the same `refs` and the same person and setting wording.
-- **Hero clip**, the one clip that must be the best: `model: "seedance-2.5"` (about 3x the credits, and a much longer wait). Never for drafts or bulk.
+- **Hero clip**, the one clip that must be the best: `model: "seedance-2.5"` (about 2x the credits, and a much longer wait). Never for drafts or bulk.
 
 ## Rules
 

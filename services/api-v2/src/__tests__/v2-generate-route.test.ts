@@ -13,10 +13,10 @@ const server = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../se
 describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
   it('quotes the same numbers the schema package quotes', () => {
     const v = validateAndQuote('video', { prompt: 'x'.repeat(10), seconds: 5 });
-    expect(v.ok && v.credits).toBe(150);
+    expect(v.ok && v.credits).toBe(300);
     expect(v.ok && v.model).toBe('seedance-2.0');
     const p = validateAndQuote('video', { prompt: 'x'.repeat(10), seconds: 5, model: 'seedance-2.5' });
-    expect(p.ok && p.credits).toBe(495);
+    expect(p.ok && p.credits).toBe(625);
     const i = validateAndQuote('image', { prompt: 'portrait' });
     expect(i.ok && i.credits).toBe(20);
     const a = validateAndQuote('audio', { text: 'a'.repeat(250) });
@@ -34,7 +34,7 @@ describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
   it('resolves model:"auto" before quoting and reports the pick', () => {
     const v = validateAndQuote('video', { prompt: 'x'.repeat(10), seconds: 5, model: 'auto' }, {});
     expect(v.ok && v.model).toBe('seedance-2.0');
-    expect(v.ok && v.credits).toBe(150);
+    expect(v.ok && v.credits).toBe(300);
     expect(v.ok && v.auto?.reason).toMatch(/default/);
     expect(v.ok && v.input.model).toBe('seedance-2.0');
   });
@@ -44,7 +44,7 @@ describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
     expect(t.ok && t.video).toEqual({ mode: 'text', provider_model: 'seedance-2.0-text-to-video', aspect: '9:16', quality: '720p', timeout_minutes: 30 });
     const i = validateAndQuote('video', { prompt: 'x'.repeat(10), model: 'seedance-2.5', first_frame: 'https://x.com/a.png', quality: '480p' });
     expect(i.ok && i.video).toEqual({ mode: 'image', provider_model: 'seedance-2.5-image-to-video', aspect: 'adaptive', quality: '480p', timeout_minutes: 90 });
-    expect(i.ok && i.credits).toBe(5 * 50);
+    expect(i.ok && i.credits).toBe(5 * 60);
     const r = validateAndQuote('video', { prompt: '@image1 waves', refs: ['https://x.com/a.png'], aspect: '16:9' });
     expect(r.ok && r.video?.provider_model).toBe('seedance-2.0-reference-to-video');
     expect(r.ok && r.video?.aspect).toBe('16:9');
@@ -58,7 +58,7 @@ describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
     const ok = await probeVideoRefs(['https://x.com/a.mp4'], probe);
     expect(ok).toEqual({ ok: true, seconds: 4.2 });
     const v = validateAndQuote('video', { prompt: '@video1 style', seconds: 5, video_refs: ['https://x.com/a.mp4'] }, {}, { inputVideoSeconds: 4.2 });
-    expect(v.ok && v.credits).toBe(30 * (5 + 5));
+    expect(v.ok && v.credits).toBe(60 * (5 + 5));
     const nope = await probeVideoRefs(['https://x.com/a.mp4', 'https://x.com/b.mp4'], probe);
     expect(nope).toEqual({ ok: false, unreadable: ['https://x.com/b.mp4'] });
   });
