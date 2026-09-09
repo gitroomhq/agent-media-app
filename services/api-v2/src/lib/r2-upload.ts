@@ -10,7 +10,8 @@
  * services/primitive-worker-vnext/src/client/r2.ts.
  */
 
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import { request as httpsRequest } from 'node:https';
 import { lookup as dnsLookupCb } from 'node:dns';
@@ -163,6 +164,118 @@ export async function uploadUserImageBase64(
     bytes: bytes.byteLength,
     mime,
   };
+}
+
+// ── Presigned upload: the bytes never pass through an agent's context ────────
+//
+// WHY: the base64 route above is the only way bytes reached us over MCP, and an
+// agent holding a 1.5 MB photo has to carry ~2 million characters of base64 in
+// its own context to use it. Every client caps that, so agents did the only
+// thing left: they downscaled the user's photo (observed: 1254px original to
+// 512px, then 300px at quality 55) until the string fit, and shipped that to
+// the video model. The customer's own product photo arrived as a thumbnail.
+//
+// With a presigned PUT the agent streams the file straight to R2 from its
+// shell, and nothing but a URL ever enters the model's context. Full
+// resolution, one round trip, no re-encode.
+//
+// The trust boundary is kept by splitting it in two:
+//   presignUpload()  signs a PUT for ONE unguessable key in a staging prefix,
+//                    pinned to the exact byte length and content type the
+//                    caller declared, expiring in minutes. A mismatched or
+//                    oversized body is rejected by R2 itself.
+//   confirmUpload()  reads those bytes back, runs the SAME magic-byte sniff,
+//                    size cap and moderation gate as the base64 path, and only
+//                    then copies them to the public uploads prefix and returns
+//                    a URL. An unconfirmed object is never handed to a model
+//                    and is deleted when confirmation fails.
+
+const PRESIGN_TTL_SECONDS = 15 * 60;
+/** Direct PUT skips base64's ~33% inflation, so the cap can be the real file size. */
+export const MAX_PRESIGNED_BYTES = 25 * 1024 * 1024;
+
+export interface PresignedUpload {
+  put_url: string;
+  upload_key: string;
+  expires_in: number;
+  content_type: 'image/png' | 'image/jpeg';
+  bytes: number;
+}
+
+function stagingKey(userId: string, ext: string): string {
+  return `vnext/staging/${userId}/${randomUUID()}.${ext}`;
+}
+
+/**
+ * Sign a one-shot PUT for exactly these bytes.
+ * @param contentType declared by the caller; the signature pins it, and
+ *   confirmUpload() re-derives the real type from the magic bytes anyway.
+ */
+export async function presignUpload(
+  userId: string,
+  bytes: number,
+  contentType: string,
+): Promise<PresignedUpload> {
+  if (!Number.isInteger(bytes) || bytes <= 0) {
+    throw new Error('r2: bytes must be the exact size of the file, in bytes');
+  }
+  if (bytes > MAX_PRESIGNED_BYTES) {
+    throw new Error(`r2: file too large (${bytes} bytes, max ${MAX_PRESIGNED_BYTES})`);
+  }
+  const mime = /jpe?g/i.test(contentType) ? 'image/jpeg' : 'image/png';
+  const env = readEnv();
+  const key = stagingKey(userId, mime === 'image/jpeg' ? 'jpg' : 'png');
+  const put_url = await getSignedUrl(
+    // The cast is a version-skew artefact, not a behaviour change: pnpm keeps
+    // two copies of @smithy/types (one per SDK package), so the structurally
+    // identical S3Client type is nominally different across them. A live PUT
+    // against R2 is what actually proves this signature, and the presign test
+    // exercises it.
+    getClient() as unknown as Parameters<typeof getSignedUrl>[0],
+    new PutObjectCommand({ Bucket: env.bucket, Key: key, ContentType: mime, ContentLength: bytes }) as unknown as Parameters<typeof getSignedUrl>[1],
+    { expiresIn: PRESIGN_TTL_SECONDS },
+  );
+  return { put_url, upload_key: key, expires_in: PRESIGN_TTL_SECONDS, content_type: mime, bytes };
+}
+
+/** Read a staged object back, validate + moderate it, and publish it. */
+export async function confirmUpload(userId: string, uploadKey: string): Promise<UploadedImage> {
+  // The key carries the owner: a signed URL from one account can never be
+  // confirmed into another's namespace.
+  if (!uploadKey.startsWith(`vnext/staging/${userId}/`)) {
+    throw new Error('r2: upload_key does not belong to this user');
+  }
+  const env = readEnv();
+  let bytes: Buffer;
+  try {
+    const got = await getClient().send(new GetObjectCommand({ Bucket: env.bucket, Key: uploadKey }));
+    const chunks: Buffer[] = [];
+    for await (const chunk of got.Body as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk));
+    bytes = Buffer.concat(chunks);
+  } catch {
+    throw new Error('r2: nothing was uploaded to that URL yet (PUT the file first, then confirm)');
+  }
+  const cleanup = async () => {
+    await getClient().send(new DeleteObjectCommand({ Bucket: env.bucket, Key: uploadKey })).catch(() => {});
+  };
+  try {
+    if (bytes.byteLength === 0) throw new Error('r2: uploaded file is empty');
+    if (bytes.byteLength > MAX_PRESIGNED_BYTES) throw new Error('r2: uploaded file is too large');
+    const isPng = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    if (!isPng && !isJpeg) throw new Error('r2: uploaded file is not a PNG or JPEG');
+    const mime: 'image/png' | 'image/jpeg' = isPng ? 'image/png' : 'image/jpeg';
+    await moderateImageOrThrow(bytes, mime);
+    const key = `vnext/uploads/${userId}/${randomUUID()}.${isPng ? 'png' : 'jpg'}`;
+    await getClient().send(
+      new PutObjectCommand({ Bucket: env.bucket, Key: key, Body: bytes, ContentType: mime }),
+    );
+    await cleanup();
+    return { url: `${env.publicUrl.replace(/\/+$/, '')}/${key}`, key, bytes: bytes.byteLength, mime };
+  } catch (err) {
+    await cleanup();
+    throw err;
+  }
 }
 
 // ── SSRF-hardened fetch for user-supplied URLs ────────────────────────────────

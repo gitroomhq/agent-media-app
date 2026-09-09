@@ -19,6 +19,7 @@
   "dependencies": {
     "@agentmedia/schema": "workspace:*",
     "@aws-sdk/client-s3": "^3.1004.0",
+    "@aws-sdk/s3-request-presigner": "3.1054.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@scalar/express-api-reference": "^0.9.7",
     "@sentry/node": "^10.56.0",

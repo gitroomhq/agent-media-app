@@ -276,13 +276,25 @@ The JSON schema is the envelope; the per-model, per-mode limits (seconds, aspect
 {
   "type": "object",
   "properties": {
+    "file_bytes": {
+      "type": "integer",
+      "description": "Step 1 of the file path: the exact size of the file in bytes (`wc -c < photo.png`). Returns a put_url and an upload_key. Full resolution, up to 25 MB."
+    },
+    "file_name": {
+      "type": "string",
+      "description": "Optional with file_bytes: the file name, so the content type is right (.png or .jpg)."
+    },
+    "upload_key": {
+      "type": "string",
+      "description": "Step 2 of the file path: the upload_key you were given, after the curl PUT finished. Returns the image_url."
+    },
     "image_base64": {
       "type": "string",
-      "description": "The image bytes, base64-encoded. A `data:image/png;base64,...` prefix is accepted and stripped."
+      "description": "The image bytes, base64-encoded. A `data:image/png;base64,...` prefix is accepted and stripped. Last resort: use file_bytes when you can run a shell."
     },
     "image_url": {
       "type": "string",
-      "description": "An https URL to fetch and re-host instead. Use this OR image_base64, not both."
+      "description": "An https URL to fetch and re-host instead."
     }
   },
   "additionalProperties": false

@@ -55,9 +55,16 @@ describe('public skill pack == hosted connector', () => {
   });
 
   it('the pack never mentions a tool the connector does not list', async () => {
-    const tools = new Set((await liveTools()).map((t) => t.name));
+    const live = await liveTools();
+    const tools = new Set(live.map((t) => t.name));
+    // Argument names are not tool names: `file_bytes` and `upload_key` are
+    // fields of upload_image. Taking them from the live schemas keeps the
+    // guard honest (an invented field still fails) without banning real ones.
+    const fields = new Set(
+      live.flatMap((t) => Object.keys(((t.inputSchema as { properties?: Record<string, unknown> })?.properties) ?? {})),
+    );
     const files = ['README.md', 'skills/agent-media/SKILL.md', 'reference/recipes.md', 'reference/prompting.md', 'reference/models.md'];
-    const known = new Set([...tools, 'make_ugc', 'make_subtitles', 'social_connect', 'social_channels', 'social_publish']);
+    const known = new Set([...tools, ...fields, 'make_ugc', 'make_subtitles', 'social_connect', 'social_channels', 'social_publish']);
     for (const f of files) {
       const names = [...read(f).matchAll(/`([a-z]+_[a-z_]+)`/g)].map((m) => m[1]).filter((n) => /^(generate|list|get|upload|quote|create|make|social)_/.test(n));
       for (const n of names) expect(known.has(n), `${f} mentions ${n}`).toBe(true);

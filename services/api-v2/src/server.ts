@@ -42,7 +42,7 @@ import { generateRoute as looseGenerateRoute, quoteRoute as looseQuoteRoute, rat
 import { GenerateAudioSchema, GenerateImageSchema, GenerateVideoSchema } from '@agentmedia/schema/v2';
 import { characterCreateRoute, listCharactersRoute, updateCharacterRoute } from './routes/v2/characters.js';
 import { listMyCharactersRoute } from './routes/v1/characters.js';
-import { uploadImageRoute } from './routes/v1/uploads.js';
+import { uploadImageRoute, presignUploadRoute, confirmUploadRoute } from './routes/v1/uploads.js';
 import { listModelsRoute } from './routes/v1/models.js';
 import { subtitleRoute } from './routes/v2/subtitle.js';
 import { jobStreamRoute } from './routes/v2/job-stream.js';
@@ -945,6 +945,9 @@ if (isPrimitivesRouteEnabled()) {
   // read limiter: an agent uploading a photo must never be throttled by the
   // generate ceiling it will need a moment later.
   app.post('/v1/uploads/image', readLimiter, authMiddleware, uploadImageRoute);
+  // The no-base64 path: sign a PUT, stream the original file to R2, confirm it.
+  app.post('/v1/uploads/presign', readLimiter, authMiddleware, presignUploadRoute);
+  app.post('/v1/uploads/confirm', readLimiter, authMiddleware, confirmUploadRoute);
   // The model catalog. Read-only, no credits; public so docs and the
   // website can render it without a key.
   app.get('/v1/models', readLimiter, listModelsRoute);

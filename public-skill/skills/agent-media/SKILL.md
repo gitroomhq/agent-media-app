@@ -83,7 +83,7 @@ Image-to-video:
 
 ### list_models, list_characters, get_run_status, upload_image, rate_run
 
-All free. `list_models` is the recommendation layer, read it before an unusual job; every video model lists its modes with inputs, seconds, aspects, qualities and credits per second, and every model carries `usage` (pick when, prompting tips, latency) and `recent` (last 30 days: runs, fail rate, auto-judge score, user ratings, typical render time). `list_characters` returns saved characters with `character_sheet_url` / portrait URLs for `refs`. `get_run_status` takes any job id this server gave you. `upload_image` turns bytes or a foreign URL into an https URL, never paste base64 into a tool call. `rate_run` records 1 to 5 and a note on a finished run: do it whenever the user reacts to an output, or you can see a defect yourself.
+All free. `list_models` is the recommendation layer, read it before an unusual job; every video model lists its modes with inputs, seconds, aspects, qualities and credits per second, and every model carries `usage` (pick when, prompting tips, latency) and `recent` (last 30 days: runs, fail rate, auto-judge score, user ratings, typical render time). `list_characters` returns saved characters with `character_sheet_url` / portrait URLs for `refs`. `get_run_status` takes any job id this server gave you. `upload_image` turns a file on disk, raw bytes or a foreign URL into an https URL. When the photo is a FILE and you have a shell, use the file path: call `upload_image` with `file_bytes` (the exact size, `wc -c < photo.png`), run the curl PUT it prints, then call it again with the `upload_key`. The bytes go straight to storage without passing through this conversation, so send the ORIGINAL file: never resize, crop or re-encode a user's photo to make it fit, a shrunken product photo is what the video model will show. Base64 is the last resort, and never paste base64 into another tool call. `rate_run` records 1 to 5 and a note on a finished run: do it whenever the user reacts to an output, or you can see a defect yourself.
 
 ### model: "auto"
 
@@ -211,6 +211,7 @@ The things the old fixed skills did, as prompts you write yourself, see [referen
 - Ask before spending big: quote a 15 s seedance-2.5 clip, or any 1080p clip, before running it.
 - Default model and default quality for everything unless the user asked for the best possible single clip.
 - Every image, clip and audio URL must be https (upload_image first for images). Refs are kept private to the account.
+- Never downscale a photo the user gave you. `upload_image` with `file_bytes` streams the original file straight to storage (up to 25 MB) and hands back a URL; resizing to fit a context window is what turns a customer product shot into a thumbnail.
 - One mode per call: a first frame OR references, never both on Seedance.
 - Poll until `completed`; a clip takes minutes (seedance-2.0: about 3 minutes for a 5 s clip at 720p; seedance-2.5: 12 to 25 minutes per clip; plan the wait), an image under a minute, audio seconds. If a job fails, the credits are refunded automatically, say so and retry with a clearer prompt.
 - Do not claim a video exists until get_run_status returned its URL.

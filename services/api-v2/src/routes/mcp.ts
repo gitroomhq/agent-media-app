@@ -438,27 +438,69 @@ export function buildMcpServer(apiKey: string): Server {
 
     // Bytes → URL. Forwards to POST /v1/uploads/image.
     if (name === 'upload_image') {
-      const a = (args ?? {}) as { image_base64?: string; image_url?: string };
+      const a = (args ?? {}) as { image_base64?: string; image_url?: string; file_bytes?: number; file_name?: string; upload_key?: string };
       const b64 = typeof a.image_base64 === 'string' ? a.image_base64.trim() : '';
       const src = typeof a.image_url === 'string' ? a.image_url.trim() : '';
-      if (!b64 && !src) {
+      const fileBytes = Number.isFinite(Number(a.file_bytes)) ? Number(a.file_bytes) : 0;
+      const uploadKey = typeof a.upload_key === 'string' ? a.upload_key.trim() : '';
+
+      // Step 1 of the file path: hand back a PUT URL. Nothing is uploaded
+      // here, so the agent never has to read the file into its context.
+      if (fileBytes > 0 && !uploadKey) {
+        const r = await apiFetch(`${PUBLIC_API_BASE}/v1/uploads/presign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ bytes: Math.round(fileBytes), filename: a.file_name ?? '' }),
+          timeoutMs: 30_000,
+        }).catch((err: Error) => err);
+        if (r instanceof Error) {
+          return { content: [{ type: 'text', text: `Could not get an upload URL (${r.message}). Try again.` }], isError: true };
+        }
+        const body = await r.text();
+        let d: unknown;
+        try { d = body ? JSON.parse(body) : null; } catch { d = body; }
+        if (!r.ok) return { content: [{ type: 'text', text: formatApiError(r.status, d) }], isError: true };
+        const p = d as { put_url?: string; upload_key?: string; content_type?: string; expires_in?: number } | null;
         return {
-          content: [{ type: 'text', text: 'Provide image_base64 (the bytes) or image_url (an https image to re-host).' }],
+          content: [{
+            type: 'text',
+            text: [
+              'Upload URL ready. Send the ORIGINAL file, unresized:',
+              '',
+              `curl -X PUT -H "Content-Type: ${p?.content_type ?? 'image/png'}" --data-binary @${a.file_name || '<file>'} "${p?.put_url ?? ''}"`,
+              '',
+              `Then call upload_image again with upload_key: "${p?.upload_key ?? ''}" to get the image URL.`,
+              `The link expires in ${Math.round((p?.expires_in ?? 900) / 60)} minutes. The bytes go straight to storage, they never pass through this conversation, so do not resize or re-encode the file.`,
+            ].join('\n'),
+          }],
+        };
+      }
+
+      if (!b64 && !src && !uploadKey) {
+        return {
+          content: [{ type: 'text', text: 'Pass file_bytes (the size of a file on disk, best: keeps full resolution), or image_url to re-host, or image_base64 as a last resort.' }],
           isError: true,
         };
       }
       let resp: FetchResponse;
       try {
-        resp = await apiFetch(`${PUBLIC_API_BASE}/v1/uploads/image`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(b64 ? { image_base64: b64 } : { image_url: src }),
-          // Generous: a 10 MB upload has to travel and then be moderated.
-          timeoutMs: 60_000,
-        });
+        resp = uploadKey
+          ? await apiFetch(`${PUBLIC_API_BASE}/v1/uploads/confirm`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+              body: JSON.stringify({ upload_key: uploadKey }),
+              timeoutMs: 60_000,
+            })
+          : await apiFetch(`${PUBLIC_API_BASE}/v1/uploads/image`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+              body: JSON.stringify(b64 ? { image_base64: b64 } : { image_url: src }),
+              // Generous: a 10 MB upload has to travel and then be moderated.
+              timeoutMs: 60_000,
+            });
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `Upload did not complete in time (${(err as Error).message}). Try once more; if it fails again the image is probably too large: ask the user for a smaller one or a public URL.` }],
+          content: [{ type: 'text', text: `Upload did not complete in time (${(err as Error).message}). Try once more; if it fails again, use file_bytes and the PUT URL instead of base64.` }],
           isError: true,
         };
       }

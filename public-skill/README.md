@@ -47,7 +47,7 @@ OAuth (above) is the default and needs no key. You need credits on the account, 
 | `list_models` | The catalog: modes, limits, prices per quality, what each model is good and bad at, how to select it, recent results. | 0 |
 | `list_characters` | Saved characters (sheet + portrait URLs) to pass as `refs`. | 0 |
 | `get_run_status` | Poll a job id until it is done; returns the URL. | 0 |
-| `upload_image` | Bytes in, https URL out. Call it before passing a photo. | 0 |
+| `upload_image` | A file on disk, or bytes, or a foreign URL in; an https URL out. Call it before passing a photo. | 0 |
 | `rate_run` | Say what you thought of a finished run, 1 to 5 plus a note. Feeds the per-model stats and `model:"auto"`. | 0 |
 
 ## 4. Ten-second tour
