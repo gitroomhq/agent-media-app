@@ -73,7 +73,7 @@ export async function uploadImageRoute(req: Request, res: Response): Promise<voi
     // blocked host, moderation) far more often than for infrastructure ones.
     // Those must reach the agent as a 400 it can act on, not a 500 it retries.
     const userFixable =
-      /not a PNG or JPEG|too large|exceeds|moderation|blocked|private|https|empty|invalid base64|decode/i.test(
+      /not a PNG or JPEG|too large|exceeds|moderation|blocked|private|https|empty|invalid base64|decode|incomplete or corrupt/i.test(
         message,
       );
     if (!userFixable) console.error(`[v1 uploads/image] ${message}`);
@@ -101,7 +101,7 @@ export async function uploadImageRoute(req: Request, res: Response): Promise<voi
 function failure(res: Response, err: unknown, tag: string): void {
   const message = (err as Error)?.message ?? 'Upload failed';
   const userFixable =
-    /not a PNG or JPEG|too large|exceeds|moderation|blocked|private|https|empty|nothing was uploaded|does not belong|bytes must be/i.test(
+    /not a PNG or JPEG|too large|exceeds|moderation|blocked|private|https|empty|nothing was uploaded|does not belong|bytes must be|incomplete or corrupt/i.test(
       message,
     );
   if (!userFixable) console.error(`[v1 uploads/${tag}] ${message}`);

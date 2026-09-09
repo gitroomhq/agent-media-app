@@ -85,6 +85,13 @@ describe('intact-image gate (the real cause of the "Invalid parameters" renders)
     expect(lib).toMatch(/resize\(64, 64, \{ fit: 'inside' \}\)\.raw\(\)/);
   });
 
+  it('reaches the agent as a 400 it can act on, not a 500 it retries', () => {
+    const routes = readFileSync(join(SRC, 'routes/v1/uploads.ts'), 'utf8');
+    // Both handlers: a corrupt file is the caller's to fix. Classed as a 500,
+    // the agent retries the same broken bytes and the message never shows.
+    expect(routes.match(/incomplete or corrupt/g)?.length).toBe(2);
+  });
+
   it('says what is wrong and how to send the file properly', () => {
     const fn = lib.slice(lib.indexOf('async function assertDecodable('), lib.indexOf('async function assertDecodable(') + 1200);
     expect(fn).toMatch(/incomplete or corrupt/);
