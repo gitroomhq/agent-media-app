@@ -43,6 +43,7 @@ import { runGenerationDetailed } from '../evolink-client.js';
 import { r2Upload } from '../r2.js';
 import { generateElevenLabsTTS } from '../elevenlabs-tts.js';
 import { fetchToBuffer } from './http.js';
+import sharp from 'sharp';
 
 const execFileAsync = promisify(execFile);
 const R2_BUCKET = 'generation-outputs';
@@ -132,6 +133,43 @@ export function buildVideoBody(p) {
   return body;
 }
 
+/**
+ * Every reference image must actually decode before we spend a provider
+ * render on it.
+ *
+ * A corrupt or truncated image is not a provider problem, but it looks like
+ * one: EvoLink accepts the job, runs for a minute or four, then fails with
+ * "Invalid parameters" or "Image processing failed", which names nothing
+ * the agent can act on. Measured on a real customer session: three of four
+ * uploaded product photos were broken mid-stream, and those three failed
+ * every single render (11 jobs) while the one intact photo succeeded.
+ *
+ * So we decode them ourselves first: one fetch plus a 64px decode per
+ * image, a few hundred milliseconds, and the job fails at submit with a
+ * sentence that says which URL is broken and what to do.
+ *
+ * Exported for tests.
+ */
+export async function assertRefsDecodable(urls, fetcher = fetchToBuffer) {
+  const broken = [];
+  for (const url of urls) {
+    try {
+      const buf = await fetcher(url);
+      await sharp(buf).resize(64, 64, { fit: 'inside' }).raw().toBuffer();
+    } catch (err) {
+      broken.push(`${url} (${err?.message ?? err})`);
+    }
+  }
+  if (broken.length) {
+    const e = new Error(
+      `reference image is corrupt or unreadable, so the render was not started: ${broken.join('; ')}. ` +
+        'Re-upload the ORIGINAL file with upload_image (file_bytes), which streams it whole; a truncated base64 upload produces exactly this.',
+    );
+    e.code = 'INVALID_REFERENCE_IMAGE';
+    throw e;
+  }
+}
+
 /** Friendly voice name or raw id → ElevenLabs voice id. Exported for tests. */
 export function resolveVoice(voice) {
   if (!voice) return VOICES.sarah;
@@ -205,6 +243,13 @@ export async function processGenerateVideo(params) {
     throw new Error(`generate_video: envelope names ${params.provider_model} but ${model} ${mode} mode is ${providerModel}`);
   }
   const body = buildVideoBody({ ...params, mode });
+  // Cheap, and it turns a four-minute provider failure into an instant,
+  // actionable error.
+  const imageRefs = [...(body.image_urls ?? [])];
+  if (imageRefs.length) {
+    onProgress?.('checking_refs', { count: imageRefs.length });
+    await assertRefsDecodable(imageRefs);
+  }
   const timeoutMs = (params.timeout_minutes ?? VIDEO_TIMEOUT_MIN[model] ?? DEFAULT_VIDEO_TIMEOUT_MIN) * 60_000;
 
   onProgress?.('rendering', { model: providerModel, mode, seconds: body.duration, quality: body.quality });

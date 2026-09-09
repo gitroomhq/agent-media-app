@@ -48,6 +48,26 @@ test('provider body: only fields the spec of that model id defines; empty ref li
   }
 });
 
+test('a corrupt reference image fails at submit, with the URL and the fix in the message', { skip: !buildVideoBody }, async () => {
+  const mod = await import('../src/v2/generate-pipeline.js');
+  const sharp = (await import('sharp')).default;
+  // A real, intact PNG: the point of the guard is that only a decodable
+  // image passes, so the control has to survive an actual decoder.
+  const good = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#888' } }).png().toBuffer();
+  const fetcher = async (url) => (url.includes('broken') ? Buffer.from('ffd8ffe000104a46494600', 'hex') : good);
+  await mod.assertRefsDecodable(['https://x/ok.png'], fetcher); // does not throw
+  await assert.rejects(
+    () => mod.assertRefsDecodable(['https://x/ok.png', 'https://x/broken.jpg'], fetcher),
+    (err) => {
+      assert.equal(err.code, 'INVALID_REFERENCE_IMAGE');
+      assert.match(err.message, /broken\.jpg/);
+      assert.match(err.message, /upload_image \(file_bytes\)/);
+      assert.match(err.message, /was not started/);
+      return true;
+    },
+  );
+});
+
 test('provider usage: the billing block of a finished task, null when absent', { skip: !summarizeUsage }, () => {
   assert.equal(summarizeUsage({ id: 't1', status: 'completed' }), null);
   const u = summarizeUsage({ id: 't1', usage: { cost: { usd: 0.993 }, credits_used: 149, billing_rule: 'per_second' }, task_info: { video_duration: 5 } });

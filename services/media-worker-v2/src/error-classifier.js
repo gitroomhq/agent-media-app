@@ -7,6 +7,8 @@
  *
  * Codes (most specific first):
  *
+ *   INVALID_REFERENCE_IMAGE  A reference image does not decode (usually a
+ *                            truncated upload). Nothing was rendered.
  *   CONTENT_POLICY_BLOCKED   Provider's safety filter blocked the request.
  *                            User needs to change prompt/inputs. Refund.
  *
@@ -46,7 +48,14 @@ export function classifyError(err) {
 
   // 1. Explicit code on the thrown error (set by ugc-pipeline / etc.)
   const explicitCode = err && typeof err === 'object' && typeof err.code === 'string' ? err.code : null;
-  if (explicitCode === 'TTS_FAILED' || explicitCode === 'NO_AUDIO_AVAILABLE') {
+  if (
+    explicitCode === 'TTS_FAILED' ||
+    explicitCode === 'NO_AUDIO_AVAILABLE' ||
+    // A broken input image is the caller's to fix, and the message says how.
+    // Without its own code it would surface as PROVIDER_FAILURE, which sends
+    // an agent chasing the provider for a file it uploaded itself.
+    explicitCode === 'INVALID_REFERENCE_IMAGE'
+  ) {
     return { code: explicitCode, message };
   }
 

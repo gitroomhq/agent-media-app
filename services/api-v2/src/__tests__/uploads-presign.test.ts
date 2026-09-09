@@ -73,3 +73,22 @@ describe('presigned upload (no base64 through the model)', () => {
     expect(handler).toMatch(/ORIGINAL file, unresized/);
   });
 });
+
+describe('intact-image gate (the real cause of the "Invalid parameters" renders)', () => {
+  const lib = readFileSync(join(SRC, 'lib/r2-upload.ts'), 'utf8');
+
+  it('every path into storage decodes the image, not just its first bytes', () => {
+    // base64, presigned confirm, and re-hosted URL: three ways in, one gate.
+    expect(lib.match(/await assertDecodable\(/g)?.length).toBe(3);
+    expect(lib).toContain('async function assertDecodable(');
+    // Header-only checks are what let a truncated file through before.
+    expect(lib).toMatch(/resize\(64, 64, \{ fit: 'inside' \}\)\.raw\(\)/);
+  });
+
+  it('says what is wrong and how to send the file properly', () => {
+    const fn = lib.slice(lib.indexOf('async function assertDecodable('), lib.indexOf('async function assertDecodable(') + 1200);
+    expect(fn).toMatch(/incomplete or corrupt/);
+    expect(fn).toMatch(/truncated base64/);
+    expect(fn).toMatch(/file_bytes/);
+  });
+});

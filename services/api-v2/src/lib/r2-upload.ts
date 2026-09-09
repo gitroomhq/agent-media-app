@@ -18,6 +18,7 @@ import { lookup as dnsLookupCb } from 'node:dns';
 import { promisify } from 'node:util';
 import type { IncomingMessage } from 'node:http';
 import { moderateImageOrThrow } from './image-moderation.js';
+import sharp from 'sharp';
 
 const dnsLookupAll = promisify(dnsLookupCb);
 
@@ -97,6 +98,37 @@ export interface UploadedImage {
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB hard cap.
 
 /**
+ * Reject an image that is not fully intact.
+ *
+ * WHY: magic bytes only say how a file STARTS. A photo that reached us as
+ * truncated or mangled base64 still begins with `FFD8FF`, so it passed the
+ * old check, went to storage, and then the video provider failed on it
+ * minutes later with a generic "Invalid parameters" that named nothing.
+ * Measured on one customer session: three of four uploaded product photos
+ * were corrupt mid-stream, and exactly those three failed every render;
+ * the one intact file is the only one that produced a video.
+ *
+ * Decoding a downscaled copy is the cheapest honest test: sharp walks the
+ * whole entropy stream, so truncation and mid-file corruption both throw,
+ * while an intact 25 MB photo costs a few milliseconds.
+ */
+async function assertDecodable(bytes: Buffer, mime: string): Promise<{ width: number; height: number }> {
+  try {
+    const meta = await sharp(bytes).metadata();
+    // Force the pixels through a decoder: metadata alone reads the header.
+    await sharp(bytes).resize(64, 64, { fit: 'inside' }).raw().toBuffer();
+    if (!meta.width || !meta.height) throw new Error('no dimensions');
+    return { width: meta.width, height: meta.height };
+  } catch (err) {
+    throw new Error(
+      `r2: the image is incomplete or corrupt (${bytes.byteLength} bytes of ${mime}, ${(err as Error).message}). ` +
+        'This is what a truncated base64 upload looks like: send the whole file, or use the presigned upload ' +
+        '(upload_image with file_bytes) which streams the original file and cannot truncate it.',
+    );
+  }
+}
+
+/**
  * Decode a base64 image payload (with or without a `data:` prefix),
  * validate MIME + size, upload to R2, and return the public URL.
  *
@@ -144,6 +176,10 @@ export async function uploadUserImageBase64(
   }
   mime = isPng ? 'image/png' : 'image/jpeg';
   const ext = isPng ? 'png' : 'jpg';
+
+  // Intact-image gate: a truncated upload must never reach storage, or a
+  // provider fails on it later and nobody can see why.
+  await assertDecodable(bytes, mime);
 
   // Content-moderation gate: reject unsafe user images BEFORE they reach storage.
   await moderateImageOrThrow(bytes, mime);
@@ -291,6 +327,8 @@ export async function confirmUpload(userId: string, uploadKey: string): Promise<
     const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
     if (!isPng && !isJpeg) throw new Error('r2: uploaded file is not a PNG or JPEG');
     const mime: 'image/png' | 'image/jpeg' = isPng ? 'image/png' : 'image/jpeg';
+    // A PUT that was cut off mid-flight fails here, before anything is published.
+    await assertDecodable(bytes, mime);
     await moderateImageOrThrow(bytes, mime);
     const key = `vnext/uploads/${userId}/${randomUUID()}.${isPng ? 'png' : 'jpg'}`;
     await getClient().send(
@@ -492,6 +530,9 @@ export async function uploadUserImageFromUrl(
   if (!isPng && !isJpeg) throw new Error('r2: fetched URL is not a PNG or JPEG image');
   const mime: 'image/png' | 'image/jpeg' = isPng ? 'image/png' : 'image/jpeg';
   const ext = isPng ? 'png' : 'jpg';
+
+  // A half-served or corrupt remote image is caught here, not by a provider.
+  await assertDecodable(bytes, mime);
 
   // Content-moderation gate: reject unsafe user images BEFORE they reach storage.
   await moderateImageOrThrow(bytes, mime);
