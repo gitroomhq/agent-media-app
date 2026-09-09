@@ -191,6 +191,32 @@ export async function uploadUserImageBase64(
 //                    and is deleted when confirmation fails.
 
 const PRESIGN_TTL_SECONDS = 15 * 60;
+
+/**
+ * A client used ONLY for signing PUT URLs.
+ *
+ * The default SDK behaviour adds a CRC32 checksum of the request body to
+ * every PutObject. There is no body at signing time, so it signs the
+ * checksum of nothing (`x-amz-checksum-crc32=AAAAAA==`) and the uploader
+ * would have to send exactly that. R2 ignores it today, which is luck, not
+ * a contract. WHEN_REQUIRED drops it, so the signature covers only what the
+ * caller can actually reproduce: the host and the content length.
+ */
+let _presignClient: S3Client | null = null;
+function getPresignClient(): S3Client {
+  if (_presignClient) return _presignClient;
+  const env = readEnv();
+  const endpoint =
+    process.env.S3_ENDPOINT?.trim() || `https://${env.accountId}.r2.cloudflarestorage.com`;
+  _presignClient = new S3Client({
+    region: process.env.S3_REGION?.trim() || 'auto',
+    endpoint,
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE?.trim() === 'true',
+    credentials: { accessKeyId: env.accessKeyId, secretAccessKey: env.secretAccessKey },
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+  });
+  return _presignClient;
+}
 /** Direct PUT skips base64's ~33% inflation, so the cap can be the real file size. */
 export const MAX_PRESIGNED_BYTES = 25 * 1024 * 1024;
 
@@ -231,7 +257,7 @@ export async function presignUpload(
     // identical S3Client type is nominally different across them. A live PUT
     // against R2 is what actually proves this signature, and the presign test
     // exercises it.
-    getClient() as unknown as Parameters<typeof getSignedUrl>[0],
+    getPresignClient() as unknown as Parameters<typeof getSignedUrl>[0],
     new PutObjectCommand({ Bucket: env.bucket, Key: key, ContentType: mime, ContentLength: bytes }) as unknown as Parameters<typeof getSignedUrl>[1],
     { expiresIn: PRESIGN_TTL_SECONDS },
   );
