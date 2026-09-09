@@ -63,6 +63,28 @@ test('the worker mode table equals the catalog (source of truth: packages/schema
   assert.deepEqual([...inWorker].sort(), [...inCatalog].sort());
 });
 
+const img = await import('../src/image-models.js').catch(() => ({}));
+
+test('image models: catalog id maps to one provider id and the quality tier it is priced at', { skip: !img.resolveImageModel }, () => {
+  assert.equal(img.DEFAULT_IMAGE_MODEL, 'gpt-image-2.5');
+  assert.deepEqual(img.resolveImageModel(undefined), { providerModel: 'gpt-image-2.5-sunburst', quality: 'high' });
+  assert.deepEqual(img.resolveImageModel('gpt-image-2.5-flare'), { providerModel: 'gpt-image-2.5-flare', quality: 'high' });
+  assert.deepEqual(img.resolveImageModel('gpt-image-2'), { providerModel: 'gpt-image-2', quality: 'medium' });
+  // An id the worker does not know still renders, on the default.
+  assert.equal(img.resolveImageModel('nope').providerModel, 'gpt-image-2.5-sunburst');
+});
+
+test('the worker image table equals the catalog (source of truth: packages/schema/src/v2/models.ts)', { skip: !img.IMAGE_MODELS }, async () => {
+  const { readFile } = await import('node:fs/promises');
+  const src = await readFile(new URL('../../../packages/schema/src/v2/models.ts', import.meta.url), 'utf8').catch(() => null);
+  if (!src) return;
+  for (const [id, { providerModel, quality }] of Object.entries(img.IMAGE_MODELS)) {
+    const rec = src.slice(src.indexOf(`  '${id}': {`), src.indexOf(`  '${id}': {`) + 900);
+    assert.ok(rec.includes(`providerModel: '${providerModel}'`), `${id} provider id`);
+    assert.ok(rec.includes(`image: { quality: '${quality}' }`), `${id} quality tier`);
+  }
+});
+
 test('voice: friendly names map to ElevenLabs ids, raw ids pass through', { skip: !resolveVoice }, () => {
   assert.equal(resolveVoice('sarah'), 'EXAVITQu4vr4xnSDxMaL');
   assert.equal(resolveVoice('Liam'), 'TX3LPaxmHKxFdv7VOQHJ');

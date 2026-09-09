@@ -56,7 +56,9 @@ Notes for seedance-2.5:
 |---|---|---|---|---|---|---|
 | [seedance-2.0](models/seedance-2.0.md) (default) | video | standard | 15 credits/s at 480p, 30 at 720p, 75 at 1080p | text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p; image-to-video (first_frame + optional last_frame): 4 to 15 s, default aspect adaptive, 480p/720p/1080p; reference (refs / video_refs / audio_refs, up to 9 images, 3 clips, 15 s total, 3 audio, 15 s total, not alone): 4 to 15 s, default aspect 9:16, 480p/720p/1080p | talking-head UGC; product in hands; crazy look; bulk daily posts; animating a still (first frame) into a clip | clips over 15s; hero shots where 2.5 detail is worth 3x the price; anything that needs a seed |
 | [seedance-2.5](models/seedance-2.5.md) | video | premium | 50 credits/s at 480p, 99 at 720p, 180 at 1080p | text (prompt only): 4 to 15 s, default aspect 9:16, 480p/720p/1080p; image-to-video (first_frame + optional last_frame): 4 to 15 s, aspect adaptive only, 480p/720p/1080p; reference (refs / video_refs / audio_refs, up to 30 images, 10 clips, 30 s total, 10 audio, 30 s total): 4 to 15 s, default aspect 9:16, 480p/720p/1080p | hero product ads; close-up faces; one clip that has to be the best | drafts; bulk; anything where 2.0 is good enough: it is about 3x the credits; anyone who cannot wait 15 to 30 minutes |
-| [gpt-image-2](models/gpt-image-2.md) (default) | image | standard | 20 credits per image | 1024x1024, 1024x1536, 1536x1024; refs up to 4 | portraits; character sheets; framing wireframes; product placement frames; a first frame for generate_video | photoreal 4K hero stills |
+| [gpt-image-2.5](models/gpt-image-2.5.md) (default) | image | premium | 20 credits per image | 1024x1024, 1024x1536, 1536x1024; refs up to 4 | portraits and character sheets that a video has to keep; the first frame of a clip; product in hand; edits that must not lose the face | bulk throwaway drafts where gpt-image-2.5-flare is faster |
+| [gpt-image-2.5-flare](models/gpt-image-2.5-flare.md) | image | standard | 20 credits per image | 1024x1024, 1024x1536, 1536x1024; refs up to 4 | variants and drafts at the same quality tier; batches of frames; anything where a few seconds matter | the one sheet a whole series depends on, where gpt-image-2.5 edits hold identity a little better |
+| [gpt-image-2](models/gpt-image-2.md) | image | standard | 20 credits per image | 1024x1024, 1024x1536, 1536x1024; refs up to 4 | the previous generation, kept selectable for runs that were built on it | new work: gpt-image-2.5 is the default and holds identity better |
 | [elevenlabs-tts](models/elevenlabs-tts.md) (default) | audio | standard | 1 credit per 100 characters | up to 4000 characters per call | voiceover on b-roll; narration; a standalone voice file; an audio reference for generate_video | lip-synced talking head: generate_video renders speech natively |
 
 ## How to use each model
@@ -95,11 +97,33 @@ From the catalog `usage` card. `list_models` returns the same text plus the last
   - In image mode leave aspect out (it is adaptive); the frame decides the ratio.
   - Do not put edit or extend wording in a reference prompt.
 
-### gpt-image-2 (default image)
+### gpt-image-2.5 (default image)
 
-- **Pick it when** you are building the reference or the first frame a video will use.
-- **Best for:** portraits; character sheets; framing wireframes; product placement frames; a first frame for generate_video.
-- **Avoid for:** photoreal 4K hero stills.
+- **Pick it when** you are making the image a video will be built on: a portrait, a character sheet, a first frame, or an edit that has to keep the same person.
+- **Best for:** portraits and character sheets that a video has to keep; the first frame of a clip; product in hand; edits that must not lose the face.
+- **Avoid for:** bulk throwaway drafts where gpt-image-2.5-flare is faster.
+- **Latency:** about 30 seconds, a little longer for an edit with references.
+- **Price:** 20 credits per image.
+- **Prompting:**
+  - Concrete subject, age, framing, light, what the hands do; it follows layout instructions like "four poses on a plain background" or "headroom for a caption".
+  - With refs it edits or composes from them and holds the identity across poses, which is what makes a character sheet usable as a video reference.
+  - Pass the result straight to generate_video as first_frame (to animate it) or in refs (to keep that person across clips).
+
+### gpt-image-2.5-flare
+
+- **Pick it when** you want the same look as gpt-image-2.5 but faster, or you are making several images at once.
+- **Best for:** variants and drafts at the same quality tier; batches of frames; anything where a few seconds matter.
+- **Avoid for:** the one sheet a whole series depends on, where gpt-image-2.5 edits hold identity a little better.
+- **Latency:** about 15 to 30 seconds.
+- **Price:** 20 credits per image.
+- **Prompting:**
+  - Same prompts as gpt-image-2.5; it is the speed tier of the same family.
+
+### gpt-image-2
+
+- **Pick it when** you are reproducing something that was made on gpt-image-2; otherwise take the default.
+- **Best for:** the previous generation, kept selectable for runs that were built on it.
+- **Avoid for:** new work: gpt-image-2.5 is the default and holds identity better.
 - **Latency:** under a minute.
 - **Price:** 20 credits per image.
 - **Prompting:**

@@ -6,7 +6,7 @@ The image model behind every video: it draws the portrait, the multi-view charac
 
 | | |
 |---|---|
-| Kind | image (default for `generate_image`) |
+| Kind | image |
 | Tier | standard |
 | Status | **live** |
 | Provider | openai (`gpt-image-2`) |
@@ -19,11 +19,11 @@ The image model behind every video: it draws the portrait, the multi-view charac
 
 ## How to use it
 
-**Pick this when** you are building the reference or the first frame a video will use.
+**Pick this when** you are reproducing something that was made on gpt-image-2; otherwise take the default.
 
-**Best for:** portraits; character sheets; framing wireframes; product placement frames; a first frame for generate_video.
+**Best for:** the previous generation, kept selectable for runs that were built on it.
 
-**Avoid for:** photoreal 4K hero stills.
+**Avoid for:** new work: gpt-image-2.5 is the default and holds identity better.
 
 **Prompting:**
 
@@ -35,8 +35,8 @@ The image model behind every video: it draws the portrait, the multi-view charac
 
 ## Usage notes
 
-- Selectable via `generate_image` (20 credits per image); the fixed video skills also use it internally for portraits and sheets.
-- Prompt adherence is strong; it follows framing instructions like headroom for a caption.
+- The previous generation. Kept live and selectable so a run built on it can be reproduced; `gpt-image-2.5` is the default for new work and holds identity better on edits.
+- Rendered at the provider's `medium` tier, the tier it was priced and verified at.
 
 ## How to select it
 

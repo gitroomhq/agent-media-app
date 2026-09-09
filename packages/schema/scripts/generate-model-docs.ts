@@ -19,27 +19,28 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { V2_MODELS, type V2ModelRecord } from '../src/v2/index.js';
-import { factTable, refreshPage } from '../src/v2/model-docs.js';
+import { generatedBlock, refreshPage } from '../src/v2/model-docs.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
+/**
+ * A page for a model that has none yet: the same generated block every
+ * other page carries (fact table, modes, usage card), then a stub for
+ * the hand-written notes underneath. Using generatedBlock here and in
+ * refreshPage is what keeps a brand new page from looking different
+ * from a refreshed one.
+ */
 function newPage(m: V2ModelRecord): string {
   return [
     `# ${m.id}`,
     '',
     '> Generated facts come from `packages/schema/src/v2/models.ts`. Edit numbers there, not here.',
     '',
+    generatedBlock(m),
+    '',
+    '## Usage notes',
+    '',
     '_No notes yet._',
-    '',
-    factTable(m),
-    '',
-    '## Best for',
-    '',
-    ...m.bestFor.map((b) => `- ${b}`),
-    '',
-    '## Avoid for',
-    '',
-    ...(m.avoidFor.length ? m.avoidFor.map((b) => `- ${b}`) : ['- –']),
     '',
   ].join('\n');
 }

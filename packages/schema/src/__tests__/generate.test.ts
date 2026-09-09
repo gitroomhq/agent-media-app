@@ -36,6 +36,7 @@ describe('loose surface: schemas', () => {
       expect(V2_MODELS[id]?.kind).toBe(kind);
     }
     expect(V2_DEFAULT_MODEL.video).toBe('seedance-2.0');
+    expect(V2_DEFAULT_MODEL.image).toBe('gpt-image-2.5');
   });
 
   it('accepts a minimal video call and fills defaults', () => {
@@ -208,7 +209,7 @@ describe('model: "auto"', () => {
 
   it('never picks a challenger on thin data or a >1.5x price', () => {
     expect(pickAuto('video', { 'seedance-2.5': S(50, 0, 0.99, 50) }).model).toBe('seedance-2.0');
-    expect(pickAuto('image', { 'gpt-image-2': S(3, 3, 0.1, 3) }).model).toBe('gpt-image-2');
+    expect(pickAuto('image', { 'gpt-image-2.5': S(3, 3, 0.1, 3) }).model).toBe('gpt-image-2.5');
   });
 
   it('abandons a default that fails >25% for a healthy live model that has the mode', () => {

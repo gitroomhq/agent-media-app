@@ -153,7 +153,7 @@
       "title": "Generate Image",
       "read_only": false,
       "spends_credits": true,
-      "description": "Render one image from YOUR prompt. Without refs it paints from the prompt; with refs (https URLs) it edits/composes from them, a portrait to re-light, a product to place in a hand, a character sheet to pose. Use it to build the reference a video needs (portrait first, then generate_video with that URL in refs). Models: gpt-image-2 (default gpt-image-2). Spends credits per image (see list_models). Returns a job id, poll get_run_status for the image URL.\n\nIMAGES: pass an https URL. If you only have raw bytes or a data: URL, call `upload_image` FIRST and pass the URL it returns. Never paste base64 into these arguments, the client prints tool arguments in the conversation, so a base64 image becomes a wall of text for the user and is re-sent on every retry.",
+      "description": "Render one image from YOUR prompt. Without refs it paints from the prompt; with refs (https URLs) it edits/composes from them, a portrait to re-light, a product to place in a hand, a character sheet to pose. Use it to build the reference a video needs (portrait first, then generate_video with that URL in refs). Models: gpt-image-2.5, gpt-image-2.5-flare, gpt-image-2 (default gpt-image-2.5). Spends credits per image (see list_models). Returns a job id, poll get_run_status for the image URL.\n\nIMAGES: pass an https URL. If you only have raw bytes or a data: URL, call `upload_image` FIRST and pass the URL it returns. Never paste base64 into these arguments, the client prints tool arguments in the conversation, so a base64 image becomes a wall of text for the user and is re-sent on every retry.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -380,11 +380,11 @@
   ],
   "models": {
     "defaults": {
-      "image": "gpt-image-2",
+      "image": "gpt-image-2.5",
       "video": "seedance-2.0",
       "audio": "elevenlabs-tts"
     },
-    "auto_policy": "model:\"auto\" starts from the kind's default (image: gpt-image-2, video: seedance-2.0, audio: elevenlabs-tts); switches only when the default failed >25% of >=10 runs and another live model is healthy, or when a live model within 1.5x the default's price beats its auto score by >=0.1 over >=10 judged runs. Scores come from an auto-judge that grades every loose-surface job (3 frames or the image against the realism rubric, prompt adherence, identity match) plus rate_run.",
+    "auto_policy": "model:\"auto\" starts from the kind's default (image: gpt-image-2.5, video: seedance-2.0, audio: elevenlabs-tts); switches only when the default failed >25% of >=10 runs and another live model is healthy, or when a live model within 1.5x the default's price beats its auto score by >=0.1 over >=10 judged runs. Scores come from an auto-judge that grades every loose-surface job (3 frames or the image against the realism rubric, prompt adherence, identity match) plus rate_run.",
     "live": [
       {
         "recent": null,
@@ -836,6 +836,131 @@
       },
       {
         "recent": null,
+        "id": "gpt-image-2.5",
+        "kind": "image",
+        "tier": "premium",
+        "status": "live",
+        "provider": "openai",
+        "modes": [
+          "text-to-image",
+          "image-edit"
+        ],
+        "features": [
+          "portrait",
+          "character-sheet",
+          "wireframe",
+          "identity-hold",
+          "multi-reference",
+          "prompt-adherence"
+        ],
+        "limits": {
+          "resolutions": [
+            "1024x1024",
+            "1024x1536",
+            "1536x1024"
+          ],
+          "refsMax": 4
+        },
+        "video": null,
+        "credits": {
+          "unit": "image",
+          "perUnit": 20
+        },
+        "price_default": "20 credits per image",
+        "quality": "premium",
+        "speed": "fast",
+        "best_for": [
+          "portraits and character sheets that a video has to keep",
+          "the first frame of a clip",
+          "product in hand",
+          "edits that must not lose the face"
+        ],
+        "avoid_for": [
+          "bulk throwaway drafts where gpt-image-2.5-flare is faster"
+        ],
+        "usage": {
+          "pick_when": "you are making the image a video will be built on: a portrait, a character sheet, a first frame, or an edit that has to keep the same person",
+          "prompt_tips": [
+            "Concrete subject, age, framing, light, what the hands do; it follows layout instructions like \"four poses on a plain background\" or \"headroom for a caption\".",
+            "With refs it edits or composes from them and holds the identity across poses, which is what makes a character sheet usable as a video reference.",
+            "Pass the result straight to generate_video as first_frame (to animate it) or in refs (to keep that person across clips)."
+          ],
+          "latency": "about 30 seconds, a little longer for an edit with references"
+        },
+        "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/gpt-image-2.5.md",
+        "verified": null,
+        "select_with": {
+          "field": "model",
+          "value": "gpt-image-2.5",
+          "on": [
+            "generate_image (MCP)",
+            "POST /v2/generate/image"
+          ],
+          "not_on": []
+        }
+      },
+      {
+        "recent": null,
+        "id": "gpt-image-2.5-flare",
+        "kind": "image",
+        "tier": "standard",
+        "status": "live",
+        "provider": "openai",
+        "modes": [
+          "text-to-image",
+          "image-edit"
+        ],
+        "features": [
+          "portrait",
+          "character-sheet",
+          "wireframe",
+          "fast"
+        ],
+        "limits": {
+          "resolutions": [
+            "1024x1024",
+            "1024x1536",
+            "1536x1024"
+          ],
+          "refsMax": 4
+        },
+        "video": null,
+        "credits": {
+          "unit": "image",
+          "perUnit": 20
+        },
+        "price_default": "20 credits per image",
+        "quality": "good",
+        "speed": "fast",
+        "best_for": [
+          "variants and drafts at the same quality tier",
+          "batches of frames",
+          "anything where a few seconds matter"
+        ],
+        "avoid_for": [
+          "the one sheet a whole series depends on, where gpt-image-2.5 edits hold identity a little better"
+        ],
+        "usage": {
+          "pick_when": "you want the same look as gpt-image-2.5 but faster, or you are making several images at once",
+          "prompt_tips": [
+            "Same prompts as gpt-image-2.5; it is the speed tier of the same family."
+          ],
+          "latency": "about 15 to 30 seconds"
+        },
+        "docs_url": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/models/gpt-image-2.5-flare.md",
+        "verified": null,
+        "select_with": {
+          "field": "model",
+          "value": "gpt-image-2.5-flare",
+          "on": [
+            "generate_image (MCP)",
+            "POST /v2/generate/image"
+          ],
+          "not_on": []
+        }
+      },
+      {
+        "recent": null,
         "id": "gpt-image-2",
         "kind": "image",
         "tier": "standard",
@@ -868,17 +993,13 @@
         "quality": "good",
         "speed": "fast",
         "best_for": [
-          "portraits",
-          "character sheets",
-          "framing wireframes",
-          "product placement frames",
-          "a first frame for generate_video"
+          "the previous generation, kept selectable for runs that were built on it"
         ],
         "avoid_for": [
-          "photoreal 4K hero stills"
+          "new work: gpt-image-2.5 is the default and holds identity better"
         ],
         "usage": {
-          "pick_when": "you are building the reference or the first frame a video will use",
+          "pick_when": "you are reproducing something that was made on gpt-image-2; otherwise take the default",
           "prompt_tips": [
             "Concrete subject, age, framing, light, what the hands do; it follows layout instructions like \"headroom for a caption\".",
             "With refs it EDITS or composes from them (a product into a hand, a portrait re-lit); without refs it paints from the prompt alone."
@@ -1419,6 +1540,16 @@
         "reference_clips": "seconds of video_refs are measured at submit and billed at the same per-second rate as output seconds"
       },
       {
+        "model": "gpt-image-2.5",
+        "kind": "image",
+        "rate": "20 credits per image"
+      },
+      {
+        "model": "gpt-image-2.5-flare",
+        "kind": "image",
+        "rate": "20 credits per image"
+      },
+      {
         "model": "gpt-image-2",
         "kind": "image",
         "rate": "20 credits per image"
@@ -1500,10 +1631,10 @@
         "breakdown": "5s on seedance-2.5 (text mode, 720p) at 99 credits/second"
       },
       {
-        "model": "gpt-image-2",
+        "model": "gpt-image-2.5",
         "credits": 20,
         "usd": 0.2,
-        "breakdown": "1 image on gpt-image-2 at 20 credits/image"
+        "breakdown": "1 image on gpt-image-2.5 at 20 credits/image"
       },
       {
         "model": "elevenlabs-tts",

@@ -14,7 +14,7 @@ You are the director. agent-media gives you three primitives and a model catalog
 
 1. **Decide the shot** in words: who, where, what happens, camera, and, if anyone speaks, the exact words in quotes.
 2. **Pick the mode.** A still to animate: image-to-video (`first_frame`, optional `last_frame`). An identity, a look, a motion or a sound to keep: reference (`refs`, `video_refs`, `audio_refs`). Neither: text. Frames and refs cannot be mixed on Seedance.
-3. **Pick the model.** Omit `model` and you get the default (`seedance-2.0` for video, `gpt-image-2` for images, `elevenlabs-tts` for speech); pass `"auto"` to let recent results decide. Call `list_models` when the job is unusual, it says what each model is good at, bad at, its modes and limits, what it costs per quality, and how it has actually performed lately. Only live models are accepted; naming a planned one returns the live list.
+3. **Pick the model.** Omit `model` and you get the default (`seedance-2.0` for video, `gpt-image-2.5` for images, `elevenlabs-tts` for speech); pass `"auto"` to let recent results decide. Call `list_models` when the job is unusual, it says what each model is good at, bad at, its modes and limits, what it costs per quality, and how it has actually performed lately. Only live models are accepted; naming a planned one returns the live list.
 4. **Get identity right.** Same face across clips: pass the same reference URL in `refs` every time and call it @image1 in the prompt. Make the reference with `generate_image` (a clean portrait), take it from `list_characters` (a saved character sheet), or `upload_image` the user's photo. References are the only way a series stays consistent; there is no other handle.
 5. **Quote if the user cares about cost** (`quote` costs nothing), then call the tool.
 6. **Poll `get_run_status`** with the job id (`wait: true`) until it is `completed`, and hand the user the URL. Never report success before you hold the URL.
@@ -125,11 +125,33 @@ From the catalog `usage` card. `list_models` returns the same text plus the last
   - In image mode leave aspect out (it is adaptive); the frame decides the ratio.
   - Do not put edit or extend wording in a reference prompt.
 
-### gpt-image-2 (default image)
+### gpt-image-2.5 (default image)
 
-- **Pick it when** you are building the reference or the first frame a video will use.
-- **Best for:** portraits; character sheets; framing wireframes; product placement frames; a first frame for generate_video.
-- **Avoid for:** photoreal 4K hero stills.
+- **Pick it when** you are making the image a video will be built on: a portrait, a character sheet, a first frame, or an edit that has to keep the same person.
+- **Best for:** portraits and character sheets that a video has to keep; the first frame of a clip; product in hand; edits that must not lose the face.
+- **Avoid for:** bulk throwaway drafts where gpt-image-2.5-flare is faster.
+- **Latency:** about 30 seconds, a little longer for an edit with references.
+- **Price:** 20 credits per image.
+- **Prompting:**
+  - Concrete subject, age, framing, light, what the hands do; it follows layout instructions like "four poses on a plain background" or "headroom for a caption".
+  - With refs it edits or composes from them and holds the identity across poses, which is what makes a character sheet usable as a video reference.
+  - Pass the result straight to generate_video as first_frame (to animate it) or in refs (to keep that person across clips).
+
+### gpt-image-2.5-flare
+
+- **Pick it when** you want the same look as gpt-image-2.5 but faster, or you are making several images at once.
+- **Best for:** variants and drafts at the same quality tier; batches of frames; anything where a few seconds matter.
+- **Avoid for:** the one sheet a whole series depends on, where gpt-image-2.5 edits hold identity a little better.
+- **Latency:** about 15 to 30 seconds.
+- **Price:** 20 credits per image.
+- **Prompting:**
+  - Same prompts as gpt-image-2.5; it is the speed tier of the same family.
+
+### gpt-image-2
+
+- **Pick it when** you are reproducing something that was made on gpt-image-2; otherwise take the default.
+- **Best for:** the previous generation, kept selectable for runs that were built on it.
+- **Avoid for:** new work: gpt-image-2.5 is the default and holds identity better.
 - **Latency:** under a minute.
 - **Price:** 20 credits per image.
 - **Prompting:**

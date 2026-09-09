@@ -176,6 +176,12 @@ export const V2ModelRecordSchema = z
       })
       .default({}),
     video: V2VideoSpecSchema.optional(),
+    /**
+     * Image models: the provider quality tier we send. It is not a user
+     * choice (one price per image), it is the tier this model is priced
+     * and verified at, so the worker never hardcodes it.
+     */
+    image: z.object({ quality: z.enum(['low', 'medium', 'high', 'xhigh']) }).optional(),
     credits: V2ModelCreditsSchema.optional(),
     quality: z.enum(['draft', 'good', 'premium']),
     speed: z.enum(['fast', 'medium', 'slow']),
@@ -209,6 +215,8 @@ export const V2ModelRecordSchema = z
         }
       }
     } else if (m.video) issue('only video models carry video.modes');
+    if (m.kind === 'image' && m.status === 'live' && !m.image) issue('live image models must name the provider quality tier');
+    if (m.kind !== 'image' && m.image) issue('only image models carry an image block');
   });
 
 export type V2ModelRecord = z.infer<typeof V2ModelRecordSchema>;
@@ -378,6 +386,56 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     },
     docs: 'docs/models/seedance-2.5.md',
   },
+  'gpt-image-2.5': {
+    id: 'gpt-image-2.5',
+    provider: 'openai',
+    providerModel: 'gpt-image-2.5-sunburst',
+    kind: 'image',
+    tier: 'premium',
+    status: 'live',
+    modes: ['text-to-image', 'image-edit'],
+    features: ['portrait', 'character-sheet', 'wireframe', 'identity-hold', 'multi-reference', 'prompt-adherence'],
+    limits: { resolutions: ['1024x1024', '1024x1536', '1536x1024'], refsMax: 4 },
+    image: { quality: 'high' },
+    credits: { unit: 'image', perUnit: 20 },
+    quality: 'premium',
+    speed: 'fast',
+    bestFor: ['portraits and character sheets that a video has to keep', 'the first frame of a clip', 'product in hand', 'edits that must not lose the face'],
+    avoidFor: ['bulk throwaway drafts where gpt-image-2.5-flare is faster'],
+    usage: {
+      pickWhen: 'you are making the image a video will be built on: a portrait, a character sheet, a first frame, or an edit that has to keep the same person',
+      promptTips: [
+        'Concrete subject, age, framing, light, what the hands do; it follows layout instructions like "four poses on a plain background" or "headroom for a caption".',
+        'With refs it edits or composes from them and holds the identity across poses, which is what makes a character sheet usable as a video reference.',
+        'Pass the result straight to generate_video as first_frame (to animate it) or in refs (to keep that person across clips).',
+      ],
+      latency: 'about 30 seconds, a little longer for an edit with references',
+    },
+    docs: 'docs/models/gpt-image-2.5.md',
+  },
+  'gpt-image-2.5-flare': {
+    id: 'gpt-image-2.5-flare',
+    provider: 'openai',
+    providerModel: 'gpt-image-2.5-flare',
+    kind: 'image',
+    tier: 'standard',
+    status: 'live',
+    modes: ['text-to-image', 'image-edit'],
+    features: ['portrait', 'character-sheet', 'wireframe', 'fast'],
+    limits: { resolutions: ['1024x1024', '1024x1536', '1536x1024'], refsMax: 4 },
+    image: { quality: 'high' },
+    credits: { unit: 'image', perUnit: 20 },
+    quality: 'good',
+    speed: 'fast',
+    bestFor: ['variants and drafts at the same quality tier', 'batches of frames', 'anything where a few seconds matter'],
+    avoidFor: ['the one sheet a whole series depends on, where gpt-image-2.5 edits hold identity a little better'],
+    usage: {
+      pickWhen: 'you want the same look as gpt-image-2.5 but faster, or you are making several images at once',
+      promptTips: ['Same prompts as gpt-image-2.5; it is the speed tier of the same family.'],
+      latency: 'about 15 to 30 seconds',
+    },
+    docs: 'docs/models/gpt-image-2.5-flare.md',
+  },
   'gpt-image-2': {
     id: 'gpt-image-2',
     provider: 'openai',
@@ -388,15 +446,16 @@ export const V2_MODELS: Record<string, V2ModelRecord> = {
     modes: ['text-to-image', 'image-edit'],
     features: ['portrait', 'character-sheet', 'wireframe', 'prompt-adherence'],
     limits: { resolutions: ['1024x1024', '1024x1536', '1536x1024'], refsMax: 4 },
+    image: { quality: 'medium' },
     // Standalone price for generate_image. Inside the fixed video skills the
     // portrait/sheet stages are still included in the video credits.
     credits: { unit: 'image', perUnit: 20 },
     quality: 'good',
     speed: 'fast',
-    bestFor: ['portraits', 'character sheets', 'framing wireframes', 'product placement frames', 'a first frame for generate_video'],
-    avoidFor: ['photoreal 4K hero stills'],
+    bestFor: ['the previous generation, kept selectable for runs that were built on it'],
+    avoidFor: ['new work: gpt-image-2.5 is the default and holds identity better'],
     usage: {
-      pickWhen: 'you are building the reference or the first frame a video will use',
+      pickWhen: 'you are reproducing something that was made on gpt-image-2; otherwise take the default',
       promptTips: [
         'Concrete subject, age, framing, light, what the hands do; it follows layout instructions like "headroom for a caption".',
         'With refs it EDITS or composes from them (a product into a hand, a portrait re-lit); without refs it paints from the prompt alone.',

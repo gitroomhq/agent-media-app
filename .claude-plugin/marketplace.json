@@ -12,7 +12,7 @@
     {
       "name": "agent-media",
       "source": "./public-skill",
-      "description": "Agent-Media, AI video, image and voice for agents, the loose way: you write the prompt, you pick the model (seedance-2.0, seedance-2.5, gpt-image-2, elevenlabs-tts), you pass frames or references. generate_video has three modes: text, image-to-video (first_frame, optional last_frame) and reference (refs, video_refs, audio_refs addressed as @image1 @video1 @audio1). Nine tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. list_models tells you what each model is good for, its modes, limits and price per quality. One MCP URL, browser sign-in."
+      "description": "Agent-Media, AI video, image and voice for agents, the loose way: you write the prompt, you pick the model (seedance-2.0, seedance-2.5, gpt-image-2.5, gpt-image-2.5-flare, gpt-image-2, elevenlabs-tts), you pass frames or references. generate_video has three modes: text, image-to-video (first_frame, optional last_frame) and reference (refs, video_refs, audio_refs addressed as @image1 @video1 @audio1). Nine tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. list_models tells you what each model is good for, its modes, limits and price per quality. One MCP URL, browser sign-in."
     }
   ]
 }

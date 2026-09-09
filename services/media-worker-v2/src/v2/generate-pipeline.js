@@ -38,6 +38,7 @@ import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { generateImageFromText, generateImageEdit } from '../openai-image-client.js';
+import { resolveImageModel } from '../image-models.js';
 import { runGenerationDetailed } from '../evolink-client.js';
 import { r2Upload } from '../r2.js';
 import { generateElevenLabsTTS } from '../elevenlabs-tts.js';
@@ -142,7 +143,7 @@ export function resolveVoice(voice) {
  * @param {string} params.job_id
  * @param {string} params.user_id
  * @param {string} params.prompt
- * @param {string} [params.model]        catalog id (gpt-image-2)
+ * @param {string} [params.model]        catalog id (gpt-image-2.5 | gpt-image-2.5-flare | gpt-image-2)
  * @param {string[]} [params.refs]       https reference images
  * @param {string} [params.size]         '1024x1536' | '1024x1024' | '1536x1024'
  * @param {(stage: string, meta?: object) => void} [params.onProgress]
@@ -159,14 +160,18 @@ export async function processGenerateImage(params) {
     for (const url of refs) refBuffers.push(await fetchToBuffer(url));
   }
 
-  onProgress?.('rendering', { model: 'gpt-image-2', size, refs: refBuffers.length });
+  // The agent picked a catalog id (api-v2 validated it); this is the only
+  // place that turns it into a provider id and the quality tier it is
+  // priced at.
+  const { providerModel, quality } = resolveImageModel(params.model);
+  onProgress?.('rendering', { model: providerModel, size, refs: refBuffers.length });
   const buf = refBuffers.length
-    ? await generateImageEdit({ prompt, imageBuffers: refBuffers, size, quality: 'medium' })
-    : await generateImageFromText({ prompt, size, quality: 'medium' });
+    ? await generateImageEdit({ prompt, imageBuffers: refBuffers, size, quality, model: providerModel })
+    : await generateImageFromText({ prompt, size, quality, model: providerModel });
   const key = `${user_id}/${job_id}/image.png`;
   const imageUrl = await r2Upload(R2_BUCKET, key, buf, 'image/png');
   console.log(`[v2:generate-image:${job_id}] → ${imageUrl}`);
-  return { imageUrl, outputUrl: imageUrl, providerModel: 'gpt-image-2' };
+  return { imageUrl, outputUrl: imageUrl, providerModel };
 }
 
 /**

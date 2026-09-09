@@ -61,7 +61,7 @@ export function liveModelIds(kind: V2ModelKind): string[] {
 
 /** The model used when the agent does not name one. */
 export const V2_DEFAULT_MODEL: Record<V2ModelKind, string> = {
-  image: 'gpt-image-2',
+  image: 'gpt-image-2.5',
   video: 'seedance-2.0',
   audio: 'elevenlabs-tts',
 };
