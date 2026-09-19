@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.0.0';
+  if (SURFACE === 'loose') return '2.1.0';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -316,7 +316,7 @@ function skillBody(skill: SkillEntry): string {
     '## How to call it',
     '',
     `Preferred path: MCP tool \`${toolName}\`. Schema is auto-published via \`tools/list\` ` +
-      `against the same MCP server, so don\'t restate the schema here — trust the server\'s response.`,
+      `against the same MCP server, so don't restate the schema here — trust the server's response.`,
     '',
     'Fallback path: REST.',
     '',
@@ -539,6 +539,11 @@ function cursorMarketplaceJson(): string {
 function changelog(): string {
   return [
     '# Changelog',
+    '',
+    '## 2.1.0',
+    '',
+    '- Temporary multi-image upload panels with 24-hour expiry; old connector catalogs can open and read panels through upload_image.',
+    '- Upload-only requests activate the agent-media skill. Plugin version bumped so installed clients can receive the new guidance.',
     '',
     '## 2.0.0',
     '',
@@ -870,10 +875,10 @@ if (SURFACE === 'loose') {
       // and Claude Code accepts the same form.
       name: 'agent-media',
       description:
-        'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at about 2x; gpt-image-2.5 for images; elevenlabs-tts for speech), pick the video mode (text; image-to-video with first_frame and optional last_frame; reference with refs, video_refs, audio_refs addressed as @image1 @video1 @audio1), pick the quality (480p, 720p default, 1080p), quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. For user photos, discover open_upload_panel and get_uploads first: drag-and-drop images with 24-hour expiry and a browser fallback. Use for UGC clips, product-in-hand, animating a still, first-to-last-frame moves, matching a reference clip, reaction clips, portraits, voiceover, and series with one face.',
+        'Use Agent Media to upload reference images, open an image upload panel, or generate AI images, video and speech. For an upload-only request, open the existing panel with open_upload_panel, or upload_image with {} if only older tools are available; show the browser link and wait. Do not build an upload page or request a local folder. Select live models with list_models, quote when needed, generate, then poll get_run_status. Covers UGC, portraits, product photos, image-to-video, reference video, voiceover and recurring characters.',
       'allowed-tools': [...LOOSE_TOOLS, 'open_upload_panel', 'get_uploads'].map((n) => `mcp__agent-media__${n}`),
       'x-skill-slug': 'agent-media',
-      'x-skill-version': '2.0.0',
+      'x-skill-version': pluginVersion(),
       'x-surface': 'loose',
     }) + looseSkillBody(REPO_ROOT),
   );

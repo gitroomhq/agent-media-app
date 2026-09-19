@@ -113,7 +113,7 @@ export const uploadImageTool = {
       },
       upload_key: {
         type: 'string',
-        description: 'Step 2 of the file path: the upload_key you were given, after the curl PUT finished. Returns the image_url.',
+        description: 'Reuse the exact upload_key returned earlier: a panel: key retrieves all ready temporary images; a file upload key confirms the completed PUT and returns its image_url.',
       },
       image_base64: {
         type: 'string',
