@@ -11,7 +11,7 @@
     {
       "name": "agent-media",
       "source": "public-skill",
-      "description": "Generate video, images and voice: your prompt, your model, your references. Nine tools over a hosted MCP server.",
+      "description": "Generate video, images and voice. Optional image upload panels with 24-hour expiry. One hosted MCP server.",
       "minClientVersions": {
         "cursor": "3.13.0"
       }

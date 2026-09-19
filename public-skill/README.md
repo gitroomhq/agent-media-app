@@ -47,8 +47,13 @@ OAuth (above) is the default and needs no key. You need credits on the account, 
 | `list_models` | The catalog: modes, limits, prices per quality, what each model is good and bad at, how to select it, recent results. | 0 |
 | `list_characters` | Saved characters (sheet + portrait URLs) to pass as `refs`. | 0 |
 | `get_run_status` | Poll a job id until it is done; returns the URL. | 0 |
-| `upload_image` | A file on disk, or bytes, or a foreign URL in; an https URL out. Call it before passing a photo. | 0 |
+| `upload_image` | An already accessible file, bytes, or a foreign URL in; an https URL out. Prefer the panel for user uploads when available. | 0 |
+| `open_upload_panel`, `get_uploads` (when available) | Let the user drag and drop images, then retrieve ready URLs. Images expire after 24 hours. | 0 |
 | `rate_run` | Say what you thought of a finished run, 1 to 5 plus a note. Feeds the per-model stats and `model:"auto"`. | 0 |
+
+## User-provided images
+
+When the user wants to provide a product photo, portrait, screenshot, or image reference, check tools/list. If open_upload_panel is available, offer it first: call open_upload_panel with {}, show its inline panel or returned browser link, and wait for the user to finish. Then call get_uploads with the returned session_id and use the exact ready image_url in refs, first_frame, last_frame, or the matching skill image field. Do not start a reference-dependent generation until the required images are ready. The panel accepts still PNG, JPEG, and WebP, up to 10 images and 25 MB each. Images expire 24 hours after the panel is created; show the returned expiry, request a new upload if expired, and never make a permanent copy. Uploading uses no generation credits. Do not ask the user for base64, shell commands, or a public hosting service; do not continuously poll while waiting for them. Only offer these tools when discovered; otherwise use upload_image for an accessible file or URL. Never invent access to a chat attachment: if you cannot read it, explain that and offer the panel when available. Browser fallback works without inline UI support; do not promise an inline panel in every client.
 
 ## 4. Ten-second tour
 

@@ -1,4 +1,5 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
+import { isTemporaryImage } from '../client/temporary-image.js';
 
 import { ApplicationFailure, Context } from '@temporalio/activity';
 import { CharacterSheetGpt2ToolInputSchema } from '@agentmedia/schema';
@@ -71,7 +72,7 @@ export function makeCharacterSheetGpt2Activity(cfg: WorkerConfig) {
 
     // SSRF guard
     const allowedPrefix = cfg.r2.publicUrl.replace(/\/+$/, '') + '/';
-    if (!input.portrait_url.startsWith(allowedPrefix)) {
+    if (!input.portrait_url.startsWith(allowedPrefix) && !isTemporaryImage(input.portrait_url)) {
       throw ApplicationFailure.nonRetryable(
         `portrait_url must be hosted on the configured R2 public URL (${allowedPrefix})`,
         'REFERENCE_URL_NOT_ALLOWED',

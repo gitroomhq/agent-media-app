@@ -17,6 +17,8 @@
  * colons or "to".
  */
 
+import { IMAGE_UPLOAD_GUIDANCE } from '../src/uploads/guidance.js';
+import { openUploadPanelTool, getUploadsTool } from '../src/uploads/tools.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -159,7 +161,7 @@ export function usageSection(headingLevel = '##'): string[] {
 
 export function loosePluginDescription(): string {
   const live = liveModels().map((m) => m.id).join(', ');
-  return `Agent-Media, AI video, image and voice for agents, the loose way: you write the prompt, you pick the model (${live}), you pass frames or references. generate_video has three modes: text, image-to-video (first_frame, optional last_frame) and reference (refs, video_refs, audio_refs addressed as @image1 @video1 @audio1). Nine tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. list_models tells you what each model is good for, its modes, limits and price per quality. One MCP URL, browser sign-in.`;
+  return `Agent-Media, AI video, image and voice for agents, the loose way: you write the prompt, you pick the model (${live}), you pass frames or references. generate_video has three modes: text, image-to-video (first_frame, optional last_frame) and reference (refs, video_refs, audio_refs addressed as @image1 @video1 @audio1). Nine tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. list_models tells you what each model is good for, its modes, limits and price per quality. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.`;
 }
 
 export function looseReadme(): string {
@@ -216,8 +218,13 @@ export function looseReadme(): string {
     '| `list_models` | The catalog: modes, limits, prices per quality, what each model is good and bad at, how to select it, recent results. | 0 |',
     '| `list_characters` | Saved characters (sheet + portrait URLs) to pass as `refs`. | 0 |',
     '| `get_run_status` | Poll a job id until it is done; returns the URL. | 0 |',
-    '| `upload_image` | A file on disk, or bytes, or a foreign URL in; an https URL out. Call it before passing a photo. | 0 |',
+    '| `upload_image` | An already accessible file, bytes, or a foreign URL in; an https URL out. Prefer the panel for user uploads when available. | 0 |',
+    '| `open_upload_panel`, `get_uploads` (when available) | Let the user drag and drop images, then retrieve ready URLs. Images expire after 24 hours. | 0 |',
     '| `rate_run` | Say what you thought of a finished run, 1 to 5 plus a note. Feeds the per-model stats and `model:"auto"`. | 0 |',
+    '',
+    '## User-provided images',
+    '',
+    IMAGE_UPLOAD_GUIDANCE,
     '',
     '## 4. Ten-second tour',
     '',
@@ -288,6 +295,10 @@ export function looseSkillBody(repoRoot: string): string {
     '',
     'You are the director. agent-media gives you three primitives and a model catalog; there is no fixed recipe between your intent and the render. Read this once; it is the whole manual.',
     '',
+    '## User-provided images: offer the upload panel',
+    '',
+    IMAGE_UPLOAD_GUIDANCE,
+    '',
     '## The loop',
     '',
     '1. **Decide the shot** in words: who, where, what happens, camera, and, if anyone speaks, the exact words in quotes.',
@@ -299,7 +310,7 @@ export function looseSkillBody(repoRoot: string): string {
     '',
     '## The tools',
     '',
-    `### generate_video, ${v5} / ${v10} / ${v15} credits for 5 / 10 / 15 s on ${def.id} at ${V2_DEFAULT_VIDEO_QUALITY} (${v5lo} at 480p, ${v5hi} at 1080p for 5 s; ${p5} for 5 s on ${hero.id})`,
+        `### generate_video, ${v5} / ${v10} / ${v15} credits for 5 / 10 / 15 s on ${def.id} at ${V2_DEFAULT_VIDEO_QUALITY} (${v5lo} at 480p, ${v5hi} at 1080p for 5 s; ${p5} for 5 s on ${hero.id})`,
     '',
     'Three modes, chosen by the fields you pass:',
     '',
@@ -619,9 +630,13 @@ export function refTools(schemas: Record<string, unknown>): string {
     '',
     'The hosted connector\'s `tools/list` on the loose surface, with each input schema rendered from the same zod definitions the server validates with (`packages/schema/src/v2/generate.ts`). If this page and `tools/list` ever disagree, `tools/list` wins and CI is broken.',
     '',
+    'Optional tools open_upload_panel and get_uploads appear only when temporary uploads are enabled. Discover them before use.',
+    '',
+    IMAGE_UPLOAD_GUIDANCE,
+    '',
     'The JSON schema is the envelope; the per-model, per-mode limits (seconds, aspects, qualities, how many refs of each kind) are checked at submit against the catalog cell, see [models.md](models.md).',
     '',
-    ...LOOSE_TOOLS.flatMap((name) => [
+    ...[...LOOSE_TOOLS, openUploadPanelTool.name, getUploadsTool.name].flatMap((name) => [
       `## ${name}`,
       '',
       '```json',

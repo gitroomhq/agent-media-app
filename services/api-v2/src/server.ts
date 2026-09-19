@@ -43,6 +43,11 @@ import { GenerateAudioSchema, GenerateImageSchema, GenerateVideoSchema } from '@
 import { characterCreateRoute, listCharactersRoute, updateCharacterRoute } from './routes/v2/characters.js';
 import { listMyCharactersRoute } from './routes/v1/characters.js';
 import { uploadImageRoute, presignUploadRoute, confirmUploadRoute } from './routes/v1/uploads.js';
+import { createUploadRouter } from './uploads/routes.js';
+import { createUploadStore } from './uploads/store.js';
+import { createUploadStorage } from './uploads/storage.js';
+import { UploadService, startUploadCleanup } from './uploads/service.js';
+import { temporaryUploadsEnabled, publicApiBase } from './uploads/types.js';
 import { listModelsRoute } from './routes/v1/models.js';
 import { subtitleRoute } from './routes/v2/subtitle.js';
 import { jobStreamRoute } from './routes/v2/job-stream.js';
@@ -845,6 +850,11 @@ app.use('/docs', apiReference({
 // by applyUserLimit (invoked from authMiddleware/mcpAuthMiddleware).
 app.use(ipFloodLimiter);
 
+const uploadService = temporaryUploadsEnabled()
+  ? new UploadService(createUploadStore(supabase), createUploadStorage(), publicApiBase())
+  : null;
+if (uploadService) app.use(createUploadRouter(uploadService, authMiddleware));
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 app.post('/v1/generate/:generatorId', generateLimiter, authMiddleware, videoConcurrencyGate, generateRoute);
@@ -1103,4 +1113,5 @@ app.listen(PORT, () => {
   // (same one pg_cron uses) but at a sub-pg-cron cadence so a Temporal
   // handoff failure resolves within ~6 minutes instead of ~60.
   startReconciler({ supabase });
+  if (uploadService) startUploadCleanup(uploadService);
 });

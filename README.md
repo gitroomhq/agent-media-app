@@ -103,6 +103,10 @@ agent-media selfie \
   --duration 10
 ```
 
+## Temporary image upload panel
+
+When enabled on the server, `open_upload_panel` opens a drag-and-drop uploader in compatible Claude/ChatGPT MCP Apps clients and returns a browser link for other agents. Upload PNG, JPEG, or WebP images, then call `get_uploads` to use their references in generation. Images are available for up to 24 hours; uploading uses no generation credits. See [setup, privacy, API contract, and tests](docs/temporary-image-uploads.md).
+
 ## Keeping the skill up-to-date
 
 The CLI ships an updater:

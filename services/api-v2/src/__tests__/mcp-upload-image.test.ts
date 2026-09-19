@@ -65,11 +65,13 @@ describe('hosted MCP: nothing may hang forever', () => {
   });
 
   it('keeps get_run_status wait:true under a connector client timeout', () => {
-    const m = source.match(/wait \? (\d+)_000 : 0/);
+    const m = source.match(/wait \? (\d+)_000 : (\d+)_000/);
     expect(m).not.toBeNull();
     // 60s is a common client ceiling; 110s guaranteed a client-side abort on
     // the one tool whose job is to stop the agent flying blind.
     expect(Number(m![1])).toBeLessThanOrEqual(50);
+    expect(Number(m![2])).toBeGreaterThan(0);
+    expect(Number(m![2])).toBeLessThanOrEqual(Number(m![1]));
   });
 });
 

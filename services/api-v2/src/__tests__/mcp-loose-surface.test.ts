@@ -153,6 +153,8 @@ describe('loose surface: tools/call forwarding', () => {
     const r = await client.callTool({ name: 'generate_video', arguments: { prompt: 'x'.repeat(10), model: 'kling-o3' } });
     expect(r.isError).toBe(true);
     expect((r.content as any)[0].text).toMatch(/Error \(400\)/);
+    expect((r.content as any)[0].text).toContain('model: unknown or not-live');
+    expect((r.content as any)[0].text).toContain('seedance-2.0, seedance-2.5');
   });
 
   it('on the fixed surface the loose tools are not callable', async () => {

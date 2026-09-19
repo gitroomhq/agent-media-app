@@ -1,4 +1,5 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
+import { isTemporaryImage } from '../client/temporary-image.js';
 
 import { ApplicationFailure, Context } from '@temporalio/activity';
 import { WireframeGpt2ToolInputSchema } from '@agentmedia/schema';
@@ -62,7 +63,7 @@ export function makeWireframeGpt2Activity(cfg: WorkerConfig) {
 
     // SSRF guard
     const allowedPrefix = cfg.r2.publicUrl.replace(/\/+$/, '') + '/';
-    if (!input.character_sheet_url.startsWith(allowedPrefix)) {
+    if (!input.character_sheet_url.startsWith(allowedPrefix) && !isTemporaryImage(input.character_sheet_url)) {
       throw ApplicationFailure.nonRetryable(
         `character_sheet_url must be hosted on the configured R2 public URL (${allowedPrefix})`,
         'REFERENCE_URL_NOT_ALLOWED',

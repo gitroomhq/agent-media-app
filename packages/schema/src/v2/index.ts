@@ -17,3 +17,4 @@ export * from './generators.js';
 export * from './models.js';
 export * from './generate.js';
 export * from './model-docs.js';
+export * from './temporary-image.js';

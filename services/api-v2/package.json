@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/build-upload-panel.mjs && tsc",
     "start": "node dist/server.js",
-    "dev": "tsx watch --env-file=../../.env src/server.ts",
+    "dev": "node scripts/build-upload-panel.mjs && tsx watch --env-file=../../.env src/server.ts",
     "temporal:worker": "tsx src/orchestrator/temporal/worker.ts",
     "test": "vitest run",
     "gen:public-skill": "tsx scripts/generate-public-skill.ts",
@@ -34,12 +34,15 @@
     "sharp": "^0.34.5",
     "undici": "^8.5.0",
     "zod": "^3.23.0",
-    "zod-to-json-schema": "^3.25.2"
+    "zod-to-json-schema": "^3.25.2",
+    "@modelcontextprotocol/ext-apps": "1.7.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.3",
-    "vitest": "^3.1.0"
+    "vitest": "^3.1.0",
+    "esbuild": "0.27.7",
+    "@electric-sql/pglite": "0.5.8"
   }
 }

@@ -11,7 +11,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
@@ -22,8 +22,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const PACK = join(ROOT, 'public-skill');
 const read = (rel: string) => readFileSync(join(PACK, rel), 'utf8');
 
-async function liveTools() {
-  delete process.env.AGENT_SURFACE;
+afterEach(() => vi.unstubAllEnvs());
+
+async function liveTools(uploads = true) {
+  vi.stubEnv('AGENT_SURFACE', 'loose');
+  vi.stubEnv('TEMP_UPLOADS_ENABLED', String(uploads));
   vi.resetModules();
   const { buildMcpServer } = await import('../routes/mcp.js');
   const server = buildMcpServer('ma_test');
@@ -31,16 +34,28 @@ async function liveTools() {
   await server.connect(st);
   const client = new Client({ name: 't', version: '0' });
   await client.connect(ct);
-  return (await client.listTools()).tools;
+  try {
+    return (await client.listTools()).tools;
+  } finally {
+    await client.close();
+    await server.close();
+  }
 }
 
 describe('public skill pack == hosted connector', () => {
-  it('SKILL.md allowed-tools is exactly tools/list', async () => {
+  it('SKILL.md allowed-tools matches tools/list with optional uploads enabled', async () => {
     const tools = (await liveTools()).map((t) => t.name).sort();
     const skill = read('skills/agent-media/SKILL.md');
     const fm = skill.match(/^allowed-tools: \[(.*)\]$/m)![1];
     const allowed = [...fm.matchAll(/'mcp__agent-media__([a-z_]+)'/g)].map((m) => m[1]).sort();
     expect(allowed).toEqual(tools);
+  });
+
+  it('only the documented optional tools are absent when uploads are disabled', async () => {
+    const enabled = (await liveTools(true)).map((t) => t.name);
+    const disabled = new Set((await liveTools(false)).map((t) => t.name));
+    expect(enabled.filter((name) => !disabled.has(name)).sort()).toEqual(['get_uploads', 'open_upload_panel']);
+    expect(read('reference/tools.md')).toContain('only when temporary uploads are enabled');
   });
 
   it('reference/tools.md carries every tool with the exact live input schema', async () => {

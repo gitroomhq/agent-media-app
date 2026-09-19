@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Upload images · Agent Media</title>
+    <style>
+      __UPLOAD_STYLES__
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="brand-bar">
+        <span class="brand">
+          <!-- The same chevron mark used by the Agent Media dashboard. -->
+          <svg class="mark" viewBox="0 0 27.19 27.19" fill="none" aria-hidden="true">
+            <g clip-path="url(#upload-mark-clip)">
+              <rect width="27.19" height="27.19" fill="url(#upload-mark-bg)" rx="6.43" />
+              <path fill="url(#upload-mark-shade)" d="M0 29.23V-2.06L22.12 9.99v7.46z" />
+              <path
+                fill="url(#upload-mark-bottom)"
+                d="m42.33-1.9-64.3 37.13 3.48 6.04L45.8 4.14z"
+              />
+              <path
+                fill="url(#upload-mark-top)"
+                d="M-18.57-13.72 45.74 23.4l-3.48 6.03-64.31-37.13z"
+              />
+            </g>
+            <defs>
+              <clipPath id="upload-mark-clip">
+                <rect width="27.19" height="27.19" rx="6.43" />
+              </clipPath>
+              <radialGradient id="upload-mark-bg" cx="1" cy=".5" r="1.4">
+                <stop />
+                <stop offset="1" stop-color="#6112ff" />
+              </radialGradient>
+              <linearGradient id="upload-mark-shade">
+                <stop stop-color="#2a008d" />
+                <stop offset="1" />
+              </linearGradient>
+              <linearGradient
+                id="upload-mark-bottom"
+                x1="44.5"
+                y1=".37"
+                x2="-20.41"
+                y2="37.84"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset=".32" stop-color="#9162ff" />
+                <stop offset=".69" stop-color="#4500e7" />
+              </linearGradient>
+              <linearGradient
+                id="upload-mark-top"
+                x1="-20.74"
+                y1="-11.46"
+                x2="44.18"
+                y2="26.02"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset=".32" stop-color="#9162ff" />
+                <stop offset=".69" stop-color="#4500e7" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <strong>agent-media</strong>
+        </span>
+        <span class="tag"><span></span> Image upload</span>
+      </header>
+      <section class="panel" aria-labelledby="heading">
+        <div class="intro">
+          <span class="eyebrow">FROM REFERENCE TO CREATION</span>
+          <h1 id="heading">Your next creation<br />starts here.</h1>
+          <p>
+            Add a product, a portrait, or a little inspiration.<br class="desktop-break" />
+            Your agent will take it from there.
+          </p>
+        </div>
+        <button
+          class="drop"
+          id="drop"
+          type="button"
+          aria-label="Drop images here or browse"
+          disabled
+        >
+          <span class="image-stack" aria-hidden="true">
+            <span class="sample sample-left">
+              <svg viewBox="0 0 72 80" fill="none">
+                <rect width="72" height="80" rx="6" fill="#eee6d9" />
+                <rect x="22" y="27" width="29" height="43" rx="8" fill="#bd7353" />
+                <rect x="28" y="19" width="17" height="12" rx="3" fill="#815342" />
+                <rect x="27" y="40" width="19" height="16" rx="1" fill="#f6ebd8" />
+                <path d="M32 45h9m-9 5h7" stroke="#bd7353" stroke-width="2" />
+              </svg>
+            </span>
+            <span class="sample sample-right">
+              <svg viewBox="0 0 72 80" fill="none">
+                <rect width="72" height="80" rx="6" fill="#e1e4d9" />
+                <circle cx="36" cy="30" r="13" fill="#c29678" />
+                <path d="M13 80V68c0-16 10-25 23-25s23 9 23 25v12" fill="#686e5d" />
+                <path
+                  d="M22 29c-1-14 7-20 16-19 12 1 16 12 11 24-4-1-6-9-7-14-6 7-13 5-20 9"
+                  fill="#443b36"
+                />
+              </svg>
+            </span>
+            <span class="sample sample-front">
+              <svg viewBox="0 0 80 80" fill="none">
+                <rect width="80" height="80" rx="6" fill="#e6e4f4" />
+                <circle cx="56" cy="23" r="9" fill="#faf9ff" />
+                <path d="M0 65 26 29 60 80H0z" fill="#b4a5d9" />
+                <path d="m25 80 31-38 24 28v10" fill="#7f6ba9" />
+                <path d="m18 40 8-11 8 12-8-4z" fill="#f9f7ff" />
+              </svg>
+            </span>
+            <span class="upload-badge"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 16V5m-4 4 4-4 4 4M5 16v3h14v-3" /></svg
+            ></span>
+          </span>
+          <strong>Drop your images here</strong>
+          <span class="browse">or <span>browse files</span></span>
+          <small>PNG, JPEG, WebP <span>·</span> Up to 25 MB each</small>
+        </button>
+        <input id="files" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
+        <div class="upload-status">
+          <div id="notice" role="status" aria-live="polite">Connecting to your upload panel…</div>
+          <span id="count" class="count" aria-label="0 of 10 images uploaded">0 / 10</span>
+        </div>
+        <ul class="list" id="list" aria-label="Uploaded images"></ul>
+        <div class="handoff">
+          <div class="actions">
+            <button id="use" class="primary" type="button" disabled>
+              <span id="use-label">Use images in chat</span
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14m-5-5 5 5-5 5" />
+              </svg>
+            </button>
+            <button id="copy" class="secondary" type="button" disabled>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="8" y="8" width="12" height="12" rx="3" />
+                <path d="M15 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3" /></svg
+              >Copy image links
+            </button>
+          </div>
+          <div class="expiry" id="expiry">Add your images, then continue in your conversation.</div>
+          <textarea
+            id="manual"
+            class="manual"
+            aria-label="Image links to copy"
+            readonly
+            hidden
+          ></textarea>
+        </div>
+      </section>
+      <footer>
+        <div class="retention">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 7v5l3 2" /></svg
+          ><span>24-hour storage</span><span class="separator">·</span
+          ><span>No generation credits used</span>
+        </div>
+        <p>
+          Images expire automatically. Only share links with people<br class="desktop-break" />
+          who should be able to view them.
+        </p>
+      </footer>
+    </main>
+    <script>
+      window.__UPLOAD_CONFIG__ = __UPLOAD_BOOTSTRAP_JSON__;
+    </script>
+    <script>
+      __UPLOAD_SCRIPT__;
+    </script>
+  </body>
+</html>
