@@ -1,7 +1,7 @@
 {
   "name": "agent-media",
   "description": "Agent-Media, AI video, image and voice for agents, the loose way: you write the prompt, you pick the model (seedance-2.0, seedance-2.5, gpt-image-2.5, gpt-image-2.5-flare, gpt-image-2, elevenlabs-tts), you pass frames or references. generate_video has three modes: text, image-to-video (first_frame, optional last_frame) and reference (refs, video_refs, audio_refs addressed as @image1 @video1 @audio1). Nine tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. list_models tells you what each model is good for, its modes, limits and price per quality. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "author": {
     "name": "gitroomhq",
     "url": "https://github.com/gitroomhq"

@@ -110,14 +110,14 @@ export function buildSiteData(pluginVersion: string) {
       transport: 'streamable-http',
       auth: 'OAuth 2.1 with dynamic client registration (browser sign-in); `Authorization: Bearer ma_...` API keys also accepted.',
       clients: [
-        { id: 'claude', label: 'Claude.ai / Claude Desktop', how: 'Settings > Connectors > Add custom connector > paste the URL > Connect.' },
-        { id: 'claude-code', label: 'Claude Code', command: `claude mcp add --transport http agent-media ${MCP_URL}` },
-        { id: 'codex', label: 'Codex', command: `codex mcp add agent-media --url ${MCP_URL}`, note: 'For scripted runs, write tools need `codex exec --dangerously-bypass-approvals-and-sandbox` or an approval policy that allows them.' },
+        { id: 'claude', label: 'Claude.ai / Claude Desktop / Cowork', how: 'Customize > Connectors > + > Add custom connector > paste the URL > Connect and sign in. Enable Agent Media in the conversation connector menu.' },
+        { id: 'claude-code', label: 'Claude Code', command: `claude mcp add --transport http --scope user agent-media ${MCP_URL}`, note: 'Available in all your projects. In Claude Code, run /mcp, select agent-media, and complete browser sign-in. If already connected, do not add a second copy.' },
+        { id: 'codex', label: 'Codex', command: `codex mcp add agent-media --url ${MCP_URL}`, note: 'Then run codex mcp login agent-media to complete browser sign-in. Keep your normal approval settings; review requested tool actions.' },
         { id: 'grok', label: 'Grok', command: `grok mcp add agent-media -t http ${MCP_URL}` },
         { id: 'cursor', label: 'Cursor', config: `{ "mcpServers": { "agent-media": { "url": "${MCP_URL}" } } }`, note: '~/.cursor/mcp.json' },
         { id: 'local', label: 'Any stdio client', command: 'npx -y -p @agentmedia/mcp-server@latest agent-media-mcp', note: 'A stdio proxy to the same hosted server; set AGENT_MEDIA_API_KEY. Do not register both the connector and the proxy in one client, or every tool appears twice.' },
       ],
-      prompt: `Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: ${MCP_URL} (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call list_models and tell me what you can make.`,
+      prompt: `Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: ${MCP_URL} (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call list_models and tell me what you can make.\n4. Open the existing image upload panel using open_upload_panel, or upload_image with {} if only the older tools are available. Do not generate anything yet.`,
       polling: `Every generate tool returns a job id. Call get_run_status with wait:true; each call blocks up to about 45 seconds, a video usually needs several calls (${liveVideo.map((m) => `${m.id}: ${m.usage!.latency}`).join('; ')}). Never report a result before get_run_status returned its URL.`,
     },
     tools: [...LOOSE_SURFACE_TOOLS, openUploadPanelTool, getUploadsTool].map((t) => ({

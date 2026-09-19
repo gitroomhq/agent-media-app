@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1
+
+- Clarify Claude connector sign-in and conversation activation, Claude Code user scope, and Codex OAuth login. Add a no-generation upload check to setup guidance.
+
 ## 2.1.0
 
 - Temporary multi-image upload panels with 24-hour expiry; old connector catalogs can open and read panels through upload_image.

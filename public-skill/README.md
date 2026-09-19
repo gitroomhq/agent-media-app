@@ -28,7 +28,11 @@ Set up agent-media for me so I can generate videos, images and voice from here.
 Once that's done, call list_models and tell me what you can make.
 ```
 
-Other routes: **Claude.ai / Desktop**: Settings > Connectors > add custom connector > paste the URL > Connect. **Claude Code**: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`. **Codex**: `codex mcp add agent-media --url https://api.agent-media.ai/mcp`. **Grok**: `grok mcp add agent-media -t http https://api.agent-media.ai/mcp`. **Claude Code plugin**: `/plugin marketplace add gitroomhq/agent-media-app` then `/plugin install agent-media@agent-media`. **Cursor plugin**: Settings > Plugins > search Agent Media > Install, or `/add-plugin agent-media` in chat; the plugin ships this skill plus the hosted MCP server, and Cursor opens the sign-in for you.
+Other routes: **Claude.ai / Desktop**: Customize > Connectors > + > Add custom connector > paste the URL > Connect and sign in. **Claude Code**: `claude mcp add --transport http --scope user agent-media https://api.agent-media.ai/mcp`. **Codex**: `codex mcp add agent-media --url https://api.agent-media.ai/mcp`. **Grok**: `grok mcp add agent-media -t http https://api.agent-media.ai/mcp`. **Claude Code plugin**: `/plugin marketplace add gitroomhq/agent-media-app` then `/plugin install agent-media@agent-media`. **Cursor plugin**: Settings > Plugins > search Agent Media > Install, or `/add-plugin agent-media` in chat; the plugin ships this skill plus the hosted MCP server, and Cursor opens the sign-in for you.
+
+Claude Code: after adding the server, run `/mcp`, select agent-media, and sign in. The command above uses user scope, so it works across projects. Codex: run `codex mcp login agent-media`. If Agent Media is already connected through a plugin or connector, use that connection instead of installing a duplicate.
+
+Check setup without spending credits: call `list_models`, then open the existing image upload panel (`open_upload_panel` when listed, otherwise `upload_image` with `{}`). Opening the panel confirms authenticated upload access, not credit balance. Ask for a quote before the first generation.
 
 ## 2. Auth
 

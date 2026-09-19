@@ -8,8 +8,8 @@ If you are Claude, Claude Code, Cursor or Codex, you do not need an API key or t
 https://api.agent-media.ai/mcp
 ```
 
-- Claude (web or desktop): Settings > Connectors > Add custom connector > paste the URL > Connect
-- Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`
+- Claude (web or desktop): Customize > Connectors > + > Add custom connector > paste the URL > Connect and sign in
+- Claude Code: `claude mcp add --transport http --scope user agent-media https://api.agent-media.ai/mcp`
 - Cursor (`~/.cursor/mcp.json`) / Codex (`~/.codex/config.toml`): the same URL as a remote server
 
 Full guide: <https://agent-media.ai/connect>. After submitting a generation over MCP, call `get_run_status` with the id you were given: generation is async and the submit response only confirms the job started.
