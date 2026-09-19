@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.0
+
+- Add generation request identities: recover the same job after response loss without another charge. Preserve job IDs on uncertain worker acknowledgements and report refunds only when confirmed.
+
 ## 2.1.1
 
 - Clarify Claude connector sign-in and conversation activation, Claude Code user scope, and Codex OAuth login. Add a no-generation upload check to setup guidance.

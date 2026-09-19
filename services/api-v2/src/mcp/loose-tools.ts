@@ -179,27 +179,36 @@ const videoPriceLine = (() => {
   return c ? `${V2_DEFAULT_MODEL.video}: ${Object.entries(c).map(([q, n]) => `${n} credits/s at ${q}`).join(', ')}` : '';
 })();
 
+const RETRY_GUIDANCE = '\n\nRETRY SAFETY: set request_id to a fresh UUID for a new generation. Reuse the exact same request_id and inputs only to recover a lost response; that returns the original job without another charge. A deliberately new generation needs a new request_id. Keep the returned job_id and poll get_run_status. Never invent a refund.';
+function generationSchema(schema: Parameters<typeof looseSchema>[0], name: string) {
+  const json = looseSchema(schema, name);
+  return { ...json, properties: { ...json.properties, request_id: {
+    type: 'string', pattern: '^[A-Za-z0-9._:-]{1,128}$',
+    description: 'Unique request identity (prefer a UUID). Reuse with identical inputs to recover the same job after a lost response; choose a new identity only for an intentionally new generation.',
+  } } };
+}
+
 export const generateVideoTool = {
   name: 'generate_video',
   description:
     `Render a video clip from YOUR prompt on the model YOU choose, in one of three MODES that follow from the fields you pass: TEXT (prompt only), IMAGE-TO-VIDEO (\`first_frame\`: an https still that becomes frame one, optionally \`last_frame\` to end on; the clip animates the still) or REFERENCE (\`refs\`: https images such as a portrait, a character sheet from list_characters or a product photo whose identity/look is kept; \`video_refs\`: clips whose motion or framing is followed; \`audio_refs\`: a voice or sound to carry; address them in the prompt as @image1, @video1, @audio1). Frames and refs cannot be mixed. Write the shot like a director: who is in frame, where, what happens, camera, and the exact spoken words in quotes if anyone talks. Models: ${liveVideo} (default ${V2_DEFAULT_MODEL.video}; call list_models for each model's modes, limits, prices and recent results; or pass model:"auto"). Aspect: 9:16 default, also 16:9, 1:1, 4:3, 3:4, 21:9, adaptive. Quality: 480p, 720p (default), 1080p; the price per second follows the quality (${videoPriceLine}). Reference clip seconds are billed like output seconds. Call \`quote\` first if the user cares about cost. Returns a job id, then call get_run_status until it is done and hand the user the URL.` +
-    IMAGE_URL_HINT,
-  inputSchema: looseSchema(GenerateVideoSchema, 'generate_video_input'),
+    IMAGE_URL_HINT + RETRY_GUIDANCE,
+  inputSchema: generationSchema(GenerateVideoSchema, 'generate_video_input'),
   annotations: generationAnnotations('Generate Video'),
 };
 export const generateImageTool = {
   name: 'generate_image',
   description:
     `Render one image from YOUR prompt. Without refs it paints from the prompt; with refs (https URLs) it edits/composes from them, a portrait to re-light, a product to place in a hand, a character sheet to pose. Use it to build the reference a video needs (portrait first, then generate_video with that URL in refs). Models: ${liveImage} (default ${V2_DEFAULT_MODEL.image}). Spends credits per image (see list_models). Returns a job id, poll get_run_status for the image URL.` +
-    IMAGE_URL_HINT,
-  inputSchema: looseSchema(GenerateImageSchema, 'generate_image_input'),
+    IMAGE_URL_HINT + RETRY_GUIDANCE,
+  inputSchema: generationSchema(GenerateImageSchema, 'generate_image_input'),
   annotations: generationAnnotations('Generate Image'),
 };
 export const generateAudioTool = {
   name: 'generate_audio',
   description:
-    `Speak text in a named voice (jessica, sarah, liam, chris, lily, bill, matilda, or a raw ElevenLabs voice id). Emotion tags like [excited] or [whispers] are honoured. For a talking-head clip you usually do NOT need this: generate_video renders native speech when the words are in the prompt. Use it for voiceover over b-roll or a standalone audio file. Models: ${liveAudio}. Spends ${audioRate}, rounded up. Returns a job id, poll get_run_status for the mp3 URL. The mp3 URL can be passed as an audio_ref to generate_video.`,
-  inputSchema: looseSchema(GenerateAudioSchema, 'generate_audio_input'),
+    `Speak text in a named voice (jessica, sarah, liam, chris, lily, bill, matilda, or a raw ElevenLabs voice id). Emotion tags like [excited] or [whispers] are honoured. For a talking-head clip you usually do NOT need this: generate_video renders native speech when the words are in the prompt. Use it for voiceover over b-roll or a standalone audio file. Models: ${liveAudio}. Spends ${audioRate}, rounded up. Returns a job id, poll get_run_status for the mp3 URL. The mp3 URL can be passed as an audio_ref to generate_video.` + RETRY_GUIDANCE,
+  inputSchema: generationSchema(GenerateAudioSchema, 'generate_audio_input'),
   annotations: generationAnnotations('Generate Audio'),
 };
 export const quoteTool = {
