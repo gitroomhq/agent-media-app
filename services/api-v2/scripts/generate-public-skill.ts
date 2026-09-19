@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.1.0';
+  if (SURFACE === 'loose') return '2.1.1';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -540,6 +540,10 @@ function changelog(): string {
   return [
     '# Changelog',
     '',
+    '## 2.1.1',
+    '',
+    '- Clarify Claude connector sign-in and conversation activation, Claude Code user scope, and Codex OAuth login. Add a no-generation upload check to setup guidance.',
+    '',
     '## 2.1.0',
     '',
     '- Temporary multi-image upload panels with 24-hour expiry; old connector catalogs can open and read panels through upload_image.',
@@ -711,8 +715,8 @@ function refAuth(): string {
     'https://api.agent-media.ai/mcp',
     '```',
     '',
-    '- Claude (web or desktop): Settings > Connectors > Add custom connector > paste the URL > Connect',
-    '- Claude Code: `claude mcp add --transport http agent-media https://api.agent-media.ai/mcp`',
+    '- Claude (web or desktop): Customize > Connectors > + > Add custom connector > paste the URL > Connect and sign in',
+    '- Claude Code: `claude mcp add --transport http --scope user agent-media https://api.agent-media.ai/mcp`',
     '- Cursor (`~/.cursor/mcp.json`) / Codex (`~/.codex/config.toml`): the same URL as a remote server',
     '',
     'Full guide: <https://agent-media.ai/connect>. After submitting a generation over MCP, call `get_run_status` with the id you were given: generation is async and the submit response only confirms the job started.',

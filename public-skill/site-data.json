@@ -1,5 +1,5 @@
 {
-  "pack_version": "2.1.0",
+  "pack_version": "2.1.1",
   "source": "https://github.com/gitroomhq/agent-media-app",
   "connector": {
     "url": "https://api.agent-media.ai/mcp",
@@ -8,19 +8,20 @@
     "clients": [
       {
         "id": "claude",
-        "label": "Claude.ai / Claude Desktop",
-        "how": "Settings > Connectors > Add custom connector > paste the URL > Connect."
+        "label": "Claude.ai / Claude Desktop / Cowork",
+        "how": "Customize > Connectors > + > Add custom connector > paste the URL > Connect and sign in. Enable Agent Media in the conversation connector menu."
       },
       {
         "id": "claude-code",
         "label": "Claude Code",
-        "command": "claude mcp add --transport http agent-media https://api.agent-media.ai/mcp"
+        "command": "claude mcp add --transport http --scope user agent-media https://api.agent-media.ai/mcp",
+        "note": "Available in all your projects. In Claude Code, run /mcp, select agent-media, and complete browser sign-in. If already connected, do not add a second copy."
       },
       {
         "id": "codex",
         "label": "Codex",
         "command": "codex mcp add agent-media --url https://api.agent-media.ai/mcp",
-        "note": "For scripted runs, write tools need `codex exec --dangerously-bypass-approvals-and-sandbox` or an approval policy that allows them."
+        "note": "Then run codex mcp login agent-media to complete browser sign-in. Keep your normal approval settings; review requested tool actions."
       },
       {
         "id": "grok",
@@ -40,7 +41,7 @@
         "note": "A stdio proxy to the same hosted server; set AGENT_MEDIA_API_KEY. Do not register both the connector and the proxy in one client, or every tool appears twice."
       }
     ],
-    "prompt": "Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: https://api.agent-media.ai/mcp (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call list_models and tell me what you can make.",
+    "prompt": "Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: https://api.agent-media.ai/mcp (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call list_models and tell me what you can make.\n4. Open the existing image upload panel using open_upload_panel, or upload_image with {} if only the older tools are available. Do not generate anything yet.",
     "polling": "Every generate tool returns a job id. Call get_run_status with wait:true; each call blocks up to about 45 seconds, a video usually needs several calls (seedance-2.0: about 3 minutes for a 5 s clip at 720p; seedance-2.5: 12 to 25 minutes per clip; plan the wait). Never report a result before get_run_status returned its URL."
   },
   "tools": [
