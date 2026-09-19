@@ -75,6 +75,7 @@ import { asyncHandler } from './lib/async-handler.js';
 import { getMyGalleryRoute } from './routes/v1/me-gallery.js';
 import { listApiKeysRoute, createApiKeyRoute, revokeApiKeyRoute } from './routes/v1/me-api-keys.js';
 import { listSocialProvidersRoute, listSocialChannelsRoute, connectSocialRoute, deleteSocialChannelRoute, publishSocialRoute } from './routes/v1/social.js';
+import { generationReplay } from './generation/request-identity.js';
 import { videoConcurrencyGate } from './concurrency.js';
 import { agentRoute } from './routes/v1/agent.js';
 import {
@@ -724,8 +725,15 @@ function buildOpenApiSpec() {
         summary: `Render ${kind === 'audio' ? 'speech' : `a ${kind}`} from your prompt on the model you choose (or "auto"). Credits are deducted at submit; poll GET /v1/videos/{job_id}.`,
         tags: ['loose-surface'],
         security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'Idempotency-Key', in: 'header', required: false,
+          description: 'Persist one identity per intended generation. Retry identical inputs with the same key to recover the original job without another debit. A new key means a new paid generation.',
+          schema: { type: 'string', pattern: '^[A-Za-z0-9._:-]{1,128}$' } }],
         requestBody: { required: true, content: { 'application/json': { schema: looseBodies[kind] } } },
         responses: {
+          '200': { description: 'Existing job recovered; credits_deducted is zero and replayed is true' },
+          '202': { description: 'Job and debit saved; worker acknowledgement uncertain. Poll the returned job_id, do not create a new request.' },
+          '409': { description: 'Idempotency key already used with different inputs' },
+          '503': { description: 'Submission or dispatch could not be confirmed; preserve request_id and job_id when returned. Refund status is explicit when known.' },
           '201': { description: 'Job submitted', content: { 'application/json': { schema: { $ref: '#/components/schemas/LooseSubmitted' } } } },
           '400': { description: 'Validation error (unknown field, non-live model — the message lists the live ones)', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
           '402': { description: 'Insufficient credits', content: { 'application/json': { schema: { $ref: '#/components/schemas/InsufficientCredits' } } } },
@@ -865,7 +873,7 @@ app.post('/v2/crazy-look', generateLimiter, authMiddleware, videoConcurrencyGate
 // The loose surface: generate_image / generate_video / generate_audio + quote.
 // Same limiter and concurrency gate as the fixed video skills (the gate
 // counts in-flight jobs, whatever their kind).
-app.post('/v2/generate/:kind', generateLimiter, authMiddleware, videoConcurrencyGate, looseGenerateRoute);
+app.post('/v2/generate/:kind', generateLimiter, authMiddleware, generationReplay, videoConcurrencyGate, looseGenerateRoute);
 app.post('/v2/quote/:kind',    readLimiter,     authMiddleware, looseQuoteRoute);
 app.post('/v1/runs/:jobId/rate', readLimiter,   authMiddleware, rateRunRoute);
 app.post('/v2/characters', generateLimiter, authMiddleware, videoConcurrencyGate, characterCreateRoute);

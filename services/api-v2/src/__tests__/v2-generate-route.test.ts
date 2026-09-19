@@ -69,7 +69,7 @@ describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
 
   it('is mounted behind auth, the generate limiter and the concurrency gate; quote on the read limiter', () => {
     expect(GENERATE_KINDS).toEqual(['image', 'video', 'audio']);
-    expect(server).toContain("app.post('/v2/generate/:kind', generateLimiter, authMiddleware, videoConcurrencyGate, looseGenerateRoute);");
+    expect(server).toContain("app.post('/v2/generate/:kind', generateLimiter, authMiddleware, generationReplay, videoConcurrencyGate, looseGenerateRoute);");
     expect(server).toContain("app.post('/v2/quote/:kind',    readLimiter,     authMiddleware, looseQuoteRoute);");
   });
 });

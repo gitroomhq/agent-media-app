@@ -3,7 +3,7 @@ name: 'agent-media'
 description: 'Use Agent Media to upload reference images, open an image upload panel, or generate AI images, video and speech. For an upload-only request, open the existing panel with open_upload_panel, or upload_image with {} if only older tools are available; show the browser link and wait. Do not build an upload page or request a local folder. Select live models with list_models, quote when needed, generate, then poll get_run_status. Covers UGC, portraits, product photos, image-to-video, reference video, voiceover and recurring characters.'
 allowed-tools: ['mcp__agent-media__generate_video', 'mcp__agent-media__generate_image', 'mcp__agent-media__generate_audio', 'mcp__agent-media__quote', 'mcp__agent-media__list_models', 'mcp__agent-media__list_characters', 'mcp__agent-media__get_run_status', 'mcp__agent-media__upload_image', 'mcp__agent-media__rate_run', 'mcp__agent-media__open_upload_panel', 'mcp__agent-media__get_uploads']
 x-skill-slug: 'agent-media'
-x-skill-version: '2.1.1'
+x-skill-version: '2.2.0'
 x-surface: 'loose'
 ---
 # agent-media, the skill

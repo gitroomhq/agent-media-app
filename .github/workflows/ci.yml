@@ -349,3 +349,23 @@ jobs:
             echo "  OK: $fn_name/index.ts"
           done
           echo "Edge Function validation passed."
+
+  generation-retry-safety:
+    name: Generation retry safety (PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: disposable-test-only
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise simultaneous submissions against independent database connections
+        env:
+          PGTEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: bash scripts/test-generation-request-postgres.sh

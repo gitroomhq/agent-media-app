@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { REQUEST_ID_PATTERN } from '../generation/request-identity.js';
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
 
 /**
@@ -393,26 +395,35 @@ export function buildMcpServer(apiKey: string): Server {
       if (!['image', 'video', 'audio'].includes(kind)) {
         return { content: [{ type: 'text', text: 'kind must be image, video or audio.' }], isError: true };
       }
-      const body = isQuote ? (q.input ?? {}) : (args ?? {});
+      const raw = isQuote ? (q.input ?? {}) : (args ?? {});
+      const inputObject = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
+      const { request_id: explicitId, ...fields } = inputObject ?? {};
+      const body = inputObject ? fields : raw;
+      const requestId = isQuote ? undefined : explicitId ?? request.params._meta?.['agent-media/request-id'] ?? randomUUID();
+      if (!isQuote && (typeof requestId !== 'string' || !REQUEST_ID_PATTERN.test(requestId))) {
+        return { content: [{ type: 'text', text: 'request_id must contain 1–128 letters, numbers, dots, underscores, colons or hyphens.' }], isError: true };
+      }
       let resp: FetchResponse;
+      let text: string;
       try {
         resp = await apiFetch(`${PUBLIC_API_BASE}/v2/${isQuote ? 'quote' : 'generate'}/${kind}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}`, ...(requestId ? { 'Idempotency-Key': String(requestId) } : {}) },
           body: JSON.stringify(body),
           timeoutMs: 45_000,
         });
+        text = await resp.text();
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). ${isQuote ? 'Call quote again.' : 'The job may already have started. Do not automatically resubmit: this could spend credits twice. If you have a job id, call get_run_status with that id; otherwise check account activity in the dashboard to recover the job before deciding whether to submit again.'}` }],
+          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). ${isQuote ? 'Call quote again.' : `The job may already have started. Retry this same tool with identical inputs and request_id "${requestId}" to recover it without a second charge. Do not use a new request_id. If you have a job id, call get_run_status.`}` }],
+          ...(!isQuote ? { structuredContent: { error_code: 'SUBMISSION_UNCONFIRMED', request_id: requestId } } : {}),
           isError: true,
         };
       }
-      const text = await resp.text();
       let data: any;
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
       if (!resp.ok) {
-        return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
+        return { content: [{ type: 'text', text: formatApiError(resp.status, data) + (!isQuote ? `\nKeep request_id "${requestId}". If the response is uncertain, retry identical inputs with this same identity; never change it just to retry.` : '') }], ...(!isQuote ? { structuredContent: { ...data, request_id: requestId } } : {}), isError: true };
       }
       if (isQuote) {
         return {
@@ -420,11 +431,15 @@ export function buildMcpServer(apiKey: string): Server {
         };
       }
       return {
+        structuredContent: { ...data, request_id: requestId },
+        ...(['failed', 'canceled'].includes(data?.status) ? { isError: true } : {}),
         content: [{
           type: 'text',
           text: [
-            `Submitted ${name}: job_id ${data?.job_id} on ${data?.model}: ${data?.credits_deducted} credits deducted (${data?.breakdown}).${data?.auto ? ` auto chose ${data.model}: ${data.auto.reason}.` : ''}`,
-            `Now call get_run_status with run_id "${data?.job_id}" (wait:true) until it is completed, then give the user the URL. ${kind === 'video' ? 'A clip takes a few minutes.' : kind === 'image' ? 'An image takes under a minute.' : 'Audio takes seconds.'}`,
+            `${data?.replayed ? 'Recovered existing' : 'Saved'} ${name}: job_id ${data?.job_id} on ${data?.model}. Status: ${data?.status}. ${data?.replayed ? 'No additional credits charged.' : `${data?.credits_deducted} credits deducted (${data?.breakdown}).`}`,
+            `Request identity: ${requestId}. Reuse this request_id with identical inputs only to recover this job.`,
+            ...(data?.dispatch_status === 'unknown' ? ['Worker acceptance is not yet confirmed. Keep checking this job id; do not submit a new generation.'] : []),
+            `Now call get_run_status with run_id "${data?.job_id}" (wait:true) until it reaches a terminal state. On completion, give the user the URL; on failure, explain it without automatically creating another job. ${kind === 'video' ? 'A clip takes a few minutes.' : kind === 'image' ? 'An image takes under a minute.' : 'Audio takes seconds.'}`,
           ].join('\n'),
         }],
       };

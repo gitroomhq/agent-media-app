@@ -13,6 +13,7 @@ afterEach(() => {
 async function call(
   name = 'get_run_status',
   args: Record<string, unknown> = { run_id: 'existing-job' },
+  meta?: Record<string, unknown>,
 ) {
   vi.stubEnv('AGENT_SURFACE', 'loose');
   const { buildMcpServer } = await import('../routes/mcp.js');
@@ -22,9 +23,10 @@ async function call(
   await server.connect(b);
   await client.connect(a);
   try {
-    const result = await client.callTool({ name, arguments: args });
+    const result = await client.callTool({ name, arguments: args, ...(meta ? { _meta: meta } : {}) });
     return {
       isError: result.isError,
+      structuredContent: result.structuredContent,
       text: (result.content as { text?: string }[]).map((c) => c.text ?? '').join('\n'),
     };
   } finally {
@@ -148,8 +150,36 @@ describe('MCP recovery guidance', () => {
       }),
     );
     const result = await call('generate_video', { prompt: 'A person waving' });
-    expect(result.text).toContain('Do not automatically resubmit');
-    expect(result.text).toContain('dashboard');
+    expect(result.text).toContain('identical inputs and request_id');
+    expect(result.text).toContain('Do not use a new request_id');
     expect(result.text).not.toContain('otherwise submit again');
+  });
+});
+
+
+describe('MCP generation identities', () => {
+  it('forwards an explicit identity as a header, not provider input', async () => {
+    const fetch = vi.fn(async () => response(200, { job_id: 'saved-job', status: 'submitted', replayed: true, credits_deducted: 0 }));
+    vi.stubGlobal('fetch', fetch);
+    const result = await call('generate_image', { prompt: 'Photo', request_id: 'stable-request' });
+    const init = (fetch.mock.calls[0] as unknown as [unknown, RequestInit])[1];
+    expect(init.headers).toMatchObject({ 'Idempotency-Key': 'stable-request' });
+    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Photo' });
+    expect(result.structuredContent).toMatchObject({ request_id: 'stable-request', job_id: 'saved-job' });
+    expect(result.text).toContain('No additional credits charged');
+  });
+  it('preserves the proxy identity after a lost response body', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(new ReadableStream({ start(c) { c.error(new Error('response body lost')); } }))));
+    const result = await call('generate_image', { prompt: 'Photo' }, { 'agent-media/request-id': 'proxy-request' });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ request_id: 'proxy-request', error_code: 'SUBMISSION_UNCONFIRMED' });
+    expect(result.text).toContain('request_id "proxy-request"');
+  });
+  it('keeps failed replayed jobs terminal instead of claiming a new submission', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response(200, { job_id: 'failed-job', status: 'failed', replayed: true, credits_deducted: 0 })));
+    const result = await call('generate_image', { prompt: 'Photo', request_id: 'same-request' });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('Status: failed');
+    expect(result.text).toContain('without automatically creating another job');
   });
 });

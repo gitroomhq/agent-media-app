@@ -39,6 +39,7 @@ import {
   type QuoteExtras,
 } from '@agentmedia/schema/v2';
 import { supabase } from '../../server.js';
+import { requestIdentity, replayResponse, type GenerationRequest } from '../../generation/request-identity.js';
 import { loadModelStats } from '../v1/models.js';
 
 const WORKER_V2_URL = process.env.WORKER_V2_URL;
@@ -63,7 +64,7 @@ function buildCallbackUrl(jobId: string): string {
   return `${supabaseUrl}/functions/v1/webhook-provider?provider=railway&job_id=${jobId}`;
 }
 
-async function markDispatchFailureAndRefund(jobId: string, userId: string, message: string): Promise<void> {
+async function markDispatchFailureAndRefund(jobId: string, userId: string, message: string): Promise<{ status: string; refund_status: string }> {
   const { data: claimedRows, error: updateErr } = await supabase
     .from('generation_jobs')
     .update({
@@ -80,14 +81,14 @@ async function markDispatchFailureAndRefund(jobId: string, userId: string, messa
     .select('id');
   if (updateErr) {
     console.error(`[v2 generate] dispatch failure state update failed for ${jobId}: ${updateErr.message}`);
-    return;
+    return { status: 'unknown', refund_status: 'unconfirmed' };
   }
-  if (!claimedRows || claimedRows.length === 0) return;
+  if (!claimedRows || claimedRows.length === 0) return { status: 'unknown', refund_status: 'unconfirmed' };
 
-  const { error } = await supabase.rpc('refund_credits', { p_job_id: jobId });
-  if (error && !/ALREADY_REFUNDED/i.test(error.message)) {
-    console.error(`[v2 generate] refund failed for ${jobId}: ${error.message}`);
-    return;
+  const { data, error } = await supabase.rpc('refund_credits', { p_job_id: jobId });
+  if ((error && !/ALREADY_REFUNDED/i.test(error.message)) || (!error && data?.success !== true)) {
+    console.error(`[v2 generate] refund failed for ${jobId}: ${error?.message ?? 'unconfirmed result'}`);
+    return { status: 'failed', refund_status: 'unconfirmed' };
   }
   await supabase
     .from('generation_jobs')
@@ -95,6 +96,7 @@ async function markDispatchFailureAndRefund(jobId: string, userId: string, messa
     .eq('id', jobId)
     .eq('status', 'failed')
     .eq('error_code', DISPATCH_FAILED_PENDING_REFUND);
+  return { status: 'failed', refund_status: 'refunded' };
 }
 
 /**
@@ -240,39 +242,39 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // ── 4. Insert job row ─────────────────────────────────────────────
+  // Job and debit commit atomically; a concurrent replay gets the winner's receipt.
+  const identity = (req as GenerationRequest).generationIdentity ?? requestIdentity(userId, kind, req.body);
   const jobId = crypto.randomUUID();
-  const promptText = String(input.prompt ?? input.text ?? '');
-  const { error: jobErr } = await supabase.from('generation_jobs').insert({
-    id: jobId,
-    user_id: userId,
-    model_slug: model, // catalog id; public.models has a row per live id (migration 20260905120000)
-    operation: `generate_${kind}`,
-    status: 'submitted',
-    prompt: promptText,
-    credit_cost: creditCost,
-    provider_slug: 'railway',
-    provider_job_id: jobId,
-    input_params: { ...input, model, ...(v.video ? { mode: v.video.mode, provider_model: v.video.provider_model, aspect: v.video.aspect } : {}) },
+  const receipt = {
+    job_id: jobId, status: 'submitted', kind, model,
+    request_id: identity.requestId, credits_deducted: creditCost, breakdown: v.breakdown,
+    ...(v.video ? { mode: v.video.mode, quality: v.video.quality, aspect: v.video.aspect } : {}),
+    ...(v.auto ? { auto: v.auto } : {}), status_url: `/v1/videos/${jobId}`,
+  };
+  const { data: submission, error: submitErr } = await supabase.rpc('submit_generation_request', {
+    p_job_id: jobId, p_user_id: userId, p_idempotency_key: identity.key,
+    p_request_hash: identity.hash, p_model: model, p_kind: kind,
+    p_prompt: String(input.prompt ?? input.text ?? ''), p_credit_cost: creditCost,
+    p_input_params: { ...input, model, ...(v.video ?? {}) }, p_response: receipt,
   });
-  if (jobErr) {
-    console.error('[v2 generate] job insert failed:', jobErr.message);
-    res.status(500).json({ error: { code: 'DATABASE_ERROR', message: 'Failed to create job' } });
+  if (submitErr) {
+    const message = submitErr.message ?? '';
+    const insufficient = /INSUFFICIENT_CREDITS/.test(message);
+    const conflict = /IDEMPOTENCY_CONFLICT/.test(message);
+    res.status(insufficient ? 402 : conflict ? 409 : 503).json({ error: {
+      code: insufficient ? 'INSUFFICIENT_CREDITS' : conflict ? 'IDEMPOTENCY_CONFLICT' : 'SUBMISSION_UNCONFIRMED',
+      message: insufficient ? message : conflict ? 'This request identity was already used with different inputs.' :
+        'The submission result could not be confirmed. Retry the same inputs with the same Idempotency-Key to recover the job; do not create a new request.',
+      request_id: identity.requestId,
+    } });
     return;
   }
-
-  // ── 5. Deduct credits ─────────────────────────────────────────────
-  const { error: creditErr } = await supabase.rpc('deduct_credits', {
-    p_user_id: userId,
-    p_amount: creditCost,
-    p_job_id: jobId,
-    p_description: `generate_${kind} · ${v.breakdown}`,
-  });
-  if (creditErr) {
-    await supabase.from('generation_jobs').delete().eq('id', jobId);
-    const msg = creditErr.message || '';
-    const code = /INSUFFICIENT_CREDITS/i.test(msg) ? 'INSUFFICIENT_CREDITS' : 'CREDIT_DEDUCTION_FAILED';
-    res.status(code === 'INSUFFICIENT_CREDITS' ? 402 : 500).json({ error: { code, message: msg || 'Credit deduction failed' } });
+  if (!submission || typeof submission.created !== 'boolean' || !submission.response?.job_id) {
+    res.status(503).json({ error: { code: 'SUBMISSION_UNCONFIRMED', message: 'Retry with the same Idempotency-Key to recover the submission.', request_id: identity.requestId } });
+    return;
+  }
+  if (!submission.created) {
+    res.status(200).json(replayResponse(submission.response, submission.status));
     return;
   }
 
@@ -285,31 +287,27 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
       signal: AbortSignal.timeout(DISPATCH_TIMEOUT_MS),
     });
     if (!resp.ok) {
-      const body = await resp.text().catch(() => '');
-      throw new Error(`media-worker-v2 dispatch failed (${resp.status}): ${body.slice(0, 500)}`);
+      // Only explicit pre-acceptance rejections are safe to fail/refund here.
+      // A timeout/5xx may have lost an acknowledgement after the worker queued it.
+      if ([400, 401, 403, 404, 413, 422].includes(resp.status)) {
+        const outcome = await markDispatchFailureAndRefund(jobId, userId, `Worker rejected dispatch (${resp.status}).`);
+        res.status(503).json({
+          ...receipt, ...outcome, dispatch_status: 'rejected',
+          error: { code: 'DISPATCH_REJECTED', message: outcome.refund_status === 'refunded' ?
+            'The worker rejected this job. Credits were refunded. Keep this job id to check its status.' :
+            'The worker rejected this job. Refund confirmation is pending; check this job id before taking further action.' },
+        });
+        return;
+      }
+      throw new Error(`Worker acknowledgement unavailable (${resp.status}).`);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[v2 generate] worker dispatch failed: ${msg}`);
-    await markDispatchFailureAndRefund(jobId, userId, `Worker dispatch failed: ${msg}`);
-    res.status(503).json({
-      error: { code: 'ORCHESTRATOR_UNAVAILABLE', message: 'Generation worker is currently unavailable. Credits were refunded.' },
-    });
+    console.error(`[v2 generate] dispatch acknowledgement unknown for ${jobId}:`, err instanceof Error ? err.message : String(err));
+    res.status(202).json({ ...receipt, dispatch_status: 'unknown',
+      message: 'Your job is saved, but worker acceptance is not yet confirmed. Check this job id; do not submit another generation. Stalled jobs are reconciled separately.' });
     return;
   }
-
-  // ── 7. Respond ────────────────────────────────────────────────────
-  res.status(201).json({
-    job_id: jobId,
-    status: 'submitted',
-    kind,
-    model,
-    credits_deducted: creditCost,
-    breakdown: v.breakdown,
-    ...(v.video ? { mode: v.video.mode, quality: v.video.quality, aspect: v.video.aspect } : {}),
-    ...(v.auto ? { auto: v.auto } : {}),
-    status_url: `/v1/videos/${jobId}`,
-  });
+  res.status(201).json(receipt);
 }
 
 // ── POST /v1/runs/:jobId/rate — the human half of the quality loop ──────

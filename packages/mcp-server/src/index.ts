@@ -26,6 +26,8 @@
  *   AGENT_MEDIA_API_URL   optional, defaults to https://api.agent-media.ai
  */
 
+import { randomUUID } from 'node:crypto';
+import { createUpstream, RETRYABLE_TOOLS } from './upstream.js';
 import { createRequire } from 'node:module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -57,7 +59,6 @@ const UPSTREAM_CALL_TIMEOUT_MS = 90_000;
 
 // ── upstream: the hosted connector ───────────────────────────────────────────
 
-let upstream: Client | null = null;
 
 async function connectUpstream(): Promise<Client> {
   const client = new Client(
@@ -71,19 +72,7 @@ async function connectUpstream(): Promise<Client> {
   return client;
 }
 
-/** Lazily connect, and reconnect once if the hosted side dropped us. */
-async function withUpstream<T>(fn: (c: Client) => Promise<T>): Promise<T> {
-  if (!upstream) upstream = await connectUpstream();
-  try {
-    return await fn(upstream);
-  } catch (err) {
-    // A stale connection (deploy swap, idle timeout) fails the first call
-    // after it; one reconnect covers that without hiding a real error.
-    try { await upstream.close(); } catch { /* already gone */ }
-    upstream = await connectUpstream();
-    return fn(upstream);
-  }
-}
+const withUpstream = createUpstream(connectUpstream);
 
 function errorResult(message: string): CallToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
@@ -107,13 +96,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const generation = ['generate_image', 'generate_video', 'generate_audio'].includes(request.params.name);
+  const requestId = generation ? request.params.arguments?.request_id ?? randomUUID() : undefined;
   try {
     const result = await withUpstream((c) =>
       c.callTool(
-        { name: request.params.name, arguments: request.params.arguments ?? {} },
+        { name: request.params.name, arguments: request.params.arguments ?? {},
+          ...(generation ? { _meta: { ...request.params._meta, 'agent-media/request-id': requestId } } : {}),
+        },
         undefined,
         { timeout: UPSTREAM_CALL_TIMEOUT_MS },
       ),
+      RETRYABLE_TOOLS.has(request.params.name),
     );
     return result as CallToolResult;
   } catch (err) {
@@ -122,7 +116,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return errorResult('agent-media rejected the API key. Check AGENT_MEDIA_API_KEY (ma_xxx) at https://agent-media.ai/settings.');
     }
     return errorResult(
-      `agent-media did not answer (${message}). If you had just submitted a generation, call get_run_status before resubmitting so the user is not charged twice.`,
+      `agent-media did not answer (${message}). This call was not automatically repeated. ${generation ? `The job may already exist. Recover it by calling the same generation tool with identical inputs and request_id "${requestId}"; do not use a new request_id. If you have a job id, call get_run_status.` : 'Check the outcome before repeating any action.'}`,
     );
   }
 });
@@ -130,9 +124,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Forward MCP Apps resources as well as tools, so stdio clients retain the
 // same upload panel and browser fallback as the hosted connector.
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
-  const client = upstream ?? (upstream = await connectUpstream());
-  if (!client.getServerCapabilities()?.resources) return { resources: [] };
-  return withUpstream(c => c.listResources());
+  return withUpstream(c => c.getServerCapabilities()?.resources ? c.listResources() : Promise.resolve({ resources: [] }));
 });
 server.setRequestHandler(ReadResourceRequestSchema, (request) =>
   withUpstream((c) => c.readResource(request.params)),

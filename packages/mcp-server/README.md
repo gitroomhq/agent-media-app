@@ -179,3 +179,17 @@ Must be `https://`, publicly reachable, max 2048 chars. On non-2xx response, age
 ## License
 
 Apache-2.0
+
+### Retry safety (0.8.1)
+
+A failed transport response can arrive after a paid job was accepted. The proxy
+never automatically repeats generation, upload, or other mutating tools. It
+reconnects and retries known read-only tools once.
+
+For generation, the proxy supplies a request identity to the hosted server. Keep
+`request_id` and `job_id` from the result. To recover a lost response, reuse the
+same tool, exact inputs, and `request_id`; an intentionally new generation needs
+a new identity. See [the generation recovery contract](https://github.com/gitroomhq/agent-media-app/blob/main/docs/generation-retry-safety.md).
+
+Update and restart an already-installed proxy to receive this change. Restarting
+a cached 0.8.0 binary does not update its retry behavior.

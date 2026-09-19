@@ -1,6 +1,6 @@
 {
   "name": "@agentmedia/mcp-server",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "mcpName": "io.github.gitroomhq/agent-media-app",
   "description": "MCP server for agent-media \u2014 a stdio proxy to the hosted connector at api.agent-media.ai/mcp. Generate AI UGC videos from Claude Code, Cursor, Windsurf, or any MCP-compatible client.",
   "type": "module",
@@ -44,7 +44,8 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

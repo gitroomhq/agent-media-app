@@ -101,6 +101,11 @@ The JSON schema is the envelope; the per-model, per-mode limits (seconds, aspect
       "minimum": 0,
       "maximum": 2147483647,
       "description": "Only for models whose mode lists seed support (none of the live Seedance modes). Refused elsewhere."
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "description": "Unique request identity (prefer a UUID). Reuse with identical inputs to recover the same job after a lost response; choose a new identity only for an intentionally new generation."
     }
   },
   "required": [
@@ -144,6 +149,11 @@ The JSON schema is the envelope; the per-model, per-mode limits (seconds, aspect
       ],
       "default": "1024x1536",
       "description": "1024x1536 portrait (default, for 9:16 video), 1024x1024 square, 1536x1024 landscape."
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "description": "Unique request identity (prefer a UUID). Reuse with identical inputs to recover the same job after a lost response; choose a new identity only for an intentionally new generation."
     }
   },
   "required": [
@@ -184,6 +194,11 @@ The JSON schema is the envelope; the per-model, per-mode limits (seconds, aspect
         "dramatic"
       ],
       "description": "energetic | calm | confident | dramatic."
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "description": "Unique request identity (prefer a UUID). Reuse with identical inputs to recover the same job after a lost response; choose a new identity only for an intentionally new generation."
     }
   },
   "required": [
