@@ -6,8 +6,8 @@
  *
  * - Public routes: /, /login, /device (accessible to all)
  * - Auth routes: /login (redirect to /gallery if logged in)
- * - Auth-required (no sub): /subscribe (needs login, not subscription)
- * - Subscription-required: /gallery, /billing, /settings (redirect to /subscribe)
+ * - Auth-required (no sub): /billing, /settings, /subscribe (needs login, not subscription)
+ * - Subscription-required: /gallery, /dashboard (redirect to /subscribe)
  *
  * Also refreshes the Supabase session on every request via updateSession
  * and applies CSP + security headers to ALL responses.
@@ -78,7 +78,9 @@ const AUTH_NO_SUB_ROUTES = new Set(['/onboarding', '/subscribe', '/invite']);
  * page. /onboarding/plan is itself exempt because it's the
  * destination.
  */
-const SUBSCRIPTION_PREFIXES = ['/dashboard', '/create', '/gallery', '/billing', '/settings', '/admin'];
+const SUBSCRIPTION_PREFIXES = ['/dashboard', '/create', '/gallery', '/admin'];
+// Account recovery and connector configuration must work before a purchase.
+const ACCOUNT_PREFIXES = ['/billing', '/settings'];
 const ENFORCE_SUBSCRIPTION_WALL = true;
 
 /**
@@ -240,7 +242,8 @@ export async function middleware(request: NextRequest) {
   );
 
   // Check if this is an auth-only route (no sub needed)
-  const isAuthNoSub = AUTH_NO_SUB_ROUTES.has(pathname);
+  const isAccountRoute = ACCOUNT_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  const isAuthNoSub = AUTH_NO_SUB_ROUTES.has(pathname) || isAccountRoute;
 
   // Redirect unauthenticated users trying to access protected routes
   if ((requiresSubscription || isAuthNoSub) && !user) {
@@ -278,7 +281,7 @@ export async function middleware(request: NextRequest) {
   // has multiple steps); public routes are also exempt.
   const isOnboardingRoute = pathname === '/onboarding' || pathname.startsWith('/onboarding/');
   if (ENFORCE_ONBOARDING && user && supabase && !isOnboardingRoute) {
-    const gateRequired = requiresSubscription || (isAuthNoSub && pathname !== '/invite');
+    const gateRequired = requiresSubscription || (isAuthNoSub && !isAccountRoute && pathname !== '/invite');
     if (gateRequired) {
       const isOnboarded = await checkOnboarded(supabase, user.id);
       if (!isOnboarded) {

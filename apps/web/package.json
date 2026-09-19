@@ -8,7 +8,8 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@agent-media/types": "workspace:*",
@@ -43,6 +44,7 @@
     "@types/react-dom": "^19.0.3",
     "eslint": "^9",
     "eslint-config-next": "^15.1.7",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "3.2.4"
   }
 }
