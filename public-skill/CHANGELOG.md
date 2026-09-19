@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.0
+
+- Temporary multi-image upload panels with 24-hour expiry; old connector catalogs can open and read panels through upload_image.
+- Upload-only requests activate the agent-media skill. Plugin version bumped so installed clients can receive the new guidance.
+
 ## 2.0.0
 
 - The loose surface: nine tools (generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run). The agent writes the prompt and picks the model instead of calling a fixed recipe.

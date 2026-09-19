@@ -89,3 +89,77 @@ describe('MCP upload panel', () => {
     }
   });
 });
+
+
+describe('cached connector catalogs', () => {
+  const id = '11111111-1111-1111-1111-111111111111';
+  it('opens and retrieves a panel using only the existing upload_image schema', async () => {
+    const session = await connect(true);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      session_id: id, upload_token: 'panel-only',
+      upload_url: 'https://example.test/upload#session=fixture', images: [],
+      expires_at: '2026-09-20T00:00:00Z',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const opened = await session.client.callTool({ name: 'upload_image', arguments: {} });
+      expect(opened.isError).not.toBe(true);
+      expect(opened.structuredContent).toMatchObject({ upload_key: `panel:${id}` });
+      expect(opened.structuredContent).not.toHaveProperty('upload_token');
+      expect(JSON.stringify(opened.content)).toContain('call upload_image');
+      expect(fetchMock.mock.calls[0]).toEqual([
+        expect.stringMatching(/\/v1\/upload-sessions$/),
+        expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer ma_fixture' } }),
+      ]);
+      await session.client.callTool({ name: 'upload_image', arguments: { upload_key: `panel:${id}` } });
+      expect(fetchMock.mock.calls[1]).toEqual([
+        expect.stringContaining(`/v1/upload-sessions/${id}`),
+        expect.objectContaining({ method: 'GET', headers: { Authorization: 'Bearer ma_fixture' } }),
+      ]);
+      fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: { code: 'UPLOAD_EXPIRED', message: 'These images expired.' } }), { status: 410 }));
+      const expired = await session.client.callTool({ name: 'upload_image', arguments: { upload_key: `panel:${id}` } });
+      expect(expired.isError).toBe(true);
+      expect(JSON.stringify(expired.content)).toContain('expired');
+    } finally { await session.close(); }
+  });
+  it('rejects malformed panel keys and mixed inputs without a backend request', async () => {
+    const session = await connect(true);
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
+    try {
+      for (const args of [{ upload_key: 'panel:../../other' }, { upload_key: `panel:${id}`, file_bytes: 50 }]) {
+        const result = await session.client.callTool({ name: 'upload_image', arguments: args });
+        expect(result.isError).toBe(true);
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { await session.close(); }
+  });
+  it('preserves the ordinary file confirmation path', async () => {
+    const session = await connect(true);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ image_url: 'https://example.test/image.png' })));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await session.client.callTool({ name: 'upload_image', arguments: { upload_key: 'uploads/existing-file.png' } });
+      expect(fetchMock.mock.calls[0]).toEqual([
+        expect.stringMatching(/\/v1\/uploads\/confirm$/),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ upload_key: 'uploads/existing-file.png' }) }),
+      ]);
+    } finally { await session.close(); }
+  });
+  it('teaches cached clients the compatibility workflow through list_models', async () => {
+    const session = await connect(true);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ models: [] }))));
+    try {
+      const result = await session.client.callTool({ name: 'list_models', arguments: {} });
+      expect(JSON.stringify(result.content)).toContain('call upload_image with {}');
+    } finally { await session.close(); }
+  });
+  it('keeps panel creation disabled when temporary uploads are disabled', async () => {
+    const session = await connect(false);
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
+    try {
+      const result = await session.client.callTool({ name: 'upload_image', arguments: {} });
+      expect(result.isError).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { await session.close(); }
+  });
+});

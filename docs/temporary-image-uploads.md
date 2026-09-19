@@ -75,3 +75,9 @@ The tests use real image decoding, real HTTP handlers, a real MCP client/server 
 The connector includes the upload workflow in its MCP initialization instructions and in image generation/upload tool descriptions. The stdio proxy forwards those tool descriptions. The generated public skill puts it before the generation loop, and the plugin descriptions, CLI skill, authentication guide, exact optional-tool schemas, and website AI-readable documentation point agents to the same flow. Both website AI context routes and the tools reference explain multiple image selection and 24-hour expiry.
 
 Agents must discover `open_upload_panel` and `get_uploads` before offering them, show the returned browser link when inline UI is unavailable, wait for the user, then retrieve all ready references. Installing or reading a skill is not proof that the connected deployment supports the feature. Existing sessions may need tool rediscovery after deployment; individual clients decide how to present server instructions.
+
+### Clients with a cached tool catalog
+
+If a connected client still lists only the original nine tools, call `upload_image` with `{}` to open the same panel. After the person uploads, call `upload_image` with only the exact `upload_key` returned by that call (`panel:<session UUID>`). This retrieves all ready images using the same owner authorization and expiry rules as `get_uploads`; it does not re-host images. No new argument names or tool names are needed by these older clients. `list_models` also returns these current upload instructions. The dedicated tools remain the preferred interface when available.
+
+Plugin 2.1.0 refreshes the upload-first skill instructions; reconnecting a remote connector is separate from updating an installed skill/plugin. A passing direct MCP test does not establish that a host refreshed its tool catalog or selected the right tool. Release acceptance must include a call through an already-installed client.

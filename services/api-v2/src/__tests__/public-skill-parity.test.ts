@@ -93,7 +93,8 @@ describe('public skill pack == hosted connector', () => {
 
   it('the plugin manifest names the loose surface and version 2', () => {
     const plugin = JSON.parse(read('.claude-plugin/plugin.json'));
-    expect(plugin.version).toBe('2.0.0');
+    expect(plugin.version).toMatch(/^2\.\d+\.\d+$/);
+    expect(read('skills/agent-media/SKILL.md')).toContain(`x-skill-version: '${plugin.version}'`);
     expect(plugin.description).toMatch(/generate_video/);
     expect(existsSync(join(PACK, 'skills/make-ugc'))).toBe(false);
   });

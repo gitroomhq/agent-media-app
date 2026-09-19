@@ -69,7 +69,7 @@ import {
 } from '../uploads/types.js';
 import { uploadPanelResource } from '../uploads/panel.js';
 import { openUploadPanelTool, getUploadsTool } from '../uploads/tools.js';
-import { IMAGE_UPLOAD_GUIDANCE } from '../uploads/guidance.js';
+import { IMAGE_UPLOAD_GUIDANCE, UPLOAD_PANEL_COMPAT_GUIDANCE } from '../uploads/guidance.js';
 
 const PUBLIC_API_BASE =
   process.env.PUBLIC_API_BASE ?? 'https://api.agent-media.ai';
@@ -303,18 +303,28 @@ export function buildMcpServer(apiKey: string): Server {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    if (temporaryUploadsEnabled() && (name === 'open_upload_panel' || name === 'get_uploads')) {
-      const id = String(args?.session_id ?? '');
-      if (name === 'get_uploads' && !/^[0-9a-f-]{36}$/i.test(id)) {
+    // Existing connector catalogs may retain only the original nine tools.
+    // Reuse fields in that published schema so those clients can still upload.
+    const legacyPanelKey = name === 'upload_image' && typeof args?.upload_key === 'string'
+      ? args.upload_key : '';
+    const legacyPanel = name === 'upload_image' &&
+      (Object.keys(args ?? {}).length === 0 || legacyPanelKey.startsWith('panel:'));
+    if (temporaryUploadsEnabled() && (name === 'open_upload_panel' || name === 'get_uploads' || legacyPanel)) {
+      const readPanel = name === 'get_uploads' || legacyPanelKey.startsWith('panel:');
+      const id = legacyPanel ? legacyPanelKey.slice('panel:'.length) : String(args?.session_id ?? '');
+      if (legacyPanel && Object.keys(args ?? {}).some(key => key !== 'upload_key')) {
+        return { isError: true, content: [{ type: 'text', text: 'Pass only the panel upload_key to retrieve images; send file uploads separately.' }] };
+      }
+      if (readPanel && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
         return {
           isError: true,
           content: [{ type: 'text', text: 'Pass the session_id returned by open_upload_panel.' }],
         };
       }
       try {
-        const suffix = name === 'get_uploads' ? `/${encodeURIComponent(id)}` : '';
+        const suffix = readPanel ? `/${encodeURIComponent(id)}` : '';
         const response = await apiFetch(`${PUBLIC_API_BASE}/v1/upload-sessions${suffix}`, {
-          method: name === 'get_uploads' ? 'GET' : 'POST',
+          method: readPanel ? 'GET' : 'POST',
           headers: { Authorization: `Bearer ${apiKey}` },
           timeoutMs: 20_000,
         });
@@ -327,12 +337,12 @@ export function buildMcpServer(apiKey: string): Server {
         }
         const { upload_token, ...view } = data;
         return {
-          structuredContent: view,
+          structuredContent: legacyPanel ? { ...view, upload_key: `panel:${view.session_id}` } : view,
           ...(upload_token ? { _meta: { upload_token } } : {}),
           content: [{
             type: 'text',
-            text: name === 'open_upload_panel'
-              ? `Upload panel ready. Open the panel or use this browser link: ${view.upload_url}\nSession: ${view.session_id}\nExpires: ${view.expires_at}\nAfter uploading, call get_uploads with this session_id. Do not ask for base64.`
+            text: !readPanel
+              ? `Upload panel ready. Open the panel or use this browser link: ${view.upload_url}\nSession: ${view.session_id}\nExpires: ${view.expires_at}\nAfter the user finishes uploading, ${legacyPanel ? `call upload_image with {"upload_key":"panel:${view.session_id}"}` : 'call get_uploads with this session_id'}. Do not build an upload page, ask for a local folder, or ask for base64.`
               : JSON.stringify(view),
           }],
         };
@@ -508,6 +518,7 @@ export function buildMcpServer(apiKey: string): Server {
           type: 'text',
           text: [
             `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Select a live model by passing its id as \`model\` to generate_video / generate_image / generate_audio (omit it for the default, or pass "auto"). Video MODES: text (prompt only), image (first_frame, optional last_frame), reference (refs / video_refs / audio_refs); the mode is derived from the fields you pass and each mode has its own limits below. Quality 480p / 720p (default) / 1080p changes the per-second price. Candidates cannot be selected.`,
+            ...(temporaryUploadsEnabled() ? [UPLOAD_PANEL_COMPAT_GUIDANCE] : []),
             ...lines,
             d?.auto_policy ? `\nauto policy: ${d.auto_policy}` : null,
           ].filter(Boolean).join('\n'),
