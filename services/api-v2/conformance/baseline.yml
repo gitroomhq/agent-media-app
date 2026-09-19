@@ -3,11 +3,12 @@
 # The server suite is written against the reference "everything" server: it
 # calls fixture tools (test_simple_text, json_schema_2020_12_tool, …), reads
 # fixture resources and prompts, and expects sampling/elicitation round trips.
-# agent-media exposes seven product tools and no resources or prompts, so
-# those scenarios cannot pass here and do not describe a defect.
+# agent-media exposes product tools and an optional upload-panel resource,
+# not the reference server fixtures or prompts. Those fixture scenarios
+# cannot pass here and do not describe a defect.
 #
 # What MUST pass, and is not listed below: server-initialize, ping,
-# tools-list, tools-call-simple-text, tools-call-error. A regression in any of
+# tools-list, tools-call-simple-text, tools-call-error, resources-list. A regression in any of
 # those fails CI.
 #
 # server-sse-polling asks for a priming event and a retry field, which exist
@@ -36,7 +37,6 @@ server:
   - elicitation-sep1034-defaults
   - elicitation-sep1330-enums
   - server-sse-polling
-  - resources-list
   - resources-read-text
   - resources-read-binary
   - resources-templates-read
