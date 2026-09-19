@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.1
+
+- Upload results now include exact generation input examples and instructions to continue an existing request with the uploaded references. Upload-only requests remain non-billable.
+
 ## 2.2.0
 
 - Add generation request identities: recover the same job after response loss without another charge. Preserve job IDs on uncertain worker acknowledgements and report refunds only when confirmed.
