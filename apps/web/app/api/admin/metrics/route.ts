@@ -1,5 +1,6 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
 
+import { ONBOARDING_STEPS } from '@/lib/onboarding/events';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
@@ -195,9 +196,7 @@ export async function GET(_req: NextRequest) {
   // count DISTINCT users who 'entered' each step, walked in canonical order, so
   // the funnel reflects real reach + per-step drop. Events are pulled in pages
   // (PostgREST caps a single response at ~1000 rows).
-  const ONBOARDING_STEP_ORDER = [
-    'welcome', 'showcase', 'product', 'source', 'goal', 'tool', 'preparing', 'completed',
-  ];
+  const ONBOARDING_STEP_ORDER: readonly string[] = ONBOARDING_STEPS;
   const reachedByStep = new Map<string, Set<string>>();
   let from = 0;
   const PAGE = 1000;

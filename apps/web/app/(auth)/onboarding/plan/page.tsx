@@ -11,7 +11,7 @@
  * pages. Three plans, middle one flagged "Most popular".
  *
  * Picking a plan:
- *   1. POST /api/onboarding/event { step: 'plan', event: 'completed', data: { tier } }
+ *   1. POST /api/onboarding/event { step: 'plan', event: 'checkout_started', data: { tier } }
  *   2. invokeFn('checkout', { plan_tier }) -> Stripe Checkout URL
  *   3. window.location.href = checkout_url
  *
@@ -110,7 +110,7 @@ export default function OnboardingPlanPage() {
     setLoadingTier(plan.tier);
     setError(null);
     try {
-      logOnboardingEvent('plan', 'completed', { tier: plan.tier });
+      void logOnboardingEvent('plan', 'checkout_started', { tier: plan.tier });
       const { data, error: fnError } = await invokeFn('checkout', {
         body: { plan_tier: plan.tier, ...(dubId ? { dub_id: dubId } : {}) },
       });
@@ -118,11 +118,13 @@ export default function OnboardingPlanPage() {
         throw new Error(fnError.message || 'Checkout failed');
       }
       if (data?.checkout_url) {
+        void logOnboardingEvent('plan', 'checkout_ready', { tier: plan.tier });
         window.location.href = data.checkout_url;
         return; // stay in loading until the redirect lands
       }
       throw new Error('Checkout returned no URL');
     } catch (e) {
+      void logOnboardingEvent('plan', 'checkout_failed', { tier: plan.tier });
       setError(e instanceof Error ? e.message : 'Checkout failed');
       setLoadingTier(null);
     }
@@ -200,6 +202,10 @@ export default function OnboardingPlanPage() {
             Secure checkout via Stripe. No contracts, cancel from
             settings anytime.
           </p>
+          <nav aria-label="Account options" className="mt-5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-black/60">
+            <Link href="/settings" className="underline underline-offset-4 hover:text-black">Account settings</Link>
+            <Link href="/billing" className="underline underline-offset-4 hover:text-black">Billing and credits</Link>
+          </nav>
         </div>
       </main>
     </div>

@@ -11,8 +11,8 @@
  * Body:
  *   {
  *     step:   "welcome" | "showcase" | "product" | "source" | "goal" |
- *             "tool" | "preparing" | "completed",
- *     event?: "entered" | "completed" | "skipped"        (default: "entered")
+ *             "tool" | "preparing" | "plan" | "completed",
+ *     event?: "entered" | "completed" | "skipped" | "checkout_started" | "checkout_ready" | "checkout_failed" (default: "entered")
  *     data?:  Record<string, unknown>                    (default: {})
  *   }
  *
@@ -28,47 +28,19 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-type Body = {
-  step?: unknown;
-  event?: unknown;
-  data?: unknown;
-};
-
-const VALID_STEPS = new Set([
-  'welcome',
-  'showcase',
-  'product',
-  'source',
-  'goal',
-  'tool',
-  'preparing',
-  'completed',
-]);
-const VALID_EVENTS = new Set(['entered', 'completed', 'skipped']);
+import { parseOnboardingEvent } from '@/lib/onboarding/events';
 
 export async function POST(req: Request) {
-  let body: Body;
+  let body: unknown;
   try {
-    body = (await req.json()) as Body;
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const step = typeof body.step === 'string' ? body.step.trim() : '';
-  if (!VALID_STEPS.has(step)) {
-    return NextResponse.json(
-      { error: `step must be one of ${Array.from(VALID_STEPS).join(', ')}` },
-      { status: 400 },
-    );
-  }
-  const event =
-    typeof body.event === 'string' && VALID_EVENTS.has(body.event)
-      ? (body.event as string)
-      : 'entered';
-  const data =
-    body.data && typeof body.data === 'object' && !Array.isArray(body.data)
-      ? (body.data as Record<string, unknown>)
-      : {};
+  const parsed = parseOnboardingEvent(body);
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const { step, event, data } = parsed.value!;
 
   const supabase = await createClient();
   const {
@@ -87,7 +59,8 @@ export async function POST(req: Request) {
       data,
     });
   if (insertErr) {
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    console.error('[onboarding/event] event insert failed:', insertErr.code);
+    return NextResponse.json({ error: 'Could not record onboarding event' }, { status: 500 });
   }
 
   // Mirror the latest "entered" step into profiles so the server can
