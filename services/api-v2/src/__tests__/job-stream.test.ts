@@ -191,3 +191,42 @@ describe('job stream route', () => {
     expect((terminalUpdate!.data as { status?: string }).status).toBe('completed');
   });
 });
+
+describe('job stream lookup outages', () => {
+  async function serve(route: ReturnType<typeof createJobStreamRoute>) {
+    const app = express();
+    app.use((req, _res, next) => { (req as express.Request & { userId: string }).userId = 'owner'; next(); });
+    app.get('/jobs/:jobId', route);
+    const server = http.createServer(app);
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/jobs/${JOB_ID}`, close: () => new Promise<void>(resolve => server.close(() => resolve())) };
+  }
+  it('returns retryable 503 before starting a stream when the initial read fails', async () => {
+    const server = await serve(createJobStreamRoute({ readJob: async () => { throw new Error('database unavailable'); } }));
+    try {
+      const response = await fetch(server.url);
+      expect(response.status).toBe(503);
+      expect(response.headers.get('retry-after')).toBe('5');
+      expect(await response.json()).toMatchObject({ error: { code: 'STATUS_UNAVAILABLE', job_id: JOB_ID } });
+    } finally { await server.close(); }
+  });
+  it.each(['realtime', 'fallback'])('closes with recovery guidance, not a terminal/missing job, after a %s read fails', async (mode) => {
+    let reads = 0; let unsubscribed = false;
+    let update: (() => Promise<void> | void) | undefined;
+    const server = await serve(createJobStreamRoute({
+      readJob: async () => { if (++reads > 2) throw new Error('database unavailable'); return baseJob('processing'); },
+      subscribe: async (args) => { update = args.onUpdate; if (mode === 'realtime') args.onState('SUBSCRIBED'); return () => { unsubscribed = true; }; },
+      fallbackIntervalMs: 30, heartbeatMs: 500,
+    }));
+    try {
+      const reading = readSseEvents(server.url, 100);
+      await waitFor(() => update !== undefined);
+      if (mode === 'realtime') await update!();
+      const events = await reading;
+      expect(events.find(event => event.event === 'job.error')?.data).toMatchObject({ code: 'STATUS_UNAVAILABLE', job_id: JOB_ID, retry_after_seconds: 5 });
+      expect(events.some(event => event.event === 'job.terminal')).toBe(false);
+      expect(JSON.stringify(events)).not.toContain('VIDEO_NOT_FOUND');
+      expect(unsubscribed).toBe(true);
+    } finally { await server.close(); }
+  });
+});

@@ -505,7 +505,7 @@ function buildOpenApiSpec() {
       },
     },
   };
-  paths['/v1/videos/{jobId}'] = { get: { operationId: 'getVideoStatus', summary: 'Get video status', tags: ['videos'], security: [{ bearerAuth: [] }], parameters: [{ name: 'jobId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { '200': { description: 'Job status', content: { 'application/json': { schema: { $ref: '#/components/schemas/JobStatus' } } } }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } } } };
+  paths['/v1/videos/{jobId}'] = { get: { operationId: 'getVideoStatus', summary: 'Get video status', tags: ['videos'], security: [{ bearerAuth: [] }], parameters: [{ name: 'jobId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { '200': { description: 'Job status', content: { 'application/json': { schema: { $ref: '#/components/schemas/JobStatus' } } } }, '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }, '503': { description: 'Status lookup unavailable; retry the same job without resubmitting generation.', headers: { 'Retry-After': { schema: { type: 'integer' }, description: 'Seconds to wait before checking the same job again.' } }, content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } } } };
   paths['/v1/tooling/contracts'] = {
     get: {
       operationId: 'getToolContracts',

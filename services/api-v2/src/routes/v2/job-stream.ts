@@ -3,6 +3,7 @@
 import type { Request, Response } from 'express';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { JobStatusView } from '../status.js';
+import { STATUS_RETRY_SECONDS, statusUnavailable } from '../../lib/status-unavailable.js';
 
 type StreamState =
   | 'SUBSCRIBED'
@@ -136,7 +137,14 @@ export function createJobStreamRoute(overrides: Partial<JobStreamDeps> = {}) {
       return;
     }
 
-    const initial = await deps.readJob(jobId, userId);
+    let initial: JobStatusView | null;
+    try {
+      initial = await deps.readJob(jobId, userId);
+    } catch {
+      res.setHeader('Retry-After', String(STATUS_RETRY_SECONDS));
+      res.status(503).json({ error: statusUnavailable(jobId) });
+      return;
+    }
     if (!initial) {
       res.status(404).json({
         error: { code: 'VIDEO_NOT_FOUND', message: `Job "${jobId}" not found` },
@@ -174,7 +182,18 @@ export function createJobStreamRoute(overrides: Partial<JobStreamDeps> = {}) {
 
     const sendLatest = async () => {
       if (closed) return;
-      const row = await deps.readJob(jobId, userId);
+      let row: JobStatusView | null;
+      try {
+        row = await deps.readJob(jobId, userId);
+      } catch {
+        if (closed) return;
+        // HTTP headers are already sent; describe the read failure without
+        // declaring the generation missing or terminal. Reconnect this job.
+        writeEvent(res, 'job.error', statusUnavailable(jobId));
+        await cleanup();
+        return;
+      }
+      if (closed) return;
       if (!row) {
         writeEvent(res, 'job.error', {
           code: 'VIDEO_NOT_FOUND',
