@@ -138,7 +138,15 @@ describe('cached connector catalogs', () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ image_url: 'https://example.test/image.png' })));
     vi.stubGlobal('fetch', fetchMock);
     try {
-      await session.client.callTool({ name: 'upload_image', arguments: { upload_key: 'uploads/existing-file.png' } });
+      const result = await session.client.callTool({ name: 'upload_image', arguments: { upload_key: 'uploads/existing-file.png' } });
+      expect((result.structuredContent as Record<string, unknown> | undefined)?.generation_handoff).toMatchObject({
+        ready: true, input_examples: [
+          { tool: 'generate_image', arguments: { refs: ['https://example.test/image.png'] } },
+          { tool: 'generate_video', arguments: { refs: ['https://example.test/image.png'] } },
+          { tool: 'generate_video', arguments: { first_frame: 'https://example.test/image.png' } },
+        ],
+      });
+      expect(JSON.stringify(result.content)).toContain('continue that request');
       expect(fetchMock.mock.calls[0]).toEqual([
         expect.stringMatching(/\/v1\/uploads\/confirm$/),
         expect.objectContaining({ method: 'POST', body: JSON.stringify({ upload_key: 'uploads/existing-file.png' }) }),
@@ -160,6 +168,45 @@ describe('cached connector catalogs', () => {
       const result = await session.client.callTool({ name: 'upload_image', arguments: {} });
       expect(result.isError).toBe(true);
       expect(fetchMock).not.toHaveBeenCalled();
+    } finally { await session.close(); }
+  });
+});
+
+describe('uploaded references reach generation', () => {
+  const id = '11111111-1111-1111-1111-111111111111';
+  const urls = ['https://example.test/product.png?token=exact-a', 'https://example.test/person.png?token=exact-b'];
+  it.each(['get_uploads', 'upload_image'])('returns actionable multi-image inputs through %s, even with a cached catalog', async (name) => {
+    const session = await connect(true);
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(
+      url.includes('/upload-sessions/')
+        ? { session_id: id, images: urls.map((image_url, i) => ({ image_url, filename: `${i}.png` })), expires_at: '2026-09-20T00:00:00Z' }
+        : { job_id: 'fixture-job', status: 'submitted', model: 'fixture', credits_deducted: 20 },
+    )));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const result = await session.client.callTool({ name, arguments: name === 'get_uploads' ? { session_id: id } : { upload_key: `panel:${id}` } });
+      const handoff = (result.structuredContent as Record<string, unknown> | undefined)?.generation_handoff as { ready: boolean; next_step: string; input_examples: Array<{ tool: string; arguments: { refs: string[] } }> };
+      expect(handoff.ready).toBe(true);
+      expect(handoff.input_examples[0].arguments.refs).toEqual(urls);
+      expect(handoff.input_examples[1].arguments.refs).toEqual(urls);
+      expect(handoff.input_examples.map(example => example.tool)).toEqual(['generate_image', 'generate_video']);
+      expect(handoff.next_step).toContain('continue that request');
+      expect(handoff.next_step).toContain('upload-only');
+      expect(JSON.stringify(result.content)).toContain('NEXT STEP:');
+      // Following the returned example must carry the exact references to the API.
+      await session.client.callTool({ name: 'generate_image', arguments: { prompt: 'Place the product beside the person', ...handoff.input_examples[0].arguments, request_id: 'fixture-reference-request' } });
+      const [, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+      expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Place the product beside the person', refs: urls });
+    } finally { await session.close(); }
+  });
+  it('does not suggest generation inputs when no images are ready', async () => {
+    const session = await connect(true);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ session_id: id, images: [] }))));
+    try {
+      const result = await session.client.callTool({ name: 'get_uploads', arguments: { session_id: id } });
+      expect((result.structuredContent as Record<string, unknown> | undefined)?.generation_handoff).toMatchObject({ ready: false });
+      expect((result.structuredContent as Record<string, unknown> | undefined)?.generation_handoff).not.toHaveProperty('input_examples');
+      expect(JSON.stringify(result.content)).toContain('Do not start the reference-dependent generation');
     } finally { await session.close(); }
   });
 });

@@ -71,7 +71,7 @@ import {
 } from '../uploads/types.js';
 import { uploadPanelResource } from '../uploads/panel.js';
 import { openUploadPanelTool, getUploadsTool } from '../uploads/tools.js';
-import { IMAGE_UPLOAD_GUIDANCE, UPLOAD_PANEL_COMPAT_GUIDANCE } from '../uploads/guidance.js';
+import { IMAGE_UPLOAD_GUIDANCE, UPLOAD_PANEL_COMPAT_GUIDANCE, uploadedImageHandoff } from '../uploads/guidance.js';
 
 const PUBLIC_API_BASE =
   process.env.PUBLIC_API_BASE ?? 'https://api.agent-media.ai';
@@ -338,14 +338,16 @@ export function buildMcpServer(apiKey: string): Server {
           };
         }
         const { upload_token, ...view } = data;
+        const generationHandoff = uploadedImageHandoff(view.images ?? []);
+        const resultView = { ...view, generation_handoff: generationHandoff };
         return {
-          structuredContent: legacyPanel ? { ...view, upload_key: `panel:${view.session_id}` } : view,
+          structuredContent: legacyPanel ? { ...resultView, upload_key: `panel:${view.session_id}` } : resultView,
           ...(upload_token ? { _meta: { upload_token } } : {}),
           content: [{
             type: 'text',
             text: !readPanel
               ? `Upload panel ready. Open the panel or use this browser link: ${view.upload_url}\nSession: ${view.session_id}\nExpires: ${view.expires_at}\nAfter the user finishes uploading, ${legacyPanel ? `call upload_image with {"upload_key":"panel:${view.session_id}"}` : 'call get_uploads with this session_id'}. Do not build an upload page, ask for a local folder, or ask for base64.`
-              : JSON.stringify(view),
+              : `${JSON.stringify(resultView)}\n\nNEXT STEP: ${generationHandoff.next_step}`,
           }],
         };
       } catch {
@@ -616,14 +618,18 @@ export function buildMcpServer(apiKey: string): Server {
         return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
       }
       const up = data as { image_url?: string; bytes?: number; mime?: string } | null;
+      const generationHandoff = uploadedImageHandoff(up?.image_url ? [{ image_url: up.image_url }] : []);
       return {
+        structuredContent: { ...up, generation_handoff: generationHandoff },
         content: [
           {
             type: 'text',
             text: [
               `Image stored: ${up?.image_url ?? '(no url returned)'}`,
               up?.bytes ? `${Math.round(up.bytes / 1024)} KB, ${up.mime}` : null,
-              'Pass this URL to the generation tool. Do not send the base64 again: reuse this URL for every retry.',
+              `NEXT STEP: ${generationHandoff.next_step}`,
+              JSON.stringify(generationHandoff.input_examples ?? {}),
+              'Do not send the base64 again: reuse this URL while it remains available.',
             ].filter(Boolean).join('\n'),
           },
         ],

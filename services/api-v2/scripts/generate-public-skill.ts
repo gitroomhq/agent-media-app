@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.2.0';
+  if (SURFACE === 'loose') return '2.2.1';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -539,6 +539,10 @@ function cursorMarketplaceJson(): string {
 function changelog(): string {
   return [
     '# Changelog',
+    '',
+    '## 2.2.1',
+    '',
+    '- Upload results now include exact generation input examples and instructions to continue an existing request with the uploaded references. Upload-only requests remain non-billable.',
     '',
     '## 2.2.0',
     '',
