@@ -34,6 +34,8 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
   type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
 
@@ -91,7 +93,7 @@ function errorResult(message: string): CallToolResult {
 
 const server = new Server(
   { name: 'agent-media', version: VERSION },
-  { capabilities: { tools: {} } },
+  { capabilities: { tools: {}, resources: {} } },
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -124,6 +126,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     );
   }
 });
+
+// Forward MCP Apps resources as well as tools, so stdio clients retain the
+// same upload panel and browser fallback as the hosted connector.
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  const client = upstream ?? (upstream = await connectUpstream());
+  if (!client.getServerCapabilities()?.resources) return { resources: [] };
+  return withUpstream(c => c.listResources());
+});
+server.setRequestHandler(ReadResourceRequestSchema, (request) =>
+  withUpstream((c) => c.readResource(request.params)),
+);
 
 // ── boot ─────────────────────────────────────────────────────────────────────
 

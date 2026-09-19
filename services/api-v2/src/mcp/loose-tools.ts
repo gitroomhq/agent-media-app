@@ -8,6 +8,7 @@
  * are one source.
  */
 
+import { IMAGE_UPLOAD_GUIDANCE } from '../uploads/guidance.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
   GenerateAudioSchema,
@@ -32,6 +33,8 @@ export function generationAnnotations(title: string) {
  * per attempt. upload_image makes the bytes cross the wire a single time.
  */
 export const IMAGE_URL_HINT =
+  '\n\n' +
+  IMAGE_UPLOAD_GUIDANCE +
   '\n\nIMAGES: pass an https URL. If you only have raw bytes or a data: URL, call `upload_image` FIRST and pass the URL it returns. Never paste base64 into these arguments, the client prints tool arguments in the conversation, so a base64 image becomes a wall of text for the user and is re-sent on every retry.';
 
 // Read-only tool (no generation, no credits): list the user's saved
@@ -90,8 +93,10 @@ export const getRunStatusTool = {
 export const uploadImageTool = {
   name: 'upload_image',
   description:
+    IMAGE_UPLOAD_GUIDANCE +
+    '\n\nFor an image already accessible to you: ' +
     'Store an image and get back a stable https URL you can pass to any agent-media tool. Costs NO credits. THREE ways in, in this order:\n' +
-    '1. FILE ON DISK (best, and the only one that keeps full resolution): call upload_image with `file_bytes` set to the exact byte size of the file (`wc -c < photo.png`) and `file_name`. You get back a `put_url`; run the printed curl to stream the file straight to storage, then call upload_image again with the `upload_key` you were given to get the URL. The bytes never pass through this conversation, so there is NO reason to resize, crop or re-encode the user\u2019s photo first. Do not: a downscaled product photo is what the video model will show. Up to 25 MB.\n' +
+    '1. FILE ON DISK (when the file is already accessible to your shell): call upload_image with `file_bytes` set to the exact byte size of the file (`wc -c < photo.png`) and `file_name`. You get back a `put_url`; run the printed curl to stream the file straight to storage, then call upload_image again with the `upload_key` you were given to get the URL. The bytes never pass through this conversation, so there is NO reason to resize, crop or re-encode the user\u2019s photo first. Do not: a downscaled product photo is what the video model will show. Up to 25 MB.\n' +
     '2. A URL you already have: pass `image_url` to re-host it.\n' +
     '3. Raw bytes with no shell available: pass `image_base64` (PNG or JPEG, 10 MB max after decoding). Only when 1 and 2 are impossible, and even then upload the original, never a shrunken copy.\n' +
     'Then pass the returned URL everywhere. Do NOT paste base64 into other tool arguments or into the conversation: the client displays tool arguments to the user, so a base64 image becomes a wall of unreadable text, and every retry re-sends it.',

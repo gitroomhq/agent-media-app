@@ -1,4 +1,5 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
+import { isTemporaryImage } from '../client/temporary-image.js';
 
 /**
  * make_podcast step 2 — the LOCKED per-actor close-up.
@@ -75,7 +76,7 @@ export function makePodcastReframeActivity(cfg: WorkerConfig) {
       ['master_url', activityInput.master_url],
       ['actor_ref_url', activityInput.actor_ref_url],
     ] as const) {
-      if (!url.startsWith(allowedPrefix)) {
+      if (!url.startsWith(allowedPrefix) && !isTemporaryImage(url)) {
         throw ApplicationFailure.nonRetryable(
           `${label} must be hosted on the configured R2 public URL (${allowedPrefix})`,
           'REFERENCE_URL_NOT_ALLOWED',

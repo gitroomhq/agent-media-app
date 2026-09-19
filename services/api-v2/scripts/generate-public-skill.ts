@@ -21,6 +21,8 @@ import { fileURLToPath } from 'node:url';
 import { SKILLS, type SkillEntry } from '../src/skills/registry.js';
 import { V2_MODELS, liveModels } from '@agentmedia/schema/v2';
 import { LOOSE_SURFACE_TOOLS } from '../src/mcp/loose-tools.js';
+import { IMAGE_UPLOAD_GUIDANCE } from '../src/uploads/guidance.js';
+import { openUploadPanelTool, getUploadsTool } from '../src/uploads/tools.js';
 import { buildSiteData } from './generate-site-data.js';
 import {
   LOOSE_TOOLS,
@@ -505,7 +507,7 @@ function cursorPluginJson(): string {
 }
 
 /** One line, marketplace-card length. Cursor's own entries stay under ~120 chars. */
-const CURSOR_DESCRIPTION = 'Generate video, images and voice: your prompt, your model, your references. Nine tools over a hosted MCP server.';
+const CURSOR_DESCRIPTION = 'Generate video, images and voice. Optional image upload panels with 24-hour expiry. One hosted MCP server.';
 
 /**
  * Cursor multi-plugin index at the REPO ROOT (`/.cursor-plugin/marketplace.json`).
@@ -710,7 +712,9 @@ function refAuth(): string {
     '',
     'Full guide: <https://agent-media.ai/connect>. After submitting a generation over MCP, call `get_run_status` with the id you were given: generation is async and the submit response only confirms the job started.',
     '',
-    'If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.',
+    IMAGE_UPLOAD_GUIDANCE,
+    '',
+    'If you have accessible image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.',
     '',
     '## API key (REST, or the self-hosted MCP server)',
     '',
@@ -846,7 +850,7 @@ for (const m of Object.values(V2_MODELS)) {
 
 if (SURFACE === 'loose') {
   // ── The loose surface: one skill, the agent is the director ─────────
-  const schemas = Object.fromEntries(LOOSE_SURFACE_TOOLS.map((t) => [t.name, t.inputSchema]));
+  const schemas = Object.fromEntries([...LOOSE_SURFACE_TOOLS, openUploadPanelTool, getUploadsTool].map((t) => [t.name, t.inputSchema]));
   const listed = LOOSE_SURFACE_TOOLS.map((t) => t.name);
   for (const n of LOOSE_TOOLS) {
     if (!listed.includes(n)) throw new Error(`public skill names tool ${n} that the connector does not list`);
@@ -866,8 +870,8 @@ if (SURFACE === 'loose') {
       // and Claude Code accepts the same form.
       name: 'agent-media',
       description:
-        'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at about 2x; gpt-image-2.5 for images; elevenlabs-tts for speech), pick the video mode (text; image-to-video with first_frame and optional last_frame; reference with refs, video_refs, audio_refs addressed as @image1 @video1 @audio1), pick the quality (480p, 720p default, 1080p), quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. Use for UGC clips, product-in-hand, animating a still, first-to-last-frame moves, matching a reference clip, reaction clips, portraits, voiceover, and series with one face.',
-      'allowed-tools': LOOSE_TOOLS.map((n) => `mcp__agent-media__${n}`),
+        'Make AI video, images and voice with agent-media as the director: write the prompt, pick the model (default seedance-2.0; seedance-2.5 for a hero clip at about 2x; gpt-image-2.5 for images; elevenlabs-tts for speech), pick the video mode (text; image-to-video with first_frame and optional last_frame; reference with refs, video_refs, audio_refs addressed as @image1 @video1 @audio1), pick the quality (480p, 720p default, 1080p), quote the price, poll for the URL. Tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. For user photos, discover open_upload_panel and get_uploads first: drag-and-drop images with 24-hour expiry and a browser fallback. Use for UGC clips, product-in-hand, animating a still, first-to-last-frame moves, matching a reference clip, reaction clips, portraits, voiceover, and series with one face.',
+      'allowed-tools': [...LOOSE_TOOLS, 'open_upload_panel', 'get_uploads'].map((n) => `mcp__agent-media__${n}`),
       'x-skill-slug': 'agent-media',
       'x-skill-version': '2.0.0',
       'x-surface': 'loose',

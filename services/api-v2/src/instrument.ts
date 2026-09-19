@@ -17,6 +17,9 @@ const REDACTIONS: { re: RegExp; with: string }[] = [
   { re: /\bma_[A-Za-z0-9]{8,}\b/g, with: 'ma_[REDACTED]' },
   { re: /\bsk-[A-Za-z0-9]{8,}\b/g, with: 'sk-[REDACTED]' },
   { re: /\bBearer\s+[A-Za-z0-9._-]{8,}/gi, with: 'Bearer [REDACTED]' },
+  // Upload/image capabilities are 32-byte hex secrets, including bare values
+  // in metadata and tokens embedded in URLs captured by HTTP tracing.
+  { re: /\b[a-f0-9]{64}\b/gi, with: '[REDACTED]' },
   { re: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, with: '[email]' },
   { re: /https?:\/\/[^@\s]+@[^/\s]+/g, with: 'https://[REDACTED]@host' },
 ];
@@ -41,6 +44,10 @@ if (dsn) {
     tracesSampleRate: 0.1,
     sendDefaultPii: false,
     beforeSend(event) {
+      if (event.request?.cookies) delete event.request.cookies;
+      return redact(event) as typeof event;
+    },
+    beforeSendTransaction(event) {
       if (event.request?.cookies) delete event.request.cookies;
       return redact(event) as typeof event;
     },

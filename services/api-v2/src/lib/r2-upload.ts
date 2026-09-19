@@ -19,6 +19,7 @@ import { promisify } from 'node:util';
 import type { IncomingMessage } from 'node:http';
 import { moderateImageOrThrow } from './image-moderation.js';
 import sharp from 'sharp';
+import { isTemporaryImageUrl } from '@agentmedia/schema/v2';
 
 const dnsLookupAll = promisify(dnsLookupCb);
 
@@ -515,6 +516,20 @@ export async function uploadUserImageFromUrl(
   userId: string,
   rawUrl: string,
 ): Promise<UploadedImage> {
+  // Keep temporary images temporary: do not silently copy them into the public,
+  // permanent uploads prefix. Their gateway validates bytes and enforces expiry.
+  if (isTemporaryImageUrl(rawUrl, process.env.PUBLIC_API_BASE)) {
+    // Only the configured service origin can reach this branch, including a
+    // self-hosted loopback API. Redirects are forbidden; never fetch an arbitrary
+    // user URL through this trusted-service path. The gateway already decodes
+    // and moderates the image, and HEAD checks expiry before starting work.
+    const response = await fetch(rawUrl, { method: 'HEAD', redirect: 'error', signal: AbortSignal.timeout(15_000) });
+    if (response.status === 404 || response.status === 410) throw new Error('Temporary image is expired or unavailable. Ask the user to upload it again.');
+    if (!response.ok) throw new Error('Temporary image service is unavailable. Retry shortly.');
+    const mime = response.headers.get('content-type')?.split(';')[0];
+    if (mime !== 'image/png' && mime !== 'image/jpeg') throw new Error('Temporary image has an invalid format.');
+    return { url: rawUrl, key: '', bytes: Number(response.headers.get('content-length') || 0), mime };
+  }
   const env = readEnv();
   const r2Prefix = env.publicUrl.replace(/\/+$/, '') + '/';
   // Already on our R2 — passthrough (still validate it's a sane https URL).

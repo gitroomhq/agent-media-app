@@ -1,4 +1,5 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
+import { isTemporaryImage } from '../client/temporary-image.js';
 
 /**
  * make_podcast step 1 — the MASTER two-shot scene.
@@ -79,7 +80,7 @@ export function makePodcastSceneActivity(cfg: WorkerConfig) {
       ['a_ref_url', activityInput.a_ref_url],
       ['b_ref_url', activityInput.b_ref_url],
     ] as const) {
-      if (!url.startsWith(allowedPrefix)) {
+      if (!url.startsWith(allowedPrefix) && !isTemporaryImage(url)) {
         throw ApplicationFailure.nonRetryable(
           `${label} must be hosted on the configured R2 public URL (${allowedPrefix})`,
           'REFERENCE_URL_NOT_ALLOWED',

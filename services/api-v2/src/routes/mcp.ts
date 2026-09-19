@@ -41,6 +41,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { V2_GENERATORS, type V2GeneratorRecord } from '@agentmedia/schema/v2';
@@ -60,6 +62,14 @@ import {
   uploadImageTool,
 } from '../mcp/loose-tools.js';
 import { isPrimitivesRouteEnabled } from './v1/primitives.js';
+import {
+  temporaryUploadsEnabled,
+  UPLOAD_RESOURCE_URI,
+  UPLOAD_RESOURCE_MIME,
+} from '../uploads/types.js';
+import { uploadPanelResource } from '../uploads/panel.js';
+import { openUploadPanelTool, getUploadsTool } from '../uploads/tools.js';
+import { IMAGE_UPLOAD_GUIDANCE } from '../uploads/guidance.js';
 
 const PUBLIC_API_BASE =
   process.env.PUBLIC_API_BASE ?? 'https://api.agent-media.ai';
@@ -107,13 +117,25 @@ function titleFromSlug(slug: string): string {
  */
 function formatApiError(status: number, data: unknown): string {
   const d = data as
-    | { error?: string | { message?: string; code?: string }; detail?: unknown; skill?: string }
+    | { error?: string | { message?: string; code?: string; issues?: unknown }; issues?: unknown; detail?: unknown; skill?: string }
     | null;
   const raw = d?.error;
   const head =
     typeof raw === 'string' ? raw : (raw?.message ?? raw?.code ?? `HTTP ${status}`);
   const parts = [`Error (${status}): ${head}`];
   if (d?.skill) parts.push(`Skill: ${d.skill}`);
+  // The loose generation API returns Zod issues inside error; fixed routes
+  // use detail.fieldErrors below. Preserve both recovery contracts.
+  const issues = typeof raw === 'object' && raw ? raw.issues : d?.issues;
+  if (Array.isArray(issues)) {
+    for (const issue of issues.slice(0, 20)) {
+      if (!issue || typeof issue.message !== 'string') continue;
+      const path = Array.isArray(issue.path)
+        ? issue.path.filter((part: unknown) => typeof part === 'string' || typeof part === 'number').join('.')
+        : '';
+      parts.push(`- ${path ? `${path}: ` : ''}${issue.message.slice(0, 1000)}`);
+    }
+  }
 
   const detail = d?.detail as
     | { fieldErrors?: Record<string, string[]>; formErrors?: string[] }
@@ -164,7 +186,7 @@ function takesAnImage(schema: unknown): boolean {
 export function buildMcpServer(apiKey: string): Server {
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {}, resources: {} }, instructions: IMAGE_UPLOAD_GUIDANCE },
   );
 
   // A10: when MAKE_UGC_ENABLED makes make_ugc the one curated agent surface, the
@@ -262,11 +284,68 @@ export function buildMcpServer(apiKey: string): Server {
       uploadImageTool,
       listModelsTool,
       ...rateTools,
+      ...(temporaryUploadsEnabled() ? [openUploadPanelTool, getUploadsTool] : []),
     ],
   }));
 
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    resources: temporaryUploadsEnabled()
+      ? [{ uri: UPLOAD_RESOURCE_URI, name: 'Image upload panel', mimeType: UPLOAD_RESOURCE_MIME }]
+      : [],
+  }));
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    if (!temporaryUploadsEnabled() || request.params.uri !== UPLOAD_RESOURCE_URI) {
+      throw new Error('Unknown resource');
+    }
+    return { contents: [uploadPanelResource(PUBLIC_API_BASE)] };
+  });
+
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    if (temporaryUploadsEnabled() && (name === 'open_upload_panel' || name === 'get_uploads')) {
+      const id = String(args?.session_id ?? '');
+      if (name === 'get_uploads' && !/^[0-9a-f-]{36}$/i.test(id)) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: 'Pass the session_id returned by open_upload_panel.' }],
+        };
+      }
+      try {
+        const suffix = name === 'get_uploads' ? `/${encodeURIComponent(id)}` : '';
+        const response = await apiFetch(`${PUBLIC_API_BASE}/v1/upload-sessions${suffix}`, {
+          method: name === 'get_uploads' ? 'GET' : 'POST',
+          headers: { Authorization: `Bearer ${apiKey}` },
+          timeoutMs: 20_000,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          return {
+            isError: true,
+            content: [{ type: 'text', text: formatApiError(response.status, data) }],
+          };
+        }
+        const { upload_token, ...view } = data;
+        return {
+          structuredContent: view,
+          ...(upload_token ? { _meta: { upload_token } } : {}),
+          content: [{
+            type: 'text',
+            text: name === 'open_upload_panel'
+              ? `Upload panel ready. Open the panel or use this browser link: ${view.upload_url}\nSession: ${view.session_id}\nExpires: ${view.expires_at}\nAfter uploading, call get_uploads with this session_id. Do not ask for base64.`
+              : JSON.stringify(view),
+          }],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [{
+            type: 'text',
+            text: 'Upload service is temporarily unavailable. Retry shortly. Your generation credits were not used.',
+          }],
+        };
+      }
+    }
 
     // The human half of the quality loop: POST /v1/runs/:id/rate.
     if (surface === 'loose' && name === 'rate_run') {
@@ -315,7 +394,7 @@ export function buildMcpServer(apiKey: string): Server {
         });
       } catch (err) {
         return {
-          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). ${isQuote ? 'Call quote again.' : 'The job may or may not have started: call get_run_status if you were given an id, otherwise submit again.'}` }],
+          content: [{ type: 'text', text: `agent-media API did not respond in time (${(err as Error).message}). ${isQuote ? 'Call quote again.' : 'The job may already have started. Do not automatically resubmit: this could spend credits twice. If you have a job id, call get_run_status with that id; otherwise check account activity in the dashboard to recover the job before deciding whether to submit again.'}` }],
           isError: true,
         };
       }
@@ -541,20 +620,37 @@ export function buildMcpServer(apiKey: string): Server {
         `/v1/videos/${encodeURIComponent(runId)}`,
       ];
 
-      async function probe(): Promise<{ found: boolean; body?: any }> {
+      const unavailable = 'Run status is temporarily unavailable. Wait briefly, then retry get_run_status with the same run_id. Do not resubmit the generation.';
+      async function probe(): Promise<{ found: boolean; body?: any; error?: string }> {
         for (const path of PATHS) {
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) return { found: false, error: unavailable };
           try {
             const r = await apiFetch(`${PUBLIC_API_BASE}${path}`, {
               headers: { Authorization: `Bearer ${apiKey}` },
-              timeoutMs: 20_000,
+              timeoutMs: Math.min(20_000, remaining),
             });
             if (r.status === 404) continue;
             const t = await r.text();
             let d: any;
             try { d = t ? JSON.parse(t) : null; } catch { d = t; }
             if (r.ok) return { found: true, body: d };
+            const recovery = r.status === 401 || r.status === 403
+              ? 'Reconnect Agent Media or check the API key, then retry get_run_status with the same run_id. Do not resubmit the generation.'
+              : r.status === 429 || r.status >= 500
+                ? unavailable
+                : 'Check the error before retrying this status request. Do not resubmit the generation.';
+            const retryAfter = r.headers.get('retry-after');
+            const delay = retryAfter && /^\d+$/.test(retryAfter)
+              ? Number(retryAfter)
+              : retryAfter ? Math.ceil((Date.parse(retryAfter) - Date.now()) / 1000) : NaN;
+            const timing = (r.status === 429 || r.status >= 500) && Number.isFinite(delay) && delay > 0
+              ? `\nWait at least ${delay} seconds before the next status check.`
+              : '';
+            return { found: false, error: `${formatApiError(r.status, d)}\n${recovery}${timing}` };
           } catch {
-            // try the next shape
+            // Only a confirmed 404 means this pipeline does not own the id.
+            return { found: false, error: unavailable };
           }
         }
         return { found: false };
@@ -566,13 +662,13 @@ export function buildMcpServer(apiKey: string): Server {
       // that exists to END the agent's blindness was itself the most likely
       // call to "hang and then fail". Stay comfortably under: the agent just
       // calls again, and it is told to.
-      const deadline = Date.now() + (wait ? 45_000 : 0);
+      const deadline = Date.now() + (wait ? 45_000 : 20_000);
       let result = await probe();
       while (
         wait &&
         result.found &&
         !TERMINAL.has(String(result.body?.status ?? '').toLowerCase()) &&
-        Date.now() < deadline
+        Date.now() + 8_000 < deadline
       ) {
         await new Promise((r) => setTimeout(r, 8_000));
         result = await probe();
@@ -580,7 +676,7 @@ export function buildMcpServer(apiKey: string): Server {
 
       if (!result.found) {
         return {
-          content: [{ type: 'text', text: `No run found for id "${runId}". Check the id you were given at submit time.` }],
+          content: [{ type: 'text', text: result.error ?? `No run found for id "${runId}". Check the id you were given at submit time.` }],
           isError: true,
         };
       }

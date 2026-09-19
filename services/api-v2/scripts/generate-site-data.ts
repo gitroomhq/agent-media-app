@@ -36,6 +36,7 @@ import {
   type V2VideoMode,
 } from '@agentmedia/schema/v2';
 import { LOOSE_SURFACE_TOOLS } from '../src/mcp/loose-tools.js';
+import { openUploadPanelTool, getUploadsTool } from '../src/uploads/tools.js';
 import { AUTO_POLICY, publicView } from '../src/lib/model-view.js';
 import { promptingGuide, recipes, realismRubric, priceLadder } from './public-skill-loose.js';
 
@@ -119,12 +120,14 @@ export function buildSiteData(pluginVersion: string) {
       prompt: `Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: ${MCP_URL} (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call list_models and tell me what you can make.`,
       polling: `Every generate tool returns a job id. Call get_run_status with wait:true; each call blocks up to about 45 seconds, a video usually needs several calls (${liveVideo.map((m) => `${m.id}: ${m.usage!.latency}`).join('; ')}). Never report a result before get_run_status returned its URL.`,
     },
-    tools: LOOSE_SURFACE_TOOLS.map((t) => ({
+    tools: [...LOOSE_SURFACE_TOOLS, openUploadPanelTool, getUploadsTool].map((t) => ({
       name: t.name,
       title: (t.annotations as { title: string }).title,
       read_only: (t.annotations as { readOnlyHint: boolean }).readOnlyHint,
       spends_credits: ['generate_video', 'generate_image', 'generate_audio'].includes(t.name),
-      description: t.description,
+      description: ['open_upload_panel', 'get_uploads'].includes(t.name)
+        ? 'Optional: available only when temporary uploads are enabled; check tools/list before calling. ' + t.description
+        : t.description,
       input_schema: t.inputSchema,
     })),
     models: {

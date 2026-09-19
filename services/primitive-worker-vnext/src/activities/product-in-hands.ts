@@ -1,4 +1,5 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
+import { isTemporaryImage } from '../client/temporary-image.js';
 
 import { ApplicationFailure, Context } from '@temporalio/activity';
 import { ProductInHandsToolInputSchema } from '@agentmedia/schema';
@@ -77,7 +78,7 @@ export function makeProductInHandsActivity(cfg: WorkerConfig) {
       ['character_sheet_url', input.character_sheet_url],
       ['product_image_url', input.product_image_url],
     ] as const) {
-      if (!url.startsWith(allowedPrefix)) {
+      if (!url.startsWith(allowedPrefix) && !isTemporaryImage(url)) {
         throw ApplicationFailure.nonRetryable(
           `${label} must be hosted on the configured R2 public URL (${allowedPrefix})`,
           'REFERENCE_URL_NOT_ALLOWED',

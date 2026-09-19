@@ -1,4 +1,5 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
+import { isTemporaryImage } from '../client/temporary-image.js';
 
 import { ApplicationFailure, Context } from '@temporalio/activity';
 import { PortraitGpt2ToolInputSchema } from '@agentmedia/schema';
@@ -96,7 +97,7 @@ export function makePortraitGpt2Activity(cfg: WorkerConfig) {
     // it does not survive DNS rebinding and does not block redirects.
     if (input.reference_photo_url) {
       const allowedPrefix = cfg.r2.publicUrl.replace(/\/+$/, '') + '/';
-      if (!input.reference_photo_url.startsWith(allowedPrefix)) {
+      if (!input.reference_photo_url.startsWith(allowedPrefix) && !isTemporaryImage(input.reference_photo_url)) {
         throw ApplicationFailure.nonRetryable(
           `reference_photo_url must be hosted on the configured R2 public URL (${allowedPrefix})`,
           'REFERENCE_URL_NOT_ALLOWED',

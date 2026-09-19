@@ -1,4 +1,5 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
+import { isTemporaryImage } from '../client/temporary-image.js';
 
 import { ApplicationFailure, Context } from '@temporalio/activity';
 import { LipSyncToolInputSchema } from '@agentmedia/schema';
@@ -86,7 +87,7 @@ export function makeLipSyncActivity(cfg: WorkerConfig) {
       ['image_url', input.image_url],
       ['audio_url', input.audio_url],
     ] as const) {
-      if (!url.startsWith(allowedPrefix)) {
+      if (!url.startsWith(allowedPrefix) && !(field === 'image_url' && isTemporaryImage(url))) {
         throw ApplicationFailure.nonRetryable(
           `${field} must be hosted on the configured R2 public URL (${allowedPrefix})`,
           'REFERENCE_URL_NOT_ALLOWED',
