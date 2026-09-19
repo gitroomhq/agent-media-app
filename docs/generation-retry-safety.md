@@ -23,3 +23,7 @@ The stdio proxy in `@agentmedia/mcp-server` 0.8.1 never automatically replays mu
 Apply `20260919180000_generation_request_receipts.sql` before the API release. The additive migration leaves legacy requests untouched. Deploy the API, then publish/update the stdio package; retain the migration on application rollback. Updated API submission fails closed if its receipt lookup is unavailable.
 
 API tests cover receipt replay, input conflicts, distinct intents/accounts, atomic debit rollback, lost commit responses, uncertain dispatch, terminal replay, and refund failure. PGlite executes the real receipt and credit-ledger SQL. CI additionally runs overlapping PostgreSQL 16 transactions using independent connections. Run the latter with a disposable PostgreSQL container via `PGTEST_CONTAINER=<container-id> bash scripts/test-generation-request-postgres.sh`; never use a production database for fixtures.
+
+## Status lookup outages
+
+A successful empty account-scoped job lookup returns 404. Database or network lookup failures return 503 with `STATUS_UNAVAILABLE`, the original `job_id`, and `Retry-After: 5`. Retry the status check for that job; do not submit another generation. MCP preserves this recovery guidance. If a live job stream is already open, it emits `job.error` with the same code and `retry_after_seconds: 5`, then closes; reconnect to the same job after that delay. This is a status-read failure, not evidence the generation failed, disappeared, or was refunded.

@@ -8,6 +8,7 @@
 
 import type { Request, Response } from 'express';
 import { supabase } from '../server.js';
+import { STATUS_RETRY_SECONDS, statusUnavailable } from '../lib/status-unavailable.js';
 
 // A job id is an opaque well-formed UUID. Validate the 8-4-4-4-12 hex shape
 // only (a cheap gate against malformed input before the DB query) — do NOT
@@ -52,9 +53,11 @@ export async function fetchUserJobStatus(jobId: string, userId: string): Promise
     .select('id, operation, status, progress_detail, input_params, output_media_url, error_message, created_at, updated_at, character_id')
     .eq('id', jobId)
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) return null;
+  // Only a successful empty lookup is evidence that this account has no job.
+  if (error) throw new Error('Job status lookup failed', { cause: error });
+  if (!data) return null;
 
   const safeError = sanitizeErrorMessage(data.error_message);
   const input = (data.input_params ?? {}) as Record<string, unknown>;
@@ -102,6 +105,10 @@ export async function statusRoute(req: Request, res: Response): Promise<void> {
   const rawJobId = req.params.jobId;
   const jobId = Array.isArray(rawJobId) ? rawJobId[0] : rawJobId;
   const userId = (req as any).userId as string;
+  if (!userId) {
+    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Auth required' } });
+    return;
+  }
   if (!jobId) {
     res.status(400).json({
       error: { code: 'VALIDATION_ERROR', message: 'Missing jobId path parameter' },
@@ -126,8 +133,7 @@ export async function statusRoute(req: Request, res: Response): Promise<void> {
     res.json(data);
   } catch (err) {
     console.error('[status] query failed:', err);
-    res.status(500).json({
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch job status' },
-    });
+    res.setHeader('Retry-After', String(STATUS_RETRY_SECONDS));
+    res.status(503).json({ error: statusUnavailable(jobId) });
   }
 }
