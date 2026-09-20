@@ -4,11 +4,221 @@ The hosted connector's `tools/list` on the loose surface, with each input schema
 
 Optional tools open_upload_panel and get_uploads appear only when temporary uploads are enabled. Discover them before use.
 
-Before the first generation, call get_account to confirm this connection and read available credits. If get_account is absent from a cached tool catalog, list_models includes the same account check. Then call quote with the intended inputs and compare the quoted credits to the available balance before submitting. A public model catalog or an upload alone does not prove credit readiness. If the balance check is unavailable, retry it; do not assume zero credits or ask the user to pay again. A balance snapshot does not reserve credits or guarantee provider availability. Upload-only requests do not need generation credits.
+Before the first generation, call get_account to confirm this connection and read available credits. If get_account is absent from a cached tool catalog, list_models includes the same account check. Then call the matching quote tool with the intended inputs: quote_ugc for make_ugc, or quote for generate_image, generate_video and generate_audio. Compare the quoted credits to the available balance before submitting. A public model catalog or an upload alone does not prove credit readiness. If the balance check is unavailable, retry it; do not assume zero credits or ask the user to pay again. A balance snapshot does not reserve credits or guarantee provider availability. Upload-only requests do not need generation credits.
 When the user wants to provide a product photo, portrait, screenshot, or image reference, check tools/list. If open_upload_panel is available, offer it first: call open_upload_panel with {}, show its inline panel or returned browser link, and wait for the user to finish. Then call get_uploads with the returned session_id and use the exact ready image_url in refs, first_frame, last_frame, or the matching skill image field. Do not start a reference-dependent generation until the required images are ready. The panel accepts still PNG, JPEG, and WebP, up to 10 images and 25 MB each. Images expire 24 hours after the panel is created; show the returned expiry, request a new upload if expired, and never make a permanent copy. Uploading uses no generation credits. Do not ask the user for base64, shell commands, or a public hosting service; do not continuously poll while waiting for them. Only call these tool names when discovered. If they are missing from the connected tool catalog, call upload_image with {} to open the same panel; use the returned panel: upload_key with upload_image to retrieve images after the user finishes. If that reports the panel is unavailable, use upload_image only for an already accessible file or URL. Do not build an upload page or request a local folder as a substitute for the existing panel. Never invent access to a chat attachment: if you cannot read it, explain that and offer the panel when available. Browser fallback works without inline UI support; do not promise an inline panel in every client.
-Inspect the native image previews returned with retrieved uploads before describing them or writing image-specific prompts. Never infer what the image shows from an email domain, account metadata, or filename. Use the original URLs for generation, not preview bytes. If the session ID was lost, call get_uploads with {} to list recent sessions, or upload_image with {"upload_key":"panel:recent"} for cached catalogs; retrieve the matching session before asking for re-upload. Account-wide recent uploads may belong to other conversations, so clarify ambiguous selection. Uploading stores an image; it does not attach it to a generation automatically. If the user already requested a generation with these images, continue that request using the returned URLs; do not stop at "upload complete" or ask again whether to use them. For generate_image, put the relevant image_url values in refs. For generate_video, use refs for product/person/appearance references, or first_frame for animating a still (last_frame only for an explicitly requested ending frame); never combine refs with frame fields. Preserve the user's intended image roles and model limits; ask only if the role or selection is unclear. For a fixed skill, use its declared image field. Include the URL in the tool arguments, not only in the prompt. Do not substitute a newly generated image for the uploaded reference. If the request was upload-only, report readiness and wait for a generation request; uploading alone does not authorize spending credits. After submitting, poll get_run_status and return the result.
+Inspect the native image previews returned with retrieved uploads before describing them or writing image-specific prompts. Never infer what the image shows from an email domain, account metadata, or filename. Use the original URLs for generation, not preview bytes. If the session ID was lost, call get_uploads with {} to list recent sessions, or upload_image with {"upload_key":"panel:recent"} for cached catalogs; retrieve the matching session before asking for re-upload. Account-wide recent uploads may belong to other conversations, so clarify ambiguous selection. Uploading stores an image; it does not attach it to a generation automatically. If the user already requested a generation with these images, continue that request using the returned URLs; do not stop at "upload complete" or ask again whether to use them. For the recommended make_ugc workflow, pass a person photo as image or a product photo as product_image, then call quote_ugc before spending. For generate_image, put the relevant image_url values in refs. For generate_video, use refs for product/person/appearance references, or first_frame for animating a still (last_frame only for an explicitly requested ending frame); never combine refs with frame fields. Preserve the user's intended image roles and model limits; ask only if the role or selection is unclear. For another fixed skill, use its declared image field. Include the URL in the tool arguments, not only in the prompt. Do not substitute a newly generated image for the uploaded reference. If the request was upload-only, report readiness and wait for a generation request; uploading alone does not authorize spending credits. After submitting, poll get_run_status and return the result.
 
 The JSON schema is the envelope; the per-model, per-mode limits (seconds, aspects, qualities, how many refs of each kind) are checked at submit against the catalog cell, see [models.md](models.md).
+
+## make_ugc
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "script": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200,
+      "description": "What the person SAYS (lip-synced), any length. A one-liner makes one clip; a full monologue makes the full multi-take video automatically, never trimmed. Usually the only field you set. EXCEPTION: when you also pass product_image the video is a SINGLE take of at most 15s, so the script must be ~33 words or fewer."
+    },
+    "scene_action": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 400,
+      "description": "A silent action clip (dancing, b-roll, vibes), no dialogue. Use instead of script; needs a `character`."
+    },
+    "person": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 400,
+      "description": "Describe the person in words. Omit if you pass image or character."
+    },
+    "image": {
+      "type": "string",
+      "description": "A photo of the person, an https URL. The face is locked to it. If you only hold bytes, call `upload_image` first and pass the URL it returns; base64 is still accepted here but it is printed into the user’s chat and re-sent on every retry."
+    },
+    "character": {
+      "type": "string",
+      "description": "Reuse a saved character: its character_id (char_…) OR its character_sheet_url from list_characters."
+    },
+    "product_image": {
+      "type": "string",
+      "description": "A photo of a PRODUCT to show/hold/wear, an https URL. If you only hold bytes, call `upload_image` first and pass the URL it returns: base64 travels inside this tool call, is printed into the user’s chat, and is re-sent on every retry. Turns the video into a product ad; needs a `character` to hold it, and limits `script` to ONE take of at most 15s (~33 words)."
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "Name/age/vibe hint, e.g. 'Sophia, 28'."
+    },
+    "broll_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/",
+      "description": "A b-roll / gameplay / product video overlaid on the lower half while the person narrates."
+    },
+    "duration": {
+      "type": "number",
+      "enum": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30
+      ],
+      "description": "IGNORED when `script` is set, length is derived from the word count (≤11 words → 5s, ≤22 → 10s, else 15s) because the renderer requires the script to fit the take. To get a shorter clip, write a shorter script. Only used for a silent `scene_action` clip, which has no words to measure."
+    },
+    "captions": {
+      "type": "boolean",
+      "description": "Burn in TikTok/Hormozi captions. OFF unless set true, ASK the user whether they want captions (and which caption_style) before generating; never add captions unprompted."
+    },
+    "caption_style": {
+      "type": "string",
+      "enum": [
+        "hormozi",
+        "tiktok",
+        "minimal"
+      ],
+      "default": "hormozi"
+    },
+    "look": {
+      "type": "string",
+      "enum": [
+        "natural",
+        "commercial",
+        "raw_iphone"
+      ],
+      "default": "natural"
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1"
+      ],
+      "default": "9:16"
+    },
+    "music": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "maxLength": 120
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+## quote_ugc
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "script": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200,
+      "description": "What the person SAYS (lip-synced), any length. A one-liner makes one clip; a full monologue makes the full multi-take video automatically, never trimmed. Usually the only field you set. EXCEPTION: when you also pass product_image the video is a SINGLE take of at most 15s, so the script must be ~33 words or fewer."
+    },
+    "scene_action": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 400,
+      "description": "A silent action clip (dancing, b-roll, vibes), no dialogue. Use instead of script; needs a `character`."
+    },
+    "person": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 400,
+      "description": "Describe the person in words. Omit if you pass image or character."
+    },
+    "image": {
+      "type": "string",
+      "description": "A photo of the person, an https URL. The face is locked to it. If you only hold bytes, call `upload_image` first and pass the URL it returns; base64 is still accepted here but it is printed into the user’s chat and re-sent on every retry."
+    },
+    "character": {
+      "type": "string",
+      "description": "Reuse a saved character: its character_id (char_…) OR its character_sheet_url from list_characters."
+    },
+    "product_image": {
+      "type": "string",
+      "description": "A photo of a PRODUCT to show/hold/wear, an https URL. If you only hold bytes, call `upload_image` first and pass the URL it returns: base64 travels inside this tool call, is printed into the user’s chat, and is re-sent on every retry. Turns the video into a product ad; needs a `character` to hold it, and limits `script` to ONE take of at most 15s (~33 words)."
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "Name/age/vibe hint, e.g. 'Sophia, 28'."
+    },
+    "broll_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https:\\/\\/",
+      "description": "A b-roll / gameplay / product video overlaid on the lower half while the person narrates."
+    },
+    "duration": {
+      "type": "number",
+      "enum": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30
+      ],
+      "description": "IGNORED when `script` is set, length is derived from the word count (≤11 words → 5s, ≤22 → 10s, else 15s) because the renderer requires the script to fit the take. To get a shorter clip, write a shorter script. Only used for a silent `scene_action` clip, which has no words to measure."
+    },
+    "captions": {
+      "type": "boolean",
+      "description": "Burn in TikTok/Hormozi captions. OFF unless set true, ASK the user whether they want captions (and which caption_style) before generating; never add captions unprompted."
+    },
+    "caption_style": {
+      "type": "string",
+      "enum": [
+        "hormozi",
+        "tiktok",
+        "minimal"
+      ],
+      "default": "hormozi"
+    },
+    "look": {
+      "type": "string",
+      "enum": [
+        "natural",
+        "commercial",
+        "raw_iphone"
+      ],
+      "default": "natural"
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": [
+        "9:16",
+        "1:1"
+      ],
+      "default": "9:16"
+    },
+    "music": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "maxLength": 120
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
+```
 
 ## generate_video
 

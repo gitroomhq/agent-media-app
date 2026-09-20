@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.4.0
+
+- Add make_ugc as the recommended complete first-video workflow on the hosted connector, with quote_ugc as its no-charge price and balance check. Direct generators remain available for advanced control.
+
 ## 2.3.3
 
 - Generation capacity now covers loose image, video, and audio jobs as well as composed skills. `TOO_MANY_ACTIVE_RENDERS` means wait for a current generation to finish, then retry the same request identity.

@@ -86,7 +86,7 @@ export const MakeUgcSkillInputSchema = z
       .min(1)
       .max(1200)
       .describe(
-        'What the person SAYS (lip-synced) — any length. A one-liner makes one clip; a full monologue makes the full multi-take video automatically, never trimmed. Usually the only field you set. EXCEPTION: when you also pass product_image the video is a SINGLE take of at most 15s, so the script must be ~33 words or fewer.',
+        'What the person SAYS (lip-synced), any length. A one-liner makes one clip; a full monologue makes the full multi-take video automatically, never trimmed. Usually the only field you set. EXCEPTION: when you also pass product_image the video is a SINGLE take of at most 15s, so the script must be ~33 words or fewer.',
       )
       .optional(),
     scene_action: z
@@ -103,7 +103,7 @@ export const MakeUgcSkillInputSchema = z
       .optional(),
     image: z
       .string()
-      .describe('A photo of the person — an https URL. The face is locked to it. If you only hold bytes, call `upload_image` first and pass the URL it returns; base64 is still accepted here but it is printed into the user\u2019s chat and re-sent on every retry.')
+      .describe('A photo of the person, an https URL. The face is locked to it. If you only hold bytes, call `upload_image` first and pass the URL it returns; base64 is still accepted here but it is printed into the user\u2019s chat and re-sent on every retry.')
       .optional(),
     character: z
       .string()
@@ -112,7 +112,7 @@ export const MakeUgcSkillInputSchema = z
     product_image: z
       .string()
       .describe(
-        'A photo of a PRODUCT to show/hold/wear — an https URL. If you only hold bytes, call `upload_image` first and pass the URL it returns: base64 travels inside this tool call, is printed into the user\u2019s chat, and is re-sent on every retry. Turns the video into a product ad; needs a `character` to hold it, and limits `script` to ONE take of at most 15s (~33 words).',
+        'A photo of a PRODUCT to show/hold/wear, an https URL. If you only hold bytes, call `upload_image` first and pass the URL it returns: base64 travels inside this tool call, is printed into the user\u2019s chat, and is re-sent on every retry. Turns the video into a product ad; needs a `character` to hold it, and limits `script` to ONE take of at most 15s (~33 words).',
       )
       .optional(),
     name: z.string().max(80).describe("Name/age/vibe hint, e.g. 'Sophia, 28'.").optional(),
@@ -134,12 +134,12 @@ export const MakeUgcSkillInputSchema = z
     duration: z
       .union([z.literal(5), z.literal(10), z.literal(15), z.literal(20), z.literal(25), z.literal(30)])
       .describe(
-        'IGNORED when `script` is set — length is derived from the word count (≤11 words → 5s, ≤22 → 10s, else 15s) because the renderer requires the script to fit the take. To get a shorter clip, write a shorter script. Only used for a silent `scene_action` clip, which has no words to measure.',
+        'IGNORED when `script` is set, length is derived from the word count (≤11 words → 5s, ≤22 → 10s, else 15s) because the renderer requires the script to fit the take. To get a shorter clip, write a shorter script. Only used for a silent `scene_action` clip, which has no words to measure.',
       )
       .optional(),
     captions: z
       .boolean()
-      .describe('Burn in TikTok/Hormozi captions. OFF unless set true — ASK the user whether they want captions (and which caption_style) before generating; never add captions unprompted.')
+      .describe('Burn in TikTok/Hormozi captions. OFF unless set true, ASK the user whether they want captions (and which caption_style) before generating; never add captions unprompted.')
       .optional(),
     caption_style: z.enum(['hormozi', 'tiktok', 'minimal']).default('hormozi'),
     look: z.enum(['natural', 'commercial', 'raw_iphone']).default('natural'),

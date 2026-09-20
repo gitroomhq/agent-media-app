@@ -52,7 +52,7 @@ _300 credits per 5 s clip at 720p_
 _1 credit per 100 characters_
 
 1. `generate_audio`, The narration, a named voice, a tone.
-2. Lay it over the footage in the editor. Muxing external video is not on this surface; the fixed make_subtitles and make_ugc REST routes still exist for that. The mp3 URL also works as an audio_refs entry for generate_video.
+2. For a finished narrated b-roll UGC video, pass the narration as script and the footage as broll_url to make_ugc, after quote_ugc. For direct generate_audio output, the mp3 URL also works as an audio_refs entry for generate_video.
 
 ## 8. A series with one face
 

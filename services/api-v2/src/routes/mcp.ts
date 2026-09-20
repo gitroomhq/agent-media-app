@@ -59,7 +59,9 @@ import {
   getRunStatusTool,
   listCharactersTool,
   listModelsTool,
+  makeUgcTool,
   quoteTool,
+  quoteUgcTool,
   rateRunTool,
   readOnlyAnnotations,
   uploadImageTool,
@@ -187,9 +189,12 @@ function takesAnImage(schema: unknown): boolean {
 }
 
 export function buildMcpServer(apiKey: string): Server {
+  const firstResultGuidance = process.env.MAKE_UGC_ENABLED?.trim() === 'true'
+    ? 'FIRST RESULT: for a complete UGC video, call quote_ugc with the exact intended input, show the price, and call make_ugc only after the user approves. Then poll get_run_status until it returns the finished URL. Use direct generate_* tools only when the request needs advanced model or shot control.'
+    : '';
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },
-    { capabilities: { tools: {}, resources: {} }, instructions: ACCOUNT_READINESS_GUIDANCE + '\n' + IMAGE_UPLOAD_GUIDANCE },
+    { capabilities: { tools: {}, resources: {} }, instructions: [firstResultGuidance, ACCOUNT_READINESS_GUIDANCE, IMAGE_UPLOAD_GUIDANCE].filter(Boolean).join('\n\n') },
   );
 
   // A10: when MAKE_UGC_ENABLED makes make_ugc the one curated agent surface, the
@@ -271,6 +276,10 @@ export function buildMcpServer(apiKey: string): Server {
       })
     : [];
   const skillBySlug = new Map(vnextSkillTools.map((t) => [t.slug, t]));
+  const recommendedUgcTool = surface === 'loose' && makeUgcOn && isPrimitivesRouteEnabled()
+    ? { slug: 'make_ugc', listEntry: makeUgcTool }
+    : null;
+  if (recommendedUgcTool) skillBySlug.set(recommendedUgcTool.slug, recommendedUgcTool);
 
   const byName = new Map(tools.map((t) => [t.listEntry.name, t.def]));
 
@@ -279,6 +288,7 @@ export function buildMcpServer(apiKey: string): Server {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
+      ...(recommendedUgcTool ? [recommendedUgcTool.listEntry, quoteUgcTool] : []),
       ...looseTools,
       ...tools.map((t) => t.listEntry),
       ...vnextSkillTools.map((t) => t.listEntry),
@@ -493,6 +503,28 @@ export function buildMcpServer(apiKey: string): Server {
             `Now call get_run_status with run_id "${data?.job_id}" (wait:true) until it reaches a terminal state. On completion, give the user the URL; on failure, explain it without automatically creating another job. ${kind === 'video' ? 'A clip takes a few minutes.' : kind === 'image' ? 'An image takes under a minute.' : 'Audio takes seconds.'}`,
           ].join('\n'),
         }],
+      };
+    }
+
+    if (recommendedUgcTool && name === 'quote_ugc') {
+      let resp: FetchResponse;
+      try {
+        resp = await apiFetch(`${PUBLIC_API_BASE}/v1/skills/make_ugc/quote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(args ?? {}),
+          timeoutMs: 20_000,
+        });
+      } catch (err) {
+        return { content: [{ type: 'text', text: `agent-media did not answer in time (${(err as Error).message}). Call quote_ugc again; nothing was rendered or charged.` }], isError: true };
+      }
+      const text = await resp.text();
+      let data: any;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!resp.ok) return { content: [{ type: 'text', text: formatApiError(resp.status, data) }], isError: true };
+      return {
+        structuredContent: data,
+        content: [{ type: 'text', text: `${data?.credits} credits ($${((Number(data?.credits) || 0) / 100).toFixed(2)}) for the complete UGC video. Spendable balance: ${data?.available ?? 'unknown'} credits.${data?.sufficient === false ? ' The balance is insufficient; open billing before generating.' : ' Nothing was rendered or charged. Ask the user to approve this spend before calling make_ugc.'}` }],
       };
     }
 

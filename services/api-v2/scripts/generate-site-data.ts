@@ -118,14 +118,14 @@ export function buildSiteData(pluginVersion: string) {
         { id: 'cursor', label: 'Cursor', config: `{ "mcpServers": { "agent-media": { "url": "${MCP_URL}" } } }`, note: '~/.cursor/mcp.json' },
         { id: 'local', label: 'Any stdio client', command: 'npx -y -p @agentmedia/mcp-server@latest agent-media-mcp', note: 'A stdio proxy to the same hosted server; set AGENT_MEDIA_API_KEY. Do not register both the connector and the proxy in one client, or every tool appears twice.' },
       ],
-      prompt: `Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: ${MCP_URL} (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call list_models and tell me what you can make.\n4. Open the existing image upload panel using open_upload_panel, or upload_image with {} if only the older tools are available. Do not generate anything yet.`,
+      prompt: `Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: ${MCP_URL} (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call get_account and tell me whether the account is ready.\n4. For my first complete UGC video, use quote_ugc before make_ugc.\n5. Open the existing image upload panel using open_upload_panel, or upload_image with {} if only the older tools are available. Do not generate anything yet.`,
       polling: `Every generate tool returns a job id. Call get_run_status with wait:true; each call blocks up to about 45 seconds, a video usually needs several calls (${liveVideo.map((m) => `${m.id}: ${m.usage!.latency}`).join('; ')}). Never report a result before get_run_status returned its URL.`,
     },
     tools: [...LOOSE_SURFACE_TOOLS, openUploadPanelTool, getUploadsTool].map((t) => ({
       name: t.name,
       title: (t.annotations as { title: string }).title,
       read_only: (t.annotations as { readOnlyHint: boolean }).readOnlyHint,
-      spends_credits: ['generate_video', 'generate_image', 'generate_audio'].includes(t.name),
+      spends_credits: ['make_ugc', 'generate_video', 'generate_image', 'generate_audio'].includes(t.name),
       description: ['open_upload_panel', 'get_uploads'].includes(t.name)
         ? 'Optional: available only when temporary uploads are enabled; check tools/list before calling. ' + t.description
         : t.description,
@@ -198,6 +198,9 @@ export function buildSiteData(pluginVersion: string) {
       base: API,
       auth: 'Authorization: Bearer YOUR_AGENT_MEDIA_API_KEY',
       routes: [
+        { method: 'POST', path: '/v1/skills/make_ugc/quote', body: '{ script or scene_action, person?, image?, character?, product_image?, broll_url?, captions?, caption_style? }', returns: '200 { credits, available, committed, sufficient }; no generation or debit' },
+        { method: 'POST', path: '/v1/skills/make_ugc/run', body: 'the same exact quoted input', returns: '202 { skill_run_id, workflow_id, status }; poll the skill run for final_output.video_url' },
+        { method: 'GET', path: '/v1/skills/runs/{skill_run_id}', body: '', returns: '{ status, steps, final_output, error }; final_output.video_url when succeeded' },
         { method: 'POST', path: '/v2/generate/{video|image|audio}', body: 'the tool arguments', returns: '201 new job; 200 saved receipt on retry; 202 acknowledgement uncertain. Returns job_id, request_id, credits_deducted, status_url and model details.' },
         { method: 'POST', path: '/v2/quote/{video|image|audio}', body: 'the same arguments', returns: '200 { credits, usd, model, mode?, quality?, breakdown, auto? }' },
         { method: 'GET', path: '/v1/videos/{job_id}', body: '', returns: '{ status, video_url, ... }; video_url holds the output for image/audio too. 503 STATUS_UNAVAILABLE: retry the same job.' },
@@ -216,7 +219,7 @@ export function buildSiteData(pluginVersion: string) {
       openapi: `${API}/openapi.json`,
       reference: `${API}/docs`,
       curl: `curl -X POST ${API}/v2/quote/video \\\n  -H "Authorization: Bearer ma_..." -H "Content-Type: application/json" \\\n  -d '{ "prompt": "A 28-year-old woman in a bright kitchen, phone framing, holds a serum bottle to the lens and says: \\"Okay, I did not expect this to work.\\"", "seconds": 5 }'`,
-      fixed_skills_note: 'The fixed recipes (make_ugc, make_podcast, make_subtitles, selfie, crazy look) remain REST and CLI routes for the dashboard. They are not MCP tools.',
+      fixed_skills_note: 'The hosted connector exposes make_ugc as the recommended complete first-video workflow, with quote_ugc before spending. The other fixed recipes remain REST and CLI routes for the dashboard.',
     },
     recipes: recipes(),
     prompting: promptingGuide(REPO_ROOT),

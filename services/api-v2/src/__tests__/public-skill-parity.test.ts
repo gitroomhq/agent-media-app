@@ -26,6 +26,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 async function liveTools(uploads = true) {
   vi.stubEnv('AGENT_SURFACE', 'loose');
+  vi.stubEnv('MAKE_UGC_ENABLED', 'true');
   vi.stubEnv('TEMP_UPLOADS_ENABLED', String(uploads));
   vi.resetModules();
   const { buildMcpServer } = await import('../routes/mcp.js');
@@ -79,12 +80,12 @@ describe('public skill pack == hosted connector', () => {
       live.flatMap((t) => Object.keys(((t.inputSchema as { properties?: Record<string, unknown> })?.properties) ?? {})),
     );
     const files = ['README.md', 'skills/agent-media/SKILL.md', 'reference/recipes.md', 'reference/prompting.md', 'reference/models.md'];
-    const known = new Set([...tools, ...fields, 'make_ugc', 'make_subtitles', 'social_connect', 'social_channels', 'social_publish']);
+    const known = new Set([...tools, ...fields, 'make_subtitles', 'social_connect', 'social_channels', 'social_publish']);
     for (const f of files) {
       const names = [...read(f).matchAll(/`([a-z]+_[a-z_]+)`/g)].map((m) => m[1]).filter((n) => /^(generate|list|get|upload|quote|create|make|social)_/.test(n));
       for (const n of names) expect(known.has(n), `${f} mentions ${n}`).toBe(true);
-      // The fixed names may appear only as "REST still exists" notes, never as MCP tools to call.
-      for (const fixed of ['make_ugc', 'make_subtitles']) {
+      // REST-only names may appear only as "REST still exists" notes, never as MCP tools to call.
+      for (const fixed of ['make_subtitles']) {
         const hits = read(f).split('`' + fixed + '`').length - 1;
         if (hits) expect(read(f)).toMatch(new RegExp(`REST[^\\n]*\`${fixed}\`|\`${fixed}\`[^\\n]*REST`));
       }

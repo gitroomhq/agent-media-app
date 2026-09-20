@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.3.3';
+  if (SURFACE === 'loose') return '2.4.0';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -539,6 +539,10 @@ function cursorMarketplaceJson(): string {
 function changelog(): string {
   return [
     '# Changelog',
+    '',
+    '## 2.4.0',
+    '',
+    '- Add make_ugc as the recommended complete first-video workflow on the hosted connector, with quote_ugc as its no-charge price and balance check. Direct generators remain available for advanced control.',
     '',
     '## 2.3.3',
     '',

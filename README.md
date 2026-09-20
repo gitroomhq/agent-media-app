@@ -10,10 +10,12 @@ AI UGC video generation from your terminal, your editor, or your AI agent.
 
 ### Agents (MCP / HTTP): video, image and audio
 
-The hosted connector exposes `generate_video`, `generate_image` and `generate_audio`.
-Agents use `list_models` to choose a model and mode, `get_account` to check their
-connection and available credits, and `quote` before generation. These checks
-cost no credits; generation remains paid. See [account readiness](docs/account-readiness.md)
+The hosted connector recommends `make_ugc` for a complete first video: full script,
+optional reference image or saved character, automatic takes and joining, and optional
+captions. Agents call `quote_ugc` first, then poll `get_run_status` for the finished URL.
+Advanced `generate_video`, `generate_image` and `generate_audio` tools remain available
+for direct model and shot control. Account checks and quotes cost no credits; generation
+remains paid. See [account readiness](docs/account-readiness.md)
 and the [public skill](public-skill/skills/agent-media/SKILL.md) for the full workflow.
 
 For reference images, open the existing upload panel, drag in one or more images,

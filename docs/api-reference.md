@@ -26,8 +26,9 @@ submit response only confirms the job started.
 
 If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
 
-The default MCP surface lists ten tools: `generate_video`, `generate_image`,
-`generate_audio`, `quote`, `get_account`, `list_models`, `list_characters`,
+The default MCP surface recommends `make_ugc` for a complete first video and
+`quote_ugc` for its no-charge price check. Advanced tools include `generate_video`,
+`generate_image`, `generate_audio`, `quote`, `get_account`, `list_models`, `list_characters`,
 `get_run_status`, `upload_image`, and `rate_run`. When temporary uploads are
 enabled, `open_upload_panel` and `get_uploads` are also available. For user photos,
 open the existing panel and use the returned image URLs in the requested generation;

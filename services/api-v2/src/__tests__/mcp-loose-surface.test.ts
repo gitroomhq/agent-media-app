@@ -36,11 +36,24 @@ describe('loose surface: tools/list', () => {
   afterEach(() => { process.env = { ...origEnv }; vi.restoreAllMocks(); });
 
   it('is the default: the three primitives + quote + rate_run + the shared read tools', async () => {
+    delete process.env.MAKE_UGC_ENABLED;
     const { client } = await connect(undefined);
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual([...LOOSE, ...SHARED].sort());
     expect(names).not.toContain('make_ugc');
     expect(names).not.toContain('create_character');
+  });
+
+  it('adds the recommended complete UGC workflow and its no-charge quote when enabled', async () => {
+    process.env.MAKE_UGC_ENABLED = 'true';
+    const { client } = await connect('loose');
+    const tools = (await client.listTools()).tools;
+    const names = tools.map((t) => t.name);
+    expect(names).toContain('make_ugc');
+    expect(names).toContain('quote_ugc');
+    expect(tools.find((t) => t.name === 'make_ugc')?.annotations?.readOnlyHint).toBe(false);
+    expect(tools.find((t) => t.name === 'quote_ugc')?.annotations?.readOnlyHint).toBe(true);
+    expect(tools.find((t) => t.name === 'make_ugc')?.description).toMatch(/RECOMMENDED first-video workflow/);
   });
 
   it('AGENT_SURFACE=fixed brings the recipe tools back and drops the primitives', async () => {
@@ -143,6 +156,38 @@ describe('loose surface: tools/call forwarding', () => {
     const text = (r.content as any)[0].text as string;
     expect(text).toMatch(/150 credits/);
     expect(text).toMatch(/Nothing was rendered/);
+  });
+
+  it('quote_ugc prices the exact make_ugc input without starting a run', async () => {
+    process.env.MAKE_UGC_ENABLED = 'true';
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: any) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ slug: 'make_ugc', credits: 225, available: 1200, sufficient: true }), { status: 200 });
+    }));
+    const { client } = await connect('loose');
+    const input = { script: 'This product makes my morning routine much easier.', image: 'https://example.com/person.jpg', captions: true };
+    const r = await client.callTool({ name: 'quote_ugc', arguments: input });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toMatch(/\/v1\/skills\/make_ugc\/quote$/);
+    expect(JSON.parse(calls[0].init.body)).toEqual(input);
+    expect((r.content as any)[0].text).toMatch(/225 credits \(\$2\.25\)/);
+    expect((r.content as any)[0].text).toMatch(/Nothing was rendered or charged/);
+  });
+
+  it('make_ugc forwards the approved request to the complete workflow and tells the agent to poll', async () => {
+    process.env.MAKE_UGC_ENABLED = 'true';
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: any) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ skill_run_id: 'skill-run-1', workflow_id: 'workflow-1', skill: 'make_ugc_video', status: 'queued' }), { status: 202 });
+    }));
+    const { client } = await connect('loose');
+    const input = { script: 'This product makes my morning routine much easier.', image: 'https://example.com/person.jpg' };
+    const r = await client.callTool({ name: 'make_ugc', arguments: input });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toMatch(/\/v1\/skills\/make_ugc\/run$/);
+    expect(JSON.parse(calls[0].init.body)).toEqual(input);
+    expect((r.content as any)[0].text).toMatch(/skill-run-1/);
+    expect((r.content as any)[0].text).toMatch(/get_run_status/);
   });
 
   it('a 400 from the API (e.g. a candidate model) reaches the agent with the issue text', async () => {

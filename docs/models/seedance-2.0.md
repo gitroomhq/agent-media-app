@@ -66,4 +66,4 @@ The mode is derived from the request: `first_frame` means image mode, `refs` / `
 - `generate_video` over MCP (the default, omit `model`, or pass `"model": "seedance-2.0"`); `POST /v2/generate/video` over REST, same body. The provider model follows the mode: `first_frame` uses `seedance-2.0-image-to-video`, references use `seedance-2.0-reference-to-video`, a bare prompt uses `seedance-2.0-text-to-video`
 - `agent-media selfie --engine seedance-2.0 ...` (default, flag optional)
 - `POST /v2/selfie` / `POST /v2/crazy-look` over REST (default engine)
-- `make_ugc` (REST, the dashboard) always uses this engine
+- `make_ugc` (hosted connector, REST, and dashboard) always uses this engine

@@ -19,6 +19,7 @@ import {
   V2_MODELS,
   liveModelIds,
 } from '@agentmedia/schema/v2';
+import { MakeUgcSkillInputSchema } from '../skills/registry.js';
 
 export function readOnlyAnnotations(title: string) {
   return { title, readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
@@ -43,7 +44,7 @@ export const IMAGE_URL_HINT =
 export const listCharactersTool = {
   name: 'list_characters',
   description:
-    "List the authenticated user's saved, reusable characters. Each has a character_id (char_…) and a character_sheet_url, pass the character_sheet_url (and/or portrait URL) in `refs` of generate_video / generate_image to reuse that exact identity, or EITHER to make_ugc's `character` prop on the fixed surface. Plus a portrait/thumbnail URL for display.",
+    "List the authenticated user's saved, reusable characters. Each has a character_id (char_…) and a character_sheet_url. Pass either one as make_ugc's `character`, or pass the sheet/portrait URL in `refs` of the advanced generate_video / generate_image tools. Plus a portrait/thumbnail URL for display.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -157,6 +158,30 @@ export const listModelsTool = {
 };
 
 /**
+ * The supported first-result workflow. The primitives stay available for
+ * advanced work, but a new user should not have to choose a model, split a
+ * script, or assemble captions to get one complete UGC video.
+ */
+const makeUgcInputSchema = looseSchema(MakeUgcSkillInputSchema, 'make_ugc_input');
+
+export const makeUgcTool = {
+  name: 'make_ugc',
+  description:
+    'Create one finished vertical UGC video from a script. This is the RECOMMENDED first-video workflow: the server chooses the takes and timing, keeps the full script, joins long monologues, and optionally burns captions. Use `image` for an uploaded person photo, `product_image` for an uploaded product photo, or `character` for a saved character. Call `quote_ugc` with the exact same input first; it costs no credits. Ask before setting captions:true. After submission, keep calling get_run_status until it returns the finished video URL.' +
+    IMAGE_URL_HINT,
+  inputSchema: makeUgcInputSchema,
+  annotations: generationAnnotations('Make UGC Video'),
+};
+
+export const quoteUgcTool = {
+  name: 'quote_ugc',
+  description:
+    'Price a complete make_ugc request and check the spendable balance without rendering or using credits. Pass the exact input intended for make_ugc. Show the returned price to the user and only call make_ugc after the user has authorized that spend.',
+  inputSchema: makeUgcInputSchema,
+  annotations: readOnlyAnnotations('Quote UGC Video'),
+};
+
+/**
  * The loose surface. Three primitives that say what they are: the agent
  * writes the prompt, picks the model (or takes the catalog default), and
  * passes reference images by URL. No recipe, no persona brief, no
@@ -252,6 +277,8 @@ export const rateRunTool = {
 
 /** tools/list on the loose surface, in the order the connector lists them. */
 export const LOOSE_SURFACE_TOOLS = [
+  makeUgcTool,
+  quoteUgcTool,
   generateVideoTool,
   generateImageTool,
   generateAudioTool,
