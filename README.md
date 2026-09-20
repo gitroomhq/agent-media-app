@@ -4,7 +4,7 @@ AI UGC video generation from your terminal, your editor, or your AI agent.
 
 [`agent-media.ai`](https://agent-media.ai) · [Install the skill](https://agent-media.ai/skill) · [API reference](https://agent-media.ai/docs/api-reference) · [Pricing](https://agent-media.ai/pricing)
 
-**Docs:** [Architecture](ARCHITECTURE.md) · [Self-hosting](#self-hosting) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+**Docs:** [Public documentation](https://docs.agent-media.ai) · [Architecture](ARCHITECTURE.md) · [Self-hosting](#self-hosting) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ## What it does
 
@@ -161,7 +161,7 @@ packages/
 services/
   api-v2/                    REST API (api.agent-media.ai) — routes, auth, dispatch
   media-worker-v2/           pipeline runner — gpt-image-2 + Seedance + ffmpeg
-public-skill/                generated agent skill pack (one agent tool: make_ugc)
+public-skill/                generated agent skill pack and connector/model reference
 supabase/migrations/         schema, RLS, edge functions
 docs/v2/api-reference.md     auto-generated REST reference
 ```

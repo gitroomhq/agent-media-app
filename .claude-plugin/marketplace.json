@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent-Media for Claude Code: AI video, images and voice with you as the director. Your prompt, your model, your modes (text, image-to-video, reference), your references.",
-    "version": "2.3.0"
+    "version": "2.3.1"
   },
   "plugins": [
     {

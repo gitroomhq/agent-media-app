@@ -6,6 +6,8 @@
 [![Cursor plugin](https://img.shields.io/badge/cursor-plugin-A78BFA)](https://cursor.com/marketplace)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
+Public documentation: [docs.agent-media.ai](https://docs.agent-media.ai). Setup, uploads, models, billing, troubleshooting and self-hosting.
+
 **Agents: read this page, then [skills/agent-media/SKILL.md](skills/agent-media/SKILL.md). That is everything.**
 
 agent-media renders video, images and voice from YOUR prompt on the model YOU choose. There is no fixed recipe: you describe the shot like a director, pass a first frame to animate or reference images, clips and audio to follow, pick a model from the catalog (or take the default), and poll for the URL. Works in Claude Code, Claude.ai, Cursor, Codex, Grok, or any MCP / HTTP agent.

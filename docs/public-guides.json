@@ -1,0 +1,535 @@
+{
+  "version": 1,
+  "pages": [
+    {
+      "slug": "quickstart",
+      "title": "Quickstart",
+      "group": "Get started",
+      "summary": "Connect an agent, check your account, and make your first image or video.",
+      "sections": [
+        {
+          "id": "connect",
+          "title": "1. Connect your agent",
+          "paragraphs": [
+            "Add the hosted Agent Media connector to your client, then complete the browser sign-in yourself. Use the connection guide for Claude, Claude Code, ChatGPT, Codex, Cursor and other MCP clients."
+          ],
+          "code": "https://api.agent-media.ai/mcp",
+          "links": [
+            {
+              "href": "/docs/connect",
+              "label": "Choose your client →"
+            }
+          ]
+        },
+        {
+          "id": "check",
+          "title": "2. Check your account",
+          "paragraphs": [
+            "Ask the agent to check your connection and available balance with get_account. If that tool is absent from an older connector catalog, list_models includes the same account check. These checks do not spend, refill or grant credits."
+          ],
+          "code": "Check my Agent Media account and show the available models. Do not generate anything yet.",
+          "note": "Generation requires paid credits. A successful connection or upload does not include free generation."
+        },
+        {
+          "id": "describe",
+          "title": "3. Describe the result",
+          "paragraphs": [
+            "Tell the agent what you want to make, the subject, the setting, the output shape and whether to use a reference. You can start with a simple image before attempting a longer video."
+          ],
+          "code": "I want a vertical product image of my bottle on a clean bathroom counter, in soft morning light. Use my uploaded photo to keep the product consistent. Show me the generation quote first."
+        },
+        {
+          "id": "references",
+          "title": "4. Add reference images",
+          "paragraphs": [
+            "Ask for the existing upload panel. Drag in one or more images, then tell the agent you are done. The agent retrieves the uploaded image URLs and passes them to the generation tool. Uploading alone is not permission to generate."
+          ],
+          "links": [
+            {
+              "href": "/docs/uploads",
+              "label": "How image uploads work →"
+            }
+          ]
+        },
+        {
+          "id": "generate",
+          "title": "5. Review the cost and generate",
+          "paragraphs": [
+            "The agent quotes the intended model and inputs, checks the balance, and submits within your approved budget. It then polls the returned job ID until the output is ready. If a status check fails, it should keep checking the same job instead of starting another."
+          ],
+          "note": "Keep the job ID until you have the final result. A timeout is not proof that generation failed."
+        }
+      ]
+    },
+    {
+      "slug": "concepts",
+      "title": "Core concepts",
+      "group": "Get started",
+      "summary": "Understand the account, connector, tools, models and jobs before your first run.",
+      "sections": [
+        {
+          "id": "account",
+          "title": "Your account",
+          "paragraphs": [
+            "The hosted account owns your credits, generations and temporary upload sessions. Connecting an agent authorizes it to act on that account. Do not paste account keys, login codes or storage credentials into shared chats."
+          ]
+        },
+        {
+          "id": "connector",
+          "title": "Connector and public skill",
+          "paragraphs": [
+            "The MCP connector exposes callable tools. The public skill explains how to use them together. Installing a skill alone does not establish the authenticated connector connection."
+          ],
+          "links": [
+            {
+              "href": "/docs/connect",
+              "label": "Connect an agent →"
+            },
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app/tree/main/public-skill",
+              "label": "Public skill source ↗"
+            }
+          ]
+        },
+        {
+          "id": "tools",
+          "title": "Tools and models",
+          "paragraphs": [
+            "A tool is an action such as generating an image, quoting a request or checking a job. A model is the provider-backed engine used for that action. Video modes determine whether the input is a text prompt, a starting frame or references."
+          ],
+          "links": [
+            {
+              "href": "/docs/tools",
+              "label": "Tool reference →"
+            },
+            {
+              "href": "/docs/models",
+              "label": "Choose a model →"
+            }
+          ]
+        },
+        {
+          "id": "jobs",
+          "title": "Asynchronous jobs",
+          "paragraphs": [
+            "Generation returns a job ID before the media is finished. Poll that ID with get_run_status. Keep the original ID through delays and status errors; creating a new request can create another paid run."
+          ]
+        },
+        {
+          "id": "credits",
+          "title": "Quotes and credits",
+          "paragraphs": [
+            "A quote estimates the intended request. The account balance is a snapshot, not a reservation. Generation performs the final credit checks. Connection checks, quotes and temporary uploads do not grant credits."
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "uploads",
+      "title": "Upload reference images",
+      "group": "Creating media",
+      "summary": "Drag and drop multiple images, then use them in a generation.",
+      "sections": [
+        {
+          "id": "open",
+          "title": "Open the existing upload panel",
+          "paragraphs": [
+            "Ask your agent to open Agent Media’s upload panel. It should call open_upload_panel when available, or upload_image with an empty object for an older cached catalog. Use the returned browser link if the client cannot display the embedded panel."
+          ],
+          "code": "Open the Agent Media image upload panel. I want to upload reference photos. Do not generate yet."
+        },
+        {
+          "id": "add",
+          "title": "Drop in your images",
+          "paragraphs": [
+            "Drop one or more images into the panel, or choose them using the file picker. Wait until each upload is marked ready. Check the panel’s displayed limits and expiry. The first version supports images, not video or audio."
+          ],
+          "note": "Use still PNG, JPEG or WebP images. Convert unsupported formats such as HEIC or SVG to a supported still image."
+        },
+        {
+          "id": "use",
+          "title": "Use the images in generation",
+          "paragraphs": [
+            "Tell the agent when the images are ready. It retrieves them with get_uploads, or the panel retrieval instructions returned by upload_image. It must pass the exact returned image URLs into the next generation."
+          ],
+          "steps": [
+            "Image editing or composition: use refs in generate_image.",
+            "Start a video from one photo: use first_frame in generate_video.",
+            "Reference-guided video: use refs with a model and mode that supports them.",
+            "Quote the intended inputs and continue only within the generation you authorized."
+          ]
+        },
+        {
+          "id": "expiry",
+          "title": "Private storage and 24-hour expiry",
+          "paragraphs": [
+            "Images are stored temporarily in private object storage and accessed through restricted URLs. Those URLs expire after 24 hours. Anyone holding a valid restricted image URL can use it until it expires, so treat it as private. Re-upload an expired reference before another generation."
+          ],
+          "note": "A local file path, an attachment visible in chat, or an expired URL is not a usable generation reference."
+        },
+        {
+          "id": "recovery",
+          "title": "If the agent stops after upload",
+          "paragraphs": [
+            "Tell it to retrieve the uploaded images and use their returned URLs in the generation you already requested. It should not build another upload page or ask you to paste base64 into chat."
+          ],
+          "code": "Use the images from this Agent Media upload session as references for the generation I requested. Retrieve their URLs, quote the request, and continue within my approved budget."
+        }
+      ]
+    },
+    {
+      "slug": "account",
+      "title": "Account and billing",
+      "group": "Cloud",
+      "summary": "Paid generation, balance checks and recovering your place after checkout.",
+      "sections": [
+        {
+          "id": "paid",
+          "title": "Generation uses paid credits",
+          "paragraphs": [
+            "Hosted generation requires credits. Account checks, model discovery, quotes and temporary image uploads use no generation credits; they do not give you free credits. Use the current pricing page and the actual request quote to understand cost."
+          ],
+          "links": [
+            {
+              "href": "/docs/pricing",
+              "label": "Generation pricing →"
+            },
+            {
+              "href": "https://app.agent-media.ai/billing",
+              "label": "Open billing ↗"
+            }
+          ]
+        },
+        {
+          "id": "balance",
+          "title": "Check the actual balance",
+          "paragraphs": [
+            "Ask your agent to call get_account. A positive balance still needs to be compared with the quoted cost. If the check is unavailable, retry it; do not assume the balance is zero or purchase again because of a temporary error."
+          ]
+        },
+        {
+          "id": "payment",
+          "title": "After a payment",
+          "paragraphs": [
+            "Payment fulfillment updates the account on the server. A checkout return URL or a “success” query parameter is not proof that the balance has been credited. If the balance has not updated, check billing and your payment before making another purchase."
+          ]
+        },
+        {
+          "id": "continue",
+          "title": "Continue where you left off",
+          "paragraphs": [
+            "The dashboard retains the destination that onboarding or checkout interrupted. Billing offers Continue creating. Skill forms can restore drafts for up to 24 hours in the same browser tab and account. Review the restored inputs before running; returning never starts a paid generation automatically."
+          ],
+          "note": "Closing the tab or disabling browser storage can prevent draft recovery. Temporary image URLs keep their own expiry."
+        },
+        {
+          "id": "access",
+          "title": "Account recovery without a plan",
+          "paragraphs": [
+            "Signed-in users can reach billing and settings before completing onboarding or buying a plan. Use settings to manage your account and connection configuration."
+          ],
+          "links": [
+            {
+              "href": "https://app.agent-media.ai/settings",
+              "label": "Open account settings ↗"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "agent-workflow",
+      "title": "How agents should work",
+      "group": "Agents",
+      "summary": "A reliable sequence from a user request to finished media.",
+      "sections": [
+        {
+          "id": "discover",
+          "title": "Discover before choosing",
+          "paragraphs": [
+            "Read the actual tool catalog. Check account readiness with get_account, then use list_models to choose the kind, model and supported mode. Use the current public skill for detailed prompting and tool guidance."
+          ]
+        },
+        {
+          "id": "inputs",
+          "title": "Resolve inputs",
+          "paragraphs": [
+            "For user images, use the existing upload panel and retrieve the returned URLs. Reference images belong in refs or first_frame according to the intended model/mode; describing an image in the prompt does not attach it."
+          ]
+        },
+        {
+          "id": "budget",
+          "title": "Quote the intended request",
+          "paragraphs": [
+            "Call quote with the same model and relevant inputs you intend to submit. Compare the quote with the account balance and stay within the user-approved budget. An upload-only request is not authorization to spend."
+          ]
+        },
+        {
+          "id": "submit",
+          "title": "Submit once, then track",
+          "paragraphs": [
+            "Submit the generation and preserve the returned job ID. Poll that same ID until completion. Keep any request identity when recovering a lost response; changing it can create a new paid run."
+          ],
+          "links": [
+            {
+              "href": "/docs/reliability",
+              "label": "Timeout and retry recovery →"
+            }
+          ]
+        },
+        {
+          "id": "deliver",
+          "title": "Return the result",
+          "paragraphs": [
+            "Give the user the finished media using the client’s supported output display. If the run fails, report the saved job ID and the actual error. Do not claim a refund or successful output unless the service confirms it."
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "troubleshooting",
+      "title": "Troubleshooting",
+      "group": "Help",
+      "summary": "Start with the symptom, recover the existing work, and avoid duplicate payments.",
+      "sections": [
+        {
+          "id": "tools",
+          "title": "The agent cannot see the tools",
+          "paragraphs": [
+            "Confirm the Agent Media connector is enabled for that conversation and complete sign-in. Refresh or reconnect the connector if the client keeps an old catalog, then start a fresh conversation. Installing only the public skill is not enough."
+          ],
+          "links": [
+            {
+              "href": "/docs/connect",
+              "label": "Connection guide →"
+            }
+          ]
+        },
+        {
+          "id": "uploader",
+          "title": "The upload panel is missing",
+          "paragraphs": [
+            "Ask the agent to call upload_image with an empty object if open_upload_panel is absent. Use the returned browser link when the client cannot embed the panel. Do not build a replacement uploader."
+          ],
+          "links": [
+            {
+              "href": "/docs/uploads",
+              "label": "Upload guide →"
+            }
+          ]
+        },
+        {
+          "id": "ignored",
+          "title": "The uploaded image is ignored",
+          "paragraphs": [
+            "Have the agent retrieve the uploaded URLs and pass them as refs or first_frame. Check that the chosen model supports that input mode. Uploading an image does not automatically attach it to every later request."
+          ]
+        },
+        {
+          "id": "expired",
+          "title": "An image reference expired",
+          "paragraphs": [
+            "Temporary images last 24 hours. Open a new panel or follow the current session’s instructions, re-upload the image, and use the new URL."
+          ]
+        },
+        {
+          "id": "balance",
+          "title": "Credits seem missing",
+          "paragraphs": [
+            "Run get_account or the account check included in list_models. A temporarily unavailable lookup is not a zero balance. Check billing before paying again; keep the payment reference private when contacting support."
+          ]
+        },
+        {
+          "id": "job",
+          "title": "Generation timed out or status failed",
+          "paragraphs": [
+            "Keep the original job ID and retry get_run_status. A status outage does not mean the generation failed. Do not submit a second paid request to check the first."
+          ],
+          "links": [
+            {
+              "href": "/docs/reliability",
+              "label": "Job recovery details →"
+            }
+          ]
+        },
+        {
+          "id": "support",
+          "title": "What to include in a support request",
+          "paragraphs": [
+            "Include the client, tool name, approximate time, job or upload-session ID, and the visible error code. Never post API keys, login codes, upload-panel tokens, restricted image URLs or customer-private images in a public issue."
+          ],
+          "links": [
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app/issues",
+              "label": "Report a reproducible OSS issue ↗"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "reliability",
+      "title": "Jobs, errors and retries",
+      "group": "Developers",
+      "summary": "Recover the original request instead of accidentally generating twice.",
+      "sections": [
+        {
+          "id": "identity",
+          "title": "Keep request identity and job IDs",
+          "paragraphs": [
+            "Retain the request identity used for a generation retry and the returned job ID. Repeating an equivalent request with the same supported identity recovers the saved job; a new identity can create a separate generation. See the OSS contract for exact HTTP headers and payload rules."
+          ],
+          "links": [
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/generation-retry-safety.md",
+              "label": "Generation retry contract ↗"
+            }
+          ]
+        },
+        {
+          "id": "pending",
+          "title": "An uncertain acknowledgement",
+          "paragraphs": [
+            "If a generation response returns an accepted job but says worker acknowledgement is uncertain, poll that job. Do not infer failure or assume a refund."
+          ]
+        },
+        {
+          "id": "status",
+          "title": "Temporary status failures",
+          "paragraphs": [
+            "HTTP 503 STATUS_UNAVAILABLE means status could not be read. Respect Retry-After and retry the original job ID. HTTP 404 after an authenticated, successful lookup means the job was not found for that account."
+          ]
+        },
+        {
+          "id": "account",
+          "title": "Temporary account failures",
+          "paragraphs": [
+            "HTTP 503 ACCOUNT_CHECK_UNAVAILABLE means the balance is unknown. Retry the check; do not treat it as zero. Quotes and balance snapshots do not reserve credits or guarantee provider availability."
+          ]
+        },
+        {
+          "id": "refunds",
+          "title": "Report confirmed outcomes",
+          "paragraphs": [
+            "Provider and generation failures should be reported with their actual error and job ID. Only tell a user that credits were refunded when the service confirms it."
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "self-hosting",
+      "title": "Self-hosting",
+      "group": "Self-hosting",
+      "summary": "Run the open-source platform with your own infrastructure and provider credentials.",
+      "sections": [
+        {
+          "id": "scope",
+          "title": "What is open source",
+          "paragraphs": [
+            "The official repository contains the platform, API, workers, CLI, SDKs and public skill. The separate hosted marketing website is maintained privately. Self-hosting uses your own provider accounts and infrastructure; provider usage may still cost money."
+          ],
+          "links": [
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app",
+              "label": "Official OSS repository ↗"
+            }
+          ]
+        },
+        {
+          "id": "install",
+          "title": "Start with the repository",
+          "paragraphs": [
+            "Follow the repository’s current self-hosting instructions and environment example. The supplied Compose stack includes the Supabase services, database, workflow engine, storage and application services. A bare database is not enough."
+          ],
+          "code": "git clone https://github.com/gitroomhq/agent-media-app.git\ncd agent-media-app\ncp .env.example .env\n# Configure your provider keys and deployment settings in .env\ndocker compose up"
+        },
+        {
+          "id": "configure",
+          "title": "Configure the deployment",
+          "paragraphs": [
+            "Keep provider keys and service credentials on the server. Read the environment example for supported replacements, then check database migrations, API health, worker connectivity and storage access before allowing traffic."
+          ],
+          "links": [
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app/blob/main/ARCHITECTURE.md",
+              "label": "Architecture ↗"
+            },
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app/blob/main/.env.example",
+              "label": "Environment reference ↗"
+            }
+          ]
+        },
+        {
+          "id": "uploads",
+          "title": "Enable temporary uploads deliberately",
+          "paragraphs": [
+            "Temporary upload storage must be private and enforce the application expiry. Configure the dedicated bucket and lifecycle cleanup using the OSS deployment guide. Do not expose storage credentials to the upload panel."
+          ],
+          "links": [
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/temporary-image-uploads.md",
+              "label": "Temporary-upload deployment guide ↗"
+            }
+          ]
+        },
+        {
+          "id": "billing",
+          "title": "Hosted credits and self-hosting",
+          "paragraphs": [
+            "Self-host billing configuration is separate from the hosted Agent Media account. Turning off application billing does not make provider generation free or award hosted credits. Review your provider billing before running jobs."
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "contributing",
+      "title": "Contributing",
+      "group": "Open source",
+      "summary": "Improve the maintained public platform and its documentation.",
+      "sections": [
+        {
+          "id": "source",
+          "title": "Work in the official repository",
+          "paragraphs": [
+            "Use gitroomhq/agent-media-app for platform fixes, public docs and public-skill changes. Read CONTRIBUTING.md and the relevant architecture and service docs before editing."
+          ],
+          "links": [
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app/blob/main/CONTRIBUTING.md",
+              "label": "Contributor guide ↗"
+            }
+          ]
+        },
+        {
+          "id": "validation",
+          "title": "Keep code and generated guidance aligned",
+          "paragraphs": [
+            "The shared schemas and tool definitions drive generated agent guidance and model documentation. Regenerate affected artifacts and run the relevant tests so the published docs agree with tools/list."
+          ],
+          "code": "pnpm install\npnpm build\npnpm test\npnpm --filter api-v2 gen:public-skill"
+        },
+        {
+          "id": "reports",
+          "title": "Make issues reproducible",
+          "paragraphs": [
+            "Describe the expected and actual behavior, affected client, version and a minimal reproduction. Redact credentials, restricted URLs and private customer content. Avoid running paid generations solely to reproduce a report unless the spend is authorized."
+          ]
+        },
+        {
+          "id": "docs",
+          "title": "Edit these guides",
+          "paragraphs": [
+            "The guide content is maintained in docs/public-guides.json in the OSS repository. Detailed tool and model data comes from the generated public-skill/site-data.json. Changes should explain the current behavior and state limitations accurately."
+          ],
+          "links": [
+            {
+              "href": "https://github.com/gitroomhq/agent-media-app/blob/main/docs/public-guides.json",
+              "label": "Edit the public guides ↗"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

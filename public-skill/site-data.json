@@ -1,5 +1,5 @@
 {
-  "pack_version": "2.3.0",
+  "pack_version": "2.3.1",
   "source": "https://github.com/gitroomhq/agent-media-app",
   "connector": {
     "url": "https://api.agent-media.ai/mcp",

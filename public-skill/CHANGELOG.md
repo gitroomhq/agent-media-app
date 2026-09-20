@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.1
+
+- Link the public documentation hub for setup, uploads, account checks, troubleshooting, REST and self-hosting. Generation still requires paid credits.
+
 ## 2.3.0
 
 - Add free, read-only authenticated account/credit readiness. Cached catalogs receive the same check through list_models. Quote before the first generation; an unavailable balance is not zero credits.
