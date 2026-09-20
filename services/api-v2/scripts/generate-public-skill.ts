@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.2.1';
+  if (SURFACE === 'loose') return '2.3.0';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -539,6 +539,10 @@ function cursorMarketplaceJson(): string {
 function changelog(): string {
   return [
     '# Changelog',
+    '',
+    '## 2.3.0',
+    '',
+    '- Add free, read-only authenticated account/credit readiness. Cached catalogs receive the same check through list_models. Quote before the first generation; an unavailable balance is not zero credits.',
     '',
     '## 2.2.1',
     '',

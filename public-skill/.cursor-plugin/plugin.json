@@ -1,7 +1,7 @@
 {
   "name": "agent-media",
   "displayName": "Agent Media",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "minClientVersions": {
     "cursor": "3.13.0"
   },

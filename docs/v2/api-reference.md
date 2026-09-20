@@ -675,6 +675,11 @@ If you have image bytes (a photo the user attached, a `data:` URL), call `upload
 
 ### Models
 
+Before generation, use the authenticated `GET /v1/me/readiness` endpoint or
+MCP `get_account` to read available credits, then quote the intended inputs.
+MCP `list_models` includes that account check for cached clients; the public
+`GET /v1/models` endpoint does not. See [account readiness](../account-readiness.md).
+
 `GET /v1/models` (public, no key) and the `list_models` MCP tool return the model catalog with user prices per quality, the modes and limits of every video model, a usage card (pick when, prompting tips, latency) and what each model is good and bad at. Live today:
 
 | Model | Kind | Tier | User price | Modes | Selectable via |

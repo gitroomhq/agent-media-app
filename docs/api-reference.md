@@ -26,12 +26,22 @@ submit response only confirms the job started.
 
 If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
 
-Over MCP the connector lists eight tools: `generate_video`, `generate_image`,
-`generate_audio`, `quote`, `list_models`, `list_characters`, `get_run_status`
-and `upload_image`. You write the prompt and pick the model; there is no fixed
-recipe. The same primitives exist over REST as `POST /v2/generate/{video|image|audio}`
-and `POST /v2/quote/{kind}` — see [docs/v2/api-reference.md](v2/api-reference.md#the-loose-surface--post-v2generatekind)
-and the public skill at [public-skill/skills/agent-media/SKILL.md](../public-skill/skills/agent-media/SKILL.md).
+The default MCP surface lists ten tools: `generate_video`, `generate_image`,
+`generate_audio`, `quote`, `get_account`, `list_models`, `list_characters`,
+`get_run_status`, `upload_image`, and `rate_run`. When temporary uploads are
+enabled, `open_upload_panel` and `get_uploads` are also available. For user photos,
+open the existing panel and use the returned image URLs in the requested generation;
+see [temporary image uploads](temporary-image-uploads.md).
+
+Before the first generation, call `get_account` to check authentication and credits,
+then `quote` for the intended inputs. Cached connectors can use `list_models` for
+the same account check. The HTTP equivalent, `GET /v1/me/readiness`, is authenticated,
+read-only and free: it never refills or spends credits. A 503 means the balance is
+unknown, not zero. See [account readiness](account-readiness.md).
+
+The same generation primitives exist over REST as `POST /v2/generate/{video|image|audio}`
+and `POST /v2/quote/{kind}` — see [v2 API reference](v2/api-reference.md#the-loose-surface--post-v2generatekind)
+and the [public skill](../public-skill/skills/agent-media/SKILL.md).
 
 The REST reference below is for direct HTTP integrations, where the `ma_` key
 still applies.

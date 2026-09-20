@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ACCOUNT_READINESS_GUIDANCE, getAccountTool } from '../account/readiness.js';
 import { REQUEST_ID_PATTERN } from '../generation/request-identity.js';
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
 
@@ -188,7 +189,7 @@ function takesAnImage(schema: unknown): boolean {
 export function buildMcpServer(apiKey: string): Server {
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },
-    { capabilities: { tools: {}, resources: {} }, instructions: IMAGE_UPLOAD_GUIDANCE },
+    { capabilities: { tools: {}, resources: {} }, instructions: ACCOUNT_READINESS_GUIDANCE + '\n' + IMAGE_UPLOAD_GUIDANCE },
   );
 
   // A10: when MAKE_UGC_ENABLED makes make_ugc the one curated agent surface, the
@@ -285,6 +286,7 @@ export function buildMcpServer(apiKey: string): Server {
       getRunStatusTool,
       uploadImageTool,
       listModelsTool,
+      getAccountTool,
       ...rateTools,
       ...(temporaryUploadsEnabled() ? [openUploadPanelTool, getUploadsTool] : []),
     ],
@@ -302,8 +304,26 @@ export function buildMcpServer(apiKey: string): Server {
     return { contents: [uploadPanelResource(PUBLIC_API_BASE)] };
   });
 
+  async function readAccount() {
+    try {
+      const response = await apiFetch(`${PUBLIC_API_BASE}/v1/me/readiness`, {
+        headers: { Authorization: `Bearer ${apiKey}` }, timeoutMs: 10_000,
+      });
+      if (response.status === 401 || response.status === 403) return { status: 'authentication_required', next_step: 'Reconnect Agent Media, then repeat the account check.' };
+      const data = await response.json();
+      if (!response.ok || data?.authenticated !== true || (!Number.isSafeInteger(data?.credits?.total) || data.credits.total < 0)) throw new Error('Account check unavailable');
+      return data;
+    } catch {
+      return { status: 'unavailable', next_step: 'Account balance is unknown. Retry get_account (or list_models if get_account is not listed) after five seconds; do not assume zero credits or ask the user to pay again.' };
+    }
+  }
+
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    if (name === 'get_account') {
+      const account = await readAccount();
+      return { structuredContent: account, isError: account.status === 'unavailable' || account.status === 'authentication_required', content: [{ type: 'text', text: JSON.stringify(account) + '\n' + ACCOUNT_READINESS_GUIDANCE }] };
+    }
 
     // Existing connector catalogs may retain only the original nine tools.
     // Reuse fields in that published schema so those clients can still upload.
@@ -450,6 +470,7 @@ export function buildMcpServer(apiKey: string): Server {
     // Read-only: the model catalog (GET /v1/models).
     if (name === 'list_models') {
       const withCandidates = (args as { include_candidates?: boolean })?.include_candidates === true;
+      const account = await readAccount();
       let resp: FetchResponse;
       try {
         resp = await apiFetch(`${PUBLIC_API_BASE}/v1/models${withCandidates ? '?include=candidates' : ''}`, {
@@ -531,9 +552,12 @@ export function buildMcpServer(apiKey: string): Server {
         ].filter(Boolean).join('\n');
       });
       return {
+        structuredContent: { account },
         content: [{
           type: 'text',
           text: [
+            `Account readiness: ${JSON.stringify(account)}`,
+            ACCOUNT_READINESS_GUIDANCE,
             `${d?.models?.length ?? 0} model(s). Default video model: ${d?.default_video_model ?? 'seedance-2.0'}. 1 credit = $0.01. Select a live model by passing its id as \`model\` to generate_video / generate_image / generate_audio (omit it for the default, or pass "auto"). Video MODES: text (prompt only), image (first_frame, optional last_frame), reference (refs / video_refs / audio_refs); the mode is derived from the fields you pass and each mode has its own limits below. Quality 480p / 720p (default) / 1080p changes the per-second price. Candidates cannot be selected.`,
             ...(temporaryUploadsEnabled() ? [UPLOAD_PANEL_COMPAT_GUIDANCE] : []),
             ...lines,

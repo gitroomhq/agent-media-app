@@ -72,6 +72,7 @@ import {
 } from './routes/v1/primitives.js';
 import { listSkillsRoute, runSkillRoute, getSkillRunRoute, cancelSkillRunRoute, quoteSkillRoute } from './routes/v1/skills.js';
 import { asyncHandler } from './lib/async-handler.js';
+import { accountReadinessRoute } from './routes/v1/me-readiness.js';
 import { getMyGalleryRoute } from './routes/v1/me-gallery.js';
 import { listApiKeysRoute, createApiKeyRoute, revokeApiKeyRoute } from './routes/v1/me-api-keys.js';
 import { listSocialProvidersRoute, listSocialChannelsRoute, connectSocialRoute, deleteSocialChannelRoute, publishSocialRoute } from './routes/v1/social.js';
@@ -653,6 +654,7 @@ function buildOpenApiSpec() {
       responses: { '200': { description: 'Skill list' } },
     },
   };
+  paths['/v1/me/readiness'] = { get: { operationId: 'getAccountReadiness', summary: 'Read authenticated account and credit readiness without spending or refilling credits', tags: ['account'], security: [{ bearerAuth: [] }], responses: { '200': { description: 'Balance snapshot and next step; no credits reserved or provider health guarantee' }, '401': { description: 'Reconnect to authenticate' }, '503': { description: 'Balance unknown; retry instead of treating it as zero' } } } };
   paths['/v1/me/gallery'] = {
     get: {
       operationId: 'getMyGallery',
@@ -907,6 +909,7 @@ app.post('/v1/schedules/:id/trigger', generateLimiter, authMiddleware, triggerSc
 app.post('/v1/schedules/preview-brief', readLimiter, authMiddleware, schedulePreviewRoute);
 // Public — actor library is browseable without auth (matches /functions/v1/actors).
 app.get('/v1/actors', readLimiter, actorsRoute);
+app.get('/v1/me/readiness', readLimiter, authMiddleware, accountReadinessRoute);
 app.get('/v1/videos/:jobId', readLimiter, authMiddleware, statusRoute);
 
 // ── Tooling-first V1 routes (additive, back-compat safe) ──────────────────
