@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.4.0';
+  if (SURFACE === 'loose') return '2.4.1';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -539,6 +539,10 @@ function cursorMarketplaceJson(): string {
 function changelog(): string {
   return [
     '# Changelog',
+    '',
+    '## 2.4.1',
+    '',
+    '- Treat make_ugc as an optional composed shortcut. Agents can freely choose and combine direct image, video and audio generators when they need custom models, modes, references, intermediate assets or shot structure.',
     '',
     '## 2.4.0',
     '',

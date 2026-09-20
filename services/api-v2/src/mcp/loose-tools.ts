@@ -158,16 +158,15 @@ export const listModelsTool = {
 };
 
 /**
- * The supported first-result workflow. The primitives stay available for
- * advanced work, but a new user should not have to choose a model, split a
- * script, or assemble captions to get one complete UGC video.
+ * Optional server-composed workflow. Agents may use it when its contract fits
+ * the request, or compose the direct generators for full control.
  */
 const makeUgcInputSchema = looseSchema(MakeUgcSkillInputSchema, 'make_ugc_input');
 
 export const makeUgcTool = {
   name: 'make_ugc',
   description:
-    'Create one finished vertical UGC video from a script. This is the RECOMMENDED first-video workflow: the server chooses the takes and timing, keeps the full script, joins long monologues, and optionally burns captions. Use `image` for an uploaded person photo, `product_image` for an uploaded product photo, or `character` for a saved character. Call `quote_ugc` with the exact same input first; it costs no credits. Ask before setting captions:true. After submission, keep calling get_run_status until it returns the finished video URL.' +
+    'Optional convenience workflow for one finished vertical UGC video from a script. Use it when the user wants the server to choose takes and timing, join a long monologue, and optionally burn captions. Use the direct generate_image, generate_video and generate_audio tools instead when the agent needs custom models, modes, shot structure, intermediate assets, or a different composition. Use `image` for a person photo, `product_image` for a product photo, or `character` for a saved character. Call `quote_ugc` with the exact same input first; it costs no credits. Ask before setting captions:true. After submission, keep calling get_run_status until it returns the finished video URL.' +
     IMAGE_URL_HINT,
   inputSchema: makeUgcInputSchema,
   annotations: generationAnnotations('Make UGC Video'),
@@ -176,7 +175,7 @@ export const makeUgcTool = {
 export const quoteUgcTool = {
   name: 'quote_ugc',
   description:
-    'Price a complete make_ugc request and check the spendable balance without rendering or using credits. Pass the exact input intended for make_ugc. Show the returned price to the user and only call make_ugc after the user has authorized that spend.',
+    'Price an optional make_ugc workflow and check the spendable balance without rendering or using credits. Pass the exact input intended for make_ugc. Show the returned price to the user and only call make_ugc after the user has authorized that spend.',
   inputSchema: makeUgcInputSchema,
   annotations: readOnlyAnnotations('Quote UGC Video'),
 };

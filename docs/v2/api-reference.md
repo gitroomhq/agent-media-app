@@ -426,7 +426,7 @@ agent-media crazy-look --description "21yo woman, long brown wavy hair, argyle c
 
 ## The loose surface: `POST /v2/generate/{kind}`
 
-Three advanced primitives with no recipe: your prompt, your model, your frames or references. The hosted MCP connector exposes them as `generate_video`, `generate_image`, `generate_audio` and `quote`. For a complete first UGC video, the connector recommends `quote_ugc` followed by `make_ugc`; the server chooses the takes, joins long scripts and optionally burns captions.
+Three composable primitives with no recipe: your prompt, your model, your frames or references. The hosted MCP connector exposes them as `generate_video`, `generate_image`, `generate_audio` and `quote`. It also offers `quote_ugc` followed by `make_ugc` as an optional server-composed shortcut for users who want automatic takes, joining and captions.
 
 | Route | Body | Credits |
 |---|---|---|

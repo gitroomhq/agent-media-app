@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.4.1
+
+- Treat make_ugc as an optional composed shortcut. Agents can freely choose and combine direct image, video and audio generators when they need custom models, modes, references, intermediate assets or shot structure.
+
 ## 2.4.0
 
 - Add make_ugc as the recommended complete first-video workflow on the hosted connector, with quote_ugc as its no-charge price and balance check. Direct generators remain available for advanced control.

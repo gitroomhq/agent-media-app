@@ -44,7 +44,7 @@ describe('loose surface: tools/list', () => {
     expect(names).not.toContain('create_character');
   });
 
-  it('adds the recommended complete UGC workflow and its no-charge quote when enabled', async () => {
+  it('adds the optional composed UGC workflow and its no-charge quote when enabled', async () => {
     process.env.MAKE_UGC_ENABLED = 'true';
     const { client } = await connect('loose');
     const tools = (await client.listTools()).tools;
@@ -53,7 +53,8 @@ describe('loose surface: tools/list', () => {
     expect(names).toContain('quote_ugc');
     expect(tools.find((t) => t.name === 'make_ugc')?.annotations?.readOnlyHint).toBe(false);
     expect(tools.find((t) => t.name === 'quote_ugc')?.annotations?.readOnlyHint).toBe(true);
-    expect(tools.find((t) => t.name === 'make_ugc')?.description).toMatch(/RECOMMENDED first-video workflow/);
+    expect(tools.find((t) => t.name === 'make_ugc')?.description).toMatch(/Optional convenience workflow/);
+    expect(tools.findIndex((t) => t.name === 'generate_video')).toBeLessThan(tools.findIndex((t) => t.name === 'make_ugc'));
   });
 
   it('AGENT_SURFACE=fixed brings the recipe tools back and drops the primitives', async () => {

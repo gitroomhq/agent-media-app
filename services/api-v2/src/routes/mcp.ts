@@ -189,12 +189,12 @@ function takesAnImage(schema: unknown): boolean {
 }
 
 export function buildMcpServer(apiKey: string): Server {
-  const firstResultGuidance = process.env.MAKE_UGC_ENABLED?.trim() === 'true'
-    ? 'FIRST RESULT: for a complete UGC video, call quote_ugc with the exact intended input, show the price, and call make_ugc only after the user approves. Then poll get_run_status until it returns the finished URL. Use direct generate_* tools only when the request needs advanced model or shot control.'
+  const workflowChoiceGuidance = process.env.MAKE_UGC_ENABLED?.trim() === 'true'
+    ? 'WORKFLOW CHOICE: choose tools from the user\'s outcome and constraints. make_ugc is an optional server-composed shortcut for a finished vertical UGC video. Direct generate_image, generate_video and generate_audio calls provide full control over models, modes, references, intermediate assets and composition. Never force make_ugc. Use quote_ugc before make_ugc, or quote before a direct generator, then poll get_run_status until the final URL.'
     : '';
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },
-    { capabilities: { tools: {}, resources: {} }, instructions: [firstResultGuidance, ACCOUNT_READINESS_GUIDANCE, IMAGE_UPLOAD_GUIDANCE].filter(Boolean).join('\n\n') },
+    { capabilities: { tools: {}, resources: {} }, instructions: [workflowChoiceGuidance, ACCOUNT_READINESS_GUIDANCE, IMAGE_UPLOAD_GUIDANCE].filter(Boolean).join('\n\n') },
   );
 
   // A10: when MAKE_UGC_ENABLED makes make_ugc the one curated agent surface, the
@@ -276,10 +276,10 @@ export function buildMcpServer(apiKey: string): Server {
       })
     : [];
   const skillBySlug = new Map(vnextSkillTools.map((t) => [t.slug, t]));
-  const recommendedUgcTool = surface === 'loose' && makeUgcOn && isPrimitivesRouteEnabled()
+  const optionalUgcTool = surface === 'loose' && makeUgcOn && isPrimitivesRouteEnabled()
     ? { slug: 'make_ugc', listEntry: makeUgcTool }
     : null;
-  if (recommendedUgcTool) skillBySlug.set(recommendedUgcTool.slug, recommendedUgcTool);
+  if (optionalUgcTool) skillBySlug.set(optionalUgcTool.slug, optionalUgcTool);
 
   const byName = new Map(tools.map((t) => [t.listEntry.name, t.def]));
 
@@ -288,8 +288,8 @@ export function buildMcpServer(apiKey: string): Server {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
-      ...(recommendedUgcTool ? [recommendedUgcTool.listEntry, quoteUgcTool] : []),
       ...looseTools,
+      ...(optionalUgcTool ? [optionalUgcTool.listEntry, quoteUgcTool] : []),
       ...tools.map((t) => t.listEntry),
       ...vnextSkillTools.map((t) => t.listEntry),
       listCharactersTool,
@@ -506,7 +506,7 @@ export function buildMcpServer(apiKey: string): Server {
       };
     }
 
-    if (recommendedUgcTool && name === 'quote_ugc') {
+    if (optionalUgcTool && name === 'quote_ugc') {
       let resp: FetchResponse;
       try {
         resp = await apiFetch(`${PUBLIC_API_BASE}/v1/skills/make_ugc/quote`, {

@@ -118,7 +118,7 @@ export function buildSiteData(pluginVersion: string) {
         { id: 'cursor', label: 'Cursor', config: `{ "mcpServers": { "agent-media": { "url": "${MCP_URL}" } } }`, note: '~/.cursor/mcp.json' },
         { id: 'local', label: 'Any stdio client', command: 'npx -y -p @agentmedia/mcp-server@latest agent-media-mcp', note: 'A stdio proxy to the same hosted server; set AGENT_MEDIA_API_KEY. Do not register both the connector and the proxy in one client, or every tool appears twice.' },
       ],
-      prompt: `Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: ${MCP_URL} (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call get_account and tell me whether the account is ready.\n4. For my first complete UGC video, use quote_ugc before make_ugc.\n5. Open the existing image upload panel using open_upload_panel, or upload_image with {} if only the older tools are available. Do not generate anything yet.`,
+      prompt: `Set up agent-media so I can generate videos, images and voice from here.\n1. Add the MCP server: ${MCP_URL} (Streamable HTTP).\n2. Authenticate: complete the sign-in in the browser it opens.\n3. Call get_account and tell me whether the account is ready.\n4. Explain that you can freely combine the direct generators or use make_ugc as an optional composed shortcut.\n5. Open the existing image upload panel using open_upload_panel, or upload_image with {} if only the older tools are available. Do not generate anything yet.`,
       polling: `Every generate tool returns a job id. Call get_run_status with wait:true; each call blocks up to about 45 seconds, a video usually needs several calls (${liveVideo.map((m) => `${m.id}: ${m.usage!.latency}`).join('; ')}). Never report a result before get_run_status returned its URL.`,
     },
     tools: [...LOOSE_SURFACE_TOOLS, openUploadPanelTool, getUploadsTool].map((t) => ({
@@ -219,7 +219,7 @@ export function buildSiteData(pluginVersion: string) {
       openapi: `${API}/openapi.json`,
       reference: `${API}/docs`,
       curl: `curl -X POST ${API}/v2/quote/video \\\n  -H "Authorization: Bearer ma_..." -H "Content-Type: application/json" \\\n  -d '{ "prompt": "A 28-year-old woman in a bright kitchen, phone framing, holds a serum bottle to the lens and says: \\"Okay, I did not expect this to work.\\"", "seconds": 5 }'`,
-      fixed_skills_note: 'The hosted connector exposes make_ugc as the recommended complete first-video workflow, with quote_ugc before spending. The other fixed recipes remain REST and CLI routes for the dashboard.',
+      fixed_skills_note: 'The hosted connector exposes make_ugc as an optional composed workflow, with quote_ugc before spending. Agents can instead combine the direct image, video and audio tools freely. The other fixed recipes remain REST and CLI routes for the dashboard.',
     },
     recipes: recipes(),
     prompting: promptingGuide(REPO_ROOT),

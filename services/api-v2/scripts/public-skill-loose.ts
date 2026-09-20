@@ -6,7 +6,7 @@
  * connector in services/api-v2/src/routes/mcp.ts).
  *
  * Everything an agent needs to make media with agent-media when the
- * agent can use the recommended complete UGC workflow or direct the advanced
+ * agent can use an optional composed UGC workflow or freely combine the direct
  * generators: the twelve core tools, the three video modes (text,
  * image-to-video, reference), how to write a prompt that comes out real,
  * which model for what, the recipes the fixed skills used to hard-code,
@@ -166,7 +166,7 @@ export function usageSection(headingLevel = '##'): string[] {
 
 export function loosePluginDescription(): string {
   const live = liveModels().map((m) => m.id).join(', ');
-  return `Agent-Media, AI video, image and voice for agents. make_ugc is the recommended complete first-video workflow, with quote_ugc as its no-charge price check. Advanced tools let you write the prompt, pick the model (${live}), and pass frames or references directly. generate_video has text, image-to-video and reference modes. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.`;
+  return `Agent-Media, flexible AI video, image and voice tools for agents. Agents can compose generate_image, generate_video and generate_audio with their chosen model (${live}), frames and references, or use make_ugc as an optional server-composed shortcut. Matching quote tools check cost before spending. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.`;
 }
 
 export function looseReadme(): string {
@@ -186,7 +186,7 @@ export function looseReadme(): string {
     '',
     '**Agents: read this page, then [skills/agent-media/SKILL.md](skills/agent-media/SKILL.md). That is everything.**',
     '',
-    'agent-media gives every agent one recommended first-video workflow: `quote_ugc`, then `make_ugc`, then `get_run_status`. It keeps the whole script, chooses the takes, joins them, and optionally burns captions. Advanced image, video and voice tools remain available when you want direct model and shot control. Works in Claude Code, Claude.ai, Cursor, Codex, Grok, or any MCP / HTTP agent.',
+    'agent-media gives agents flexible image, video and voice primitives. They can choose models, modes, references and intermediate assets, or use `make_ugc` as an optional shortcut when its complete vertical-video contract fits. Every path has a no-charge quote and ends with `get_run_status`. Works in Claude Code, Claude.ai, Cursor, Codex, Grok, or any MCP / HTTP agent.',
     '',
     '## 1. Connect, no API key needed',
     '',
@@ -222,7 +222,7 @@ export function looseReadme(): string {
     '',
     '| Tool | What it does | Credits |',
     '|---|---|---|',
-    '| `make_ugc` | Recommended first-video workflow: full script plus an optional person photo, product photo, saved character or b-roll; returns one finished vertical video. Captions are opt-in. | Exact cost from `quote_ugc` |',
+    '| `make_ugc` | Optional shortcut: full script plus an optional person photo, product photo, saved character or b-roll; returns one finished vertical video. Captions are opt-in. | Exact cost from `quote_ugc` |',
     '| `quote_ugc` | Price the exact `make_ugc` input and check spendable balance without starting a run. | 0 |',
     `| \`generate_video\` | A clip from your prompt on the model you pick, in one of three modes: text (prompt only), image-to-video (\`first_frame\`, optional \`last_frame\`) or reference (\`refs\`, \`video_refs\`, \`audio_refs\`, addressed as @image1 @video1 @audio1). Native speech when the words are in the prompt. | seconds x the per-second rate at the chosen quality (${liveVideo.map((m) => `${m.id}: ${priceLadder(m)}`).join('; ')}); reference clip seconds are billed like output seconds |`,
     `| \`generate_image\` | One image from your prompt; with refs it edits/composes from them. The way to build a portrait, a product frame or a first frame for a video. | ${V2_MODELS['gpt-image-2'].credits!.perUnit} per image |`,
@@ -310,14 +310,14 @@ export function looseSkillBody(repoRoot: string): string {
   return [
     '# agent-media, the skill',
     '',
-    'Use the complete workflow first. `make_ugc` turns a full script plus an optional person photo, product photo, saved character or b-roll into one finished vertical video. It chooses the takes and timing, joins long scripts, and adds captions only when requested. The direct image, video and audio generators are advanced controls for work that does not fit that workflow.',
+    'Choose the workflow that fits the user. Compose `generate_image`, `generate_video` and `generate_audio` freely when you need model, mode, reference, intermediate-asset or shot-level control. Use `make_ugc` only as an optional shortcut when the user wants its server-composed vertical-video result.',
     '',
     '## User-provided images: offer the upload panel',
     '',
     ACCOUNT_READINESS_GUIDANCE,
     IMAGE_UPLOAD_GUIDANCE,
     '',
-    '## The recommended first-video loop',
+    '## Optional composed UGC loop',
     '',
     '1. Get the full spoken script and the intended person or product. If the user supplied an image, retrieve it from the upload panel and inspect its native preview.',
     '2. Ask whether captions are wanted. Never turn them on by assumption.',
@@ -325,9 +325,9 @@ export function looseSkillBody(repoRoot: string): string {
     '4. After the user approves the spend, call `make_ugc` with the same input.',
     '5. Poll `get_run_status` until the finished video URL is returned, then give it to the user. Do not stop at the submission receipt.',
     '',
-    'Use `image` for a person photo, `product_image` for a product photo, and `character` for a saved `char_…` identity. `product_image` also needs a saved character to hold or wear it. Pass the whole script; never trim it to fit one clip.',
+    'Use `image` for a person photo, `product_image` for a product photo, and `character` for a saved `char_…` identity. `product_image` also needs a saved character to hold or wear it. Pass the whole script; never trim it to fit one clip. Skip this workflow when direct tools give the agent a better way to satisfy the request.',
     '',
-    '## The advanced generator loop',
+    '## Direct generator loop',
     '',
     '1. **Decide the shot** in words: who, where, what happens, camera, and, if anyone speaks, the exact words in quotes.',
     '2. **Pick the mode.** A still to animate: image-to-video (`first_frame`, optional `last_frame`). An identity, a look, a motion or a sound to keep: reference (`refs`, `video_refs`, `audio_refs`). Neither: text. Frames and refs cannot be mixed on Seedance.',
