@@ -6,36 +6,17 @@ import { REQUEST_ID_PATTERN } from '../generation/request-identity.js';
 /**
  * POST /mcp — public HTTP MCP server for agent-media.
  *
- * What this is: a Model Context Protocol server exposed over HTTP so
- * clients that can't run local stdio MCP processes (Claude.ai, Cowork,
- * Claude Desktop's web mode, anything else that wants a remote MCP
- * URL) can use agent-media's one generation tool: make_ugc
- * ("Agent-Media UGC Video") — give a script plus a person/image/
- * character and get back a finished vertical video (captions are
- * opt-in — the agent asks before adding them).
+ * One connection exposes the complete media toolbox an agent needs: temporary
+ * uploads and image inspection, image generation and editing, storyboards and
+ * reusable references, video generation, speech, quoting, status, ratings and
+ * optional composed workflows. The agent chooses and combines tools from the
+ * user’s requested outcome; no prescribed workflow is required.
  *
- * Tools exposed:
- *   - make_ugc — "Agent-Media UGC Video", the single agent-facing
- *     generation tool. One call: script + a person/image/character in,
- *     finished vertical video out (captions opt-in). The agent never
- *     picks a sub-skill; make_ugc resolves identity and routes internally.
- *   - list_characters — read-only; list saved, reusable characters.
- * (The legacy create_selfie / create_character / create_subtitle
- *  primitives remain wired for back-compat but are no longer the
- *  user-facing offering.)
+ * Auth: OAuth 2.1 for hosted clients or Bearer ma_xxx. The existing auth
+ * middleware scopes every request to the authenticated user.
  *
- * Auth: standard Bearer ma_xxx in the Authorization header. The
- * existing authMiddleware runs before this route, so `req.userId`
- * is already populated when this handler fires.
- *
- * Statelessness: each request creates a fresh MCP server + transport.
- * No session storage, no in-memory state. This means each tool call
- * is a single round-trip; streaming partial responses (progress
- * events while a job runs) is NOT exposed via this transport — the
- * client polls the returned job_id via GET /v1/videos/<id> instead.
- *
- * Why stateless: simpler ops, no need for a session store, plays well
- * with serverless / multi-instance Railway deployments.
+ * Each request creates a fresh MCP server and transport. Generation is
+ * asynchronous, so agents follow returned ids with get_run_status.
  */
 
 import type { Request, Response } from 'express';
@@ -190,7 +171,7 @@ function takesAnImage(schema: unknown): boolean {
 
 export function buildMcpServer(apiKey: string): Server {
   const workflowChoiceGuidance = process.env.MAKE_UGC_ENABLED?.trim() === 'true'
-    ? 'WORKFLOW CHOICE: choose tools from the user\'s outcome and constraints. make_ugc is an optional server-composed shortcut for a finished vertical UGC video. Direct generate_image, generate_video and generate_audio calls provide full control over models, modes, references, intermediate assets and composition. Never force make_ugc. Use quote_ugc before make_ugc, or quote before a direct generator, then poll get_run_status until the final URL.'
+    ? 'ONE CONNECTION, COMPLETE MEDIA TOOLBOX: start from the user\'s outcome and freely combine upload, inspection, image generation/editing, storyboards and reference frames, video, speech, saved characters, quoting and status tools. generate_image can create a storyboard or any intermediate visual; pass its URL into later tools. make_ugc is only an optional server-composed shortcut for a finished vertical UGC video. Never force a prescribed workflow. Use quote_ugc before make_ugc, or quote before a direct generator, then poll get_run_status until every requested final URL is ready.'
     : '';
   const server = new Server(
     { name: 'agent-media', version: '0.4.0' },

@@ -26,6 +26,8 @@ submit response only confirms the job started.
 
 If you have image bytes (a photo the user attached, a `data:` URL), call `upload_image` first and pass the https URL it returns. Never inline base64 into a generation call: the client prints tool arguments in the chat, so the user sees a wall of base64, and every retry re-sends it. `upload_image` costs no credits.
 
+The hosted MCP connection is the complete agent-facing media toolbox: temporary uploads and inspection, image generation and editing, storyboards and intermediate frames, video, speech, reusable characters, quotes, ratings and run tracking. Agents may compose these capabilities in any order required by the user.
+
 The default MCP surface offers `make_ugc` as an optional composed video workflow and
 `quote_ugc` as its no-charge price check. Agents can instead combine `generate_video`,
 `generate_image`, `generate_audio`, `quote`, `get_account`, `list_models`, `list_characters`,

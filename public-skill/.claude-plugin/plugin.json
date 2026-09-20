@@ -1,7 +1,7 @@
 {
   "name": "agent-media",
-  "description": "Agent-Media, flexible AI video, image and voice tools for agents. Agents can compose generate_image, generate_video and generate_audio with their chosen model (seedance-2.0, seedance-2.5, gpt-image-2.5, gpt-image-2.5-flare, gpt-image-2, elevenlabs-tts), frames and references, or use make_ugc as an optional server-composed shortcut. Matching quote tools check cost before spending. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.",
-  "version": "2.4.1",
+  "description": "Agent-Media is one connection for the complete media toolbox: upload and inspect references, generate or edit images, build storyboards and frames, generate video and voice, reuse characters, quote, track and compose results. Agents can combine generate_image, generate_video and generate_audio with their chosen model (seedance-2.0, seedance-2.5, gpt-image-2.5, gpt-image-2.5-flare, gpt-image-2, elevenlabs-tts), frames and references, or use make_ugc as an optional server-composed shortcut. Matching quote tools check cost before spending. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.",
+  "version": "2.4.2",
   "author": {
     "name": "gitroomhq",
     "url": "https://github.com/gitroomhq"

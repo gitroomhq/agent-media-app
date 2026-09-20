@@ -8,10 +8,12 @@ AI UGC video generation from your terminal, your editor, or your AI agent.
 
 ## What it does
 
-### Agents (MCP / HTTP): video, image and audio
+### Agents (MCP / HTTP): one complete media toolbox
 
-The hosted connector gives agents flexible `generate_video`, `generate_image` and
-`generate_audio` primitives with direct control over models, modes, references and
+One hosted connection gives agents uploads and image inspection, image generation
+and editing, storyboards and reference frames, video, voice, reusable characters,
+quotes and run tracking. Agents freely compose `generate_image`, `generate_video`
+and `generate_audio` with direct control over models, modes, references and
 intermediate assets. `make_ugc` is an optional server-composed shortcut when its full
 vertical-video workflow fits the request. Agents use the matching no-charge quote tool,
 then poll `get_run_status` for the result. Generation remains paid. See
@@ -54,7 +56,7 @@ Works in Claude Code, Cursor, Claude Desktop, or anything that speaks MCP — th
 agent sets *itself* up:
 
 ```text
-Set up agent-media for me so I can generate UGC videos from here.
+Set up agent-media for me so I can upload references and generate images, storyboards, video and voice from here.
 1. Add the agent-media MCP server: https://api.agent-media.ai/mcp (Streamable HTTP).
 2. Authenticate: complete the sign-in in the browser it opens.
 3. Install the companion skills: run `npx skills add gitroomhq/agent-media-app`.
@@ -140,9 +142,9 @@ Every CLI invocation also runs a once-per-day background check and prints a one-
 
 ## The skill pack
 
-[`public-skill/`](public-skill/) is the agent-facing pack: the `make-ugc` skill (the one
-generation tool) plus `agent-media-ugc`, `make-podcast`, `publish-to-social`, a
-plugin/marketplace manifest, and `reference/` docs. It is generated from the skill
+[`public-skill/`](public-skill/) is the agent-facing pack for the complete hosted
+media toolbox, plus optional composed workflows, publishing guidance, marketplace
+manifests, and `reference/` docs. It is generated from the skill
 registry by `services/api-v2/scripts/generate-public-skill.ts` — edit the registry, not
 the emitted files.
 

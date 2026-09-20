@@ -1,11 +1,11 @@
 {
   "name": "agent-media",
   "displayName": "Agent Media",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "minClientVersions": {
     "cursor": "3.13.0"
   },
-  "description": "Generate video, images and voice. Optional image upload panels with 24-hour expiry. One hosted MCP server.",
+  "description": "One media toolbox for agents: upload, images, storyboards, video and voice over one hosted MCP connection.",
   "author": {
     "name": "agent-media",
     "email": "info@agent-media.ai"

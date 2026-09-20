@@ -10,7 +10,7 @@ Public documentation: [docs.agent-media.ai](https://docs.agent-media.ai). Setup,
 
 **Agents: read this page, then [skills/agent-media/SKILL.md](skills/agent-media/SKILL.md). That is everything.**
 
-agent-media gives agents flexible image, video and voice primitives. They can choose models, modes, references and intermediate assets, or use `make_ugc` as an optional shortcut when its complete vertical-video contract fits. Every path has a no-charge quote and ends with `get_run_status`. Works in Claude Code, Claude.ai, Cursor, Codex, Grok, or any MCP / HTTP agent.
+agent-media gives agents one connection to upload and inspect references, generate or edit images, build storyboards and frames, generate video and voice, reuse characters, quote, track and compose results. Agents choose models, modes, references and intermediate assets, or use `make_ugc` as an optional shortcut when its complete vertical-video contract fits. Every path has a no-charge quote and ends with `get_run_status`. Works in Claude Code, Claude.ai, Cursor, Codex, Grok, or any MCP / HTTP agent.
 
 ## 1. Connect, no API key needed
 

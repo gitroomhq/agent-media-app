@@ -166,7 +166,7 @@ export function usageSection(headingLevel = '##'): string[] {
 
 export function loosePluginDescription(): string {
   const live = liveModels().map((m) => m.id).join(', ');
-  return `Agent-Media, flexible AI video, image and voice tools for agents. Agents can compose generate_image, generate_video and generate_audio with their chosen model (${live}), frames and references, or use make_ugc as an optional server-composed shortcut. Matching quote tools check cost before spending. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.`;
+  return `Agent-Media is one connection for the complete media toolbox: upload and inspect references, generate or edit images, build storyboards and frames, generate video and voice, reuse characters, quote, track and compose results. Agents can combine generate_image, generate_video and generate_audio with their chosen model (${live}), frames and references, or use make_ugc as an optional server-composed shortcut. Matching quote tools check cost before spending. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.`;
 }
 
 export function looseReadme(): string {
@@ -186,7 +186,7 @@ export function looseReadme(): string {
     '',
     '**Agents: read this page, then [skills/agent-media/SKILL.md](skills/agent-media/SKILL.md). That is everything.**',
     '',
-    'agent-media gives agents flexible image, video and voice primitives. They can choose models, modes, references and intermediate assets, or use `make_ugc` as an optional shortcut when its complete vertical-video contract fits. Every path has a no-charge quote and ends with `get_run_status`. Works in Claude Code, Claude.ai, Cursor, Codex, Grok, or any MCP / HTTP agent.',
+    'agent-media gives agents one connection to upload and inspect references, generate or edit images, build storyboards and frames, generate video and voice, reuse characters, quote, track and compose results. Agents choose models, modes, references and intermediate assets, or use `make_ugc` as an optional shortcut when its complete vertical-video contract fits. Every path has a no-charge quote and ends with `get_run_status`. Works in Claude Code, Claude.ai, Cursor, Codex, Grok, or any MCP / HTTP agent.',
     '',
     '## 1. Connect, no API key needed',
     '',
@@ -310,7 +310,7 @@ export function looseSkillBody(repoRoot: string): string {
   return [
     '# agent-media, the skill',
     '',
-    'Choose the workflow that fits the user. Compose `generate_image`, `generate_video` and `generate_audio` freely when you need model, mode, reference, intermediate-asset or shot-level control. Use `make_ugc` only as an optional shortcut when the user wants its server-composed vertical-video result.',
+    'Treat Agent Media as one composable media toolbox. Start from the user\'s outcome, then freely combine uploads, image inspection, `generate_image`, `generate_video`, `generate_audio`, saved characters, quotes and status. Use `generate_image` for any needed storyboard, contact sheet, keyframe or intermediate visual; pass the returned URLs into later calls. Use `make_ugc` only as an optional shortcut when the user wants its server-composed vertical-video result.',
     '',
     '## User-provided images: offer the upload panel',
     '',

@@ -5,13 +5,13 @@
     "email": "info@agent-media.ai"
   },
   "metadata": {
-    "description": "AI video, images and voice for agents. One hosted MCP server, browser sign-in."
+    "description": "One media toolbox for agents: uploads, images, storyboards, video and voice. Browser sign-in."
   },
   "plugins": [
     {
       "name": "agent-media",
       "source": "public-skill",
-      "description": "Generate video, images and voice. Optional image upload panels with 24-hour expiry. One hosted MCP server.",
+      "description": "One media toolbox for agents: upload, images, storyboards, video and voice over one hosted MCP connection.",
       "minClientVersions": {
         "cursor": "3.13.0"
       }

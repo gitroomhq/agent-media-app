@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.4.1';
+  if (SURFACE === 'loose') return '2.4.2';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -507,7 +507,7 @@ function cursorPluginJson(): string {
 }
 
 /** One line, marketplace-card length. Cursor's own entries stay under ~120 chars. */
-const CURSOR_DESCRIPTION = 'Generate video, images and voice. Optional image upload panels with 24-hour expiry. One hosted MCP server.';
+const CURSOR_DESCRIPTION = 'One media toolbox for agents: upload, images, storyboards, video and voice over one hosted MCP connection.';
 
 /**
  * Cursor multi-plugin index at the REPO ROOT (`/.cursor-plugin/marketplace.json`).
@@ -520,7 +520,7 @@ function cursorMarketplaceJson(): string {
     {
       name: 'agent-media',
       owner: { name: 'agent-media', email: 'info@agent-media.ai' },
-      metadata: { description: 'AI video, images and voice for agents. One hosted MCP server, browser sign-in.' },
+      metadata: { description: 'One media toolbox for agents: uploads, images, storyboards, video and voice. Browser sign-in.' },
       plugins: [
         {
           name: 'agent-media',
@@ -539,6 +539,10 @@ function cursorMarketplaceJson(): string {
 function changelog(): string {
   return [
     '# Changelog',
+    '',
+    '## 2.4.2',
+    '',
+    '- Define Agent Media as one composable connection for uploads, image inspection, images, storyboards and frames, video, voice, characters, quotes and run tracking.',
     '',
     '## 2.4.1',
     '',
@@ -911,7 +915,7 @@ if (SURFACE === 'loose') {
       // and Claude Code accepts the same form.
       name: 'agent-media',
       description:
-        'Use Agent Media to upload reference images, open an image upload panel, or generate AI images, video and speech. For an upload-only request, open the existing panel with open_upload_panel, or upload_image with {} if only older tools are available; show the browser link and wait. Do not build an upload page or request a local folder. Select live models with list_models, quote when needed, generate, then poll get_run_status. Covers UGC, portraits, product photos, image-to-video, reference video, voiceover and recurring characters.',
+        'Use Agent Media as one composable media toolbox: upload and inspect reference images, generate or edit images, build storyboards and frames, generate video and speech, reuse characters, quote costs and track runs. For an upload-only request, open the existing panel with open_upload_panel, or upload_image with {} if only older tools are available; show the browser link and wait. Do not build an upload page or request a local folder. Select live models with list_models, quote when needed, generate, then poll get_run_status. Covers UGC, portraits, product photos, image-to-video, reference video, voiceover and recurring characters.',
       'allowed-tools': [...LOOSE_TOOLS, 'open_upload_panel', 'get_uploads'].map((n) => `mcp__agent-media__${n}`),
       'x-skill-slug': 'agent-media',
       'x-skill-version': pluginVersion(),

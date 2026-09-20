@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.4.2
+
+- Define Agent Media as one composable connection for uploads, image inspection, images, storyboards and frames, video, voice, characters, quotes and run tracking.
+
 ## 2.4.1
 
 - Treat make_ugc as an optional composed shortcut. Agents can freely choose and combine direct image, video and audio generators when they need custom models, modes, references, intermediate assets or shot structure.
