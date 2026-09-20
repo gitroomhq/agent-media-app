@@ -93,6 +93,38 @@ export class UploadService {
       height: asset.height!,
     };
   }
+  async recent(userId: string) {
+    const sessions = await this.store.sessions(userId, new Date(this.now()).toISOString());
+    const result = [];
+    for (const session of sessions) {
+      if (session.user_id !== userId || Date.parse(session.expires_at) <= this.now()) continue;
+      const assets = await this.store.assets(session.id);
+      result.push({ session_id: session.id, expires_at: session.expires_at,
+        images: assets.filter(a => a.user_id === userId && a.status === 'ready' && Date.parse(a.expires_at) > this.now())
+          .map(a => ({ asset_id: a.id, filename: a.filename })) });
+    }
+    return { sessions: result, next_step: 'Choose the session matching the user request, then retrieve it to see image previews and generation URLs. These are account-wide uploads, not proof of which conversation they belong to. Never silently select unrelated files.' };
+  }
+  async previews(session: UploadSession) {
+    this.active(session.expires_at);
+    const assets = (await this.store.assets(session.id)).filter(a =>
+      a.user_id === session.user_id && a.status === 'ready' && Date.parse(a.expires_at) > this.now()).slice(0, MAX_SESSION_FILES);
+    const previews = [];
+    const unavailable = [];
+    for (const asset of assets) {
+      try {
+        const bytes = await this.storage.get(asset.object_key);
+        const data = await sharp(bytes, { limitInputPixels: 40_000_000 })
+          .rotate().resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+          .flatten({ background: '#ffffff' }).jpeg({ quality: 65 }).toBuffer();
+        if (data.length > 256 * 1024) throw new Error('Preview too large');
+        this.active(asset.expires_at);
+        previews.push({ asset_id: asset.id, filename: asset.filename, mimeType: 'image/jpeg' as const, data: data.toString('base64') });
+      } catch { unavailable.push(asset.id); }
+    }
+    this.active(session.expires_at);
+    return { previews, unavailable };
+  }
   async create(userId: string) {
     const token = randomBytes(32).toString('hex');
     const session = await this.store.createSession(randomUUID(), userId, tokenHash(token));

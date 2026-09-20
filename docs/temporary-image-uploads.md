@@ -81,3 +81,11 @@ Agents must discover `open_upload_panel` and `get_uploads` before offering them,
 If a connected client still lists only the original nine tools, call `upload_image` with `{}` to open the same panel. After the person uploads, call `upload_image` with only the exact `upload_key` returned by that call (`panel:<session UUID>`). This retrieves all ready images using the same owner authorization and expiry rules as `get_uploads`; it does not re-host images. No new argument names or tool names are needed by these older clients. `list_models` also returns these current upload instructions. The dedicated tools remain the preferred interface when available.
 
 Plugin 2.1.0 refreshes the upload-first skill instructions; reconnecting a remote connector is separate from updating an installed skill/plugin. A passing direct MCP test does not establish that a host refreshed its tool catalog or selected the right tool. Release acceptance must include a call through an already-installed client.
+
+## Image inspection and session recovery
+
+`get_uploads({session_id})` and cached `upload_image({upload_key:"panel:<session_id>"})` return MCP native image content, labeled by asset ID and filename, alongside original URLs. Preview generation stays on the authenticated API: the client never has to download from the image host. JPEG previews fit within 512×512 pixels and 256KiB each, at most 10. They are created in memory, not stored as permanent copies, and never replace original generation references. Failed previews are reported separately without discarding usable URLs.
+
+`get_uploads({})` or cached `upload_image({upload_key:"panel:recent"})` lists owned unexpired sessions with filenames, no tokens or image URLs. This is account-wide recovery, not conversation memory: agents must select the session matching the user request and clarify ambiguity. They must inspect available image content instead of guessing the subject from email domains or account metadata.
+
+Owner-authenticated REST endpoints: `GET /v1/upload-sessions` for recovery metadata and `GET /v1/upload-sessions/:sessionId/previews` for image inspection. Panel capability tokens cannot use these endpoints. Preview reads retain hard expiry, no-store headers and a two-request processing capacity bound.

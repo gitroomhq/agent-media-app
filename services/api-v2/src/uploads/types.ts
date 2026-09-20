@@ -60,6 +60,7 @@ export class UploadError extends Error {
 export interface UploadStore {
   createSession(id: string, userId: string, tokenHash: string): Promise<UploadSession>;
   session(id: string): Promise<UploadSession | null>;
+  sessions(userId: string, now: string): Promise<UploadSession[]>;
   assets(sessionId: string): Promise<UploadAsset[]>;
   asset(id: string): Promise<UploadAsset | null>;
   reserve(input: {

@@ -120,6 +120,15 @@ describe('temporary image uploads', () => {
           })
         ).status,
       ).toBe(401);
+      const previewPath = `${base}/v1/upload-sessions/${created.session_id}/previews`;
+      expect((await fetch(previewPath)).status).toBe(401);
+      expect((await fetch(previewPath, {headers:{Authorization:`Upload ${created.upload_token}`}})).status).toBe(401);
+      const previewResponse = await fetch(previewPath, {headers:{Authorization:'Bearer fixture-owner'}});
+      expect(previewResponse.status).toBe(200);
+      expect(previewResponse.headers.get('cache-control')).toContain('no-store');
+      expect((await previewResponse.json()).previews).toHaveLength(1);
+      const foreign = await f.service.create(randomUUID());
+      expect((await fetch(`${base}/v1/upload-sessions/${foreign.session_id}/previews`,{headers:{Authorization:'Bearer fixture-owner'}})).status).toBe(404);
       const page = await fetch(base + '/upload');
       expect(page.status).toBe(200);
       expect(await page.text()).toContain('Drop images here or browse');
@@ -127,5 +136,38 @@ describe('temporary image uploads', () => {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+});
+
+describe('private upload preview and recovery', () => {
+  it('lists only owned live sessions without tokens, URLs or preview bytes', async () => {
+    const f = uploadFixture();
+    const own = await f.service.create(f.owner);
+    await f.service.create(randomUUID());
+    const session = await f.service.authorize(own.session_id, {userId:f.owner});
+    await f.service.upload(session,randomUUID(),'product.png',await png());
+    const recent = await f.service.recent(f.owner);
+    expect(recent.sessions).toHaveLength(1);
+    expect(recent.sessions[0].images).toHaveLength(1);
+    expect(JSON.stringify(recent)).not.toMatch(/upload_token|token_hash|image_url|read_token/);
+    f.advance(86400001);
+    expect((await f.service.recent(f.owner)).sessions).toEqual([]);
+  });
+  it('returns bounded JPEG previews without changing the original or storing another copy', async () => {
+    const f = uploadFixture();
+    const opened = await f.service.create(f.owner);
+    const session = await f.service.authorize(opened.session_id,{userId:f.owner});
+    const bytes = await sharp({create:{width:1600,height:1200,channels:3,background:'#88aa44'}}).png().toBuffer();
+    const image = await f.service.upload(session,randomUUID(),'large.png',bytes);
+    const before = f.writes();
+    const response = await f.service.previews(session);
+    const preview = Buffer.from(response.previews[0].data,'base64');
+    const metadata = await sharp(preview).metadata();
+    expect(metadata).toMatchObject({format:'jpeg',width:512,height:384});
+    expect(preview.length).toBeLessThanOrEqual(256*1024);
+    expect(f.writes()).toBe(before);
+    expect((await f.service.view(session)).images[0].image_url).toBe(image.image_url);
+    f.advance(86400001);
+    await expect(f.service.previews(session)).rejects.toMatchObject({status:410});
   });
 });

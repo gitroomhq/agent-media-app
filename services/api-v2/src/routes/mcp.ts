@@ -334,17 +334,18 @@ export function buildMcpServer(apiKey: string): Server {
     if (temporaryUploadsEnabled() && (name === 'open_upload_panel' || name === 'get_uploads' || legacyPanel)) {
       const readPanel = name === 'get_uploads' || legacyPanelKey.startsWith('panel:');
       const id = legacyPanel ? legacyPanelKey.slice('panel:'.length) : String(args?.session_id ?? '');
+      const readRecent = readPanel && ((legacyPanel && id === 'recent') || (name === 'get_uploads' && !id));
       if (legacyPanel && Object.keys(args ?? {}).some(key => key !== 'upload_key')) {
         return { isError: true, content: [{ type: 'text', text: 'Pass only the panel upload_key to retrieve images; send file uploads separately.' }] };
       }
-      if (readPanel && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      if (readPanel && !readRecent && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
         return {
           isError: true,
           content: [{ type: 'text', text: 'Pass the session_id returned by open_upload_panel.' }],
         };
       }
       try {
-        const suffix = readPanel ? `/${encodeURIComponent(id)}` : '';
+        const suffix = readPanel && !readRecent ? `/${encodeURIComponent(id)}` : '';
         const response = await apiFetch(`${PUBLIC_API_BASE}/v1/upload-sessions${suffix}`, {
           method: readPanel ? 'GET' : 'POST',
           headers: { Authorization: `Bearer ${apiKey}` },
@@ -357,9 +358,37 @@ export function buildMcpServer(apiKey: string): Server {
             content: [{ type: 'text', text: formatApiError(response.status, data) }],
           };
         }
+        if (readRecent) return {
+          structuredContent: data,
+          content: [{ type: 'text', text: JSON.stringify(data) + '\nRetrieve the matching session with get_uploads({session_id}) or upload_image({upload_key:"panel:<session_id>"}). Do not create a new panel or ask for another upload before checking existing files. If multiple sessions could match, ask which one; do not silently mix references.' }],
+        };
         const { upload_token, ...view } = data;
+        const imageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
+        const previewIds: string[] = [];
+        if (readPanel && view.images?.length) {
+          try {
+            const previewResponse = await apiFetch(`${PUBLIC_API_BASE}/v1/upload-sessions/${encodeURIComponent(id)}/previews`, {
+              method: 'GET', headers: { Authorization: `Bearer ${apiKey}` }, timeoutMs: 20_000,
+            });
+            if (previewResponse.ok) {
+              const payload = await previewResponse.json();
+              for (const preview of (payload.previews ?? []).slice(0, 10)) {
+                if (!view.images.some((image: { asset_id: string }) => image.asset_id === preview.asset_id)
+                  || preview.mimeType !== 'image/jpeg' || typeof preview.data !== 'string' || preview.data.length > 350_000) continue;
+                previewIds.push(preview.asset_id);
+                imageContent.push({ type: 'text', text: `Uploaded image preview — asset_id: ${preview.asset_id}; filename: ${JSON.stringify(preview.filename)}. Inspect this image; use its original image_url from the image list for generation.` });
+                imageContent.push({ type: 'image', data: preview.data, mimeType: preview.mimeType });
+              }
+            }
+          } catch { /* Keep recoverable URLs when preview storage is unavailable. */ }
+        }
+        const visualInspection = {
+          preview_asset_ids: previewIds,
+          unavailable_asset_ids: (view.images ?? []).filter((image: { asset_id: string }) => !previewIds.includes(image.asset_id)).map((image: { asset_id: string }) => image.asset_id),
+          guidance: 'Inspect the native image content in this tool response before describing the subject or writing image-specific prompts. Do not guess the product or business from an email domain, account metadata, or filename. Original URLs remain the generation inputs. If a preview is unavailable or your client cannot display it, say so; do not claim to have seen it or ask for re-upload merely because web fetching is blocked.',
+        };
         const generationHandoff = uploadedImageHandoff(view.images ?? []);
-        const resultView = { ...view, generation_handoff: generationHandoff };
+        const resultView = { ...view, generation_handoff: generationHandoff, visual_inspection: visualInspection };
         return {
           structuredContent: legacyPanel ? { ...resultView, upload_key: `panel:${view.session_id}` } : resultView,
           ...(upload_token ? { _meta: { upload_token } } : {}),
@@ -368,7 +397,7 @@ export function buildMcpServer(apiKey: string): Server {
             text: !readPanel
               ? `Upload panel ready. Open the panel or use this browser link: ${view.upload_url}\nSession: ${view.session_id}\nExpires: ${view.expires_at}\nAfter the user finishes uploading, ${legacyPanel ? `call upload_image with {"upload_key":"panel:${view.session_id}"}` : 'call get_uploads with this session_id'}. Do not build an upload page, ask for a local folder, or ask for base64.`
               : `${JSON.stringify(resultView)}\n\nNEXT STEP: ${generationHandoff.next_step}`,
-          }],
+          }, ...imageContent],
         };
       } catch {
         return {

@@ -35,6 +35,12 @@ export function createUploadStore(db: SupabaseClient): UploadStore {
       check(error);
       return data as UploadSession;
     },
+    async sessions(userId, now) {
+      const { data, error } = await db.from('temporary_upload_sessions').select('*')
+        .eq('user_id', userId).gt('expires_at', now).order('expires_at', { ascending: false }).limit(10);
+      check(error);
+      return (data ?? []) as UploadSession[];
+    },
     async session(id) {
       const { data, error } = await db
         .from('temporary_upload_sessions')

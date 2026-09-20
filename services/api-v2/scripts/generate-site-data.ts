@@ -204,6 +204,8 @@ export function buildSiteData(pluginVersion: string) {
         { method: 'GET', path: '/v1/me/readiness', body: '', returns: '{ authenticated, credits, generation, uploads, billing_url }; 503 means balance unknown' },
         { method: 'GET', path: '/v1/models', body: '', returns: 'the catalog with modes, prices per quality and recent stats; public' },
         { method: 'POST', path: '/v1/runs/{job_id}/rate', body: '{ score: 1..5, note? }', returns: '200 { job_id, model, score }' },
+        { method: 'GET', path: '/v1/upload-sessions', body: '', returns: '{ sessions }; owned unexpired session IDs and filenames, no image URLs or tokens' },
+        { method: 'GET', path: '/v1/upload-sessions/{session_id}/previews', body: '', returns: '{ previews, unavailable }; owner-only bounded JPEG inspection previews, not generation inputs' },
         { method: 'POST', path: '/v1/upload-sessions', body: '{}; temporary uploads must be enabled', returns: '201 { session_id, upload_url, upload_token, expires_at, max_bytes, max_files, images }' },
         { method: 'GET', path: '/v1/upload-sessions/{session_id}', body: '', returns: '{ session_id, expires_at, max_bytes, max_files, images }; owner authentication required' },
         { method: 'POST', path: '/v1/uploads/presign', body: '{ bytes, content_type?, filename? }', returns: '{ put_url, upload_key, content_type, bytes, expires_in, ... }; PUT original bytes, then confirm' },

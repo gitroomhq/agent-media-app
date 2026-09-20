@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.3.1';
+  if (SURFACE === 'loose') return '2.3.2';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -539,6 +539,10 @@ function cursorMarketplaceJson(): string {
 function changelog(): string {
   return [
     '# Changelog',
+    '',
+    '## 2.3.2',
+    '',
+    '- Retrieve uploads as native image previews with original generation URLs. Recover forgotten upload sessions with get_uploads({}) or the cached upload_image panel:recent key. Inspect the actual image; never guess its subject from account metadata.',
     '',
     '## 2.3.1',
     '',

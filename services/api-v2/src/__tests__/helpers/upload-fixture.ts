@@ -17,6 +17,7 @@ export function uploadFixture(apiBase = 'http://127.0.0.1:3001') {
   let writes = 0;
   let removeFails = false;
   const store: UploadStore = {
+    async sessions(userId, time) { return [...sessions.values()].filter(s => s.user_id === userId && s.expires_at > time); },
     async createSession(id, user_id, token_hash) {
       const s = { id, user_id, token_hash, expires_at: new Date(now + 86400000).toISOString() };
       sessions.set(id, s);

@@ -68,6 +68,19 @@ export function createUploadRouter(service: UploadService, auth: RequestHandler)
       res.status(201).json(await service.create(req.userId));
     }),
   );
+  router.get('/v1/upload-sessions', auth, run(async (req, res) => {
+    if (!req.userId) throw new UploadError(401, 'UNAUTHORIZED', 'Sign in to find your uploads.');
+    res.json(await service.recent(req.userId));
+  }));
+  router.get('/v1/upload-sessions/:sessionId/previews', auth, capacity, run(async (req, res) => {
+    if (!req.userId) throw new UploadError(401, 'UNAUTHORIZED', 'Sign in to view your images.');
+    if (!uuid.test(String(req.params.sessionId))) throw new UploadError(400, 'INVALID_INPUT', 'Invalid upload session.');
+    res.locals.processingUpload = true;
+    try {
+      const session = await service.authorize(String(req.params.sessionId), { userId: req.userId });
+      res.json(await service.previews(session));
+    } finally { res.locals.releaseUpload(); }
+  }));
   router.get(
     '/v1/upload-sessions/:sessionId',
     auth,

@@ -19,11 +19,11 @@ export const getUploadsTool = {
   name: 'get_uploads',
   title: 'Get uploaded images',
   description:
-    'Get ready image URLs and expiry times from an upload panel on this account. Call after the user finishes uploading, not in a tight polling loop. Images expire after 24 hours; request a fresh upload if expired. Reuse these URLs for generation without downloading, re-encoding, or making a permanent copy.',
+    'Retrieve uploaded images as native image previews plus original generation URLs and expiry times. Inspect the previews before describing the image or writing a prompt. Omit session_id to find recent unexpired sessions on this account if the session ID was lost; choose the session matching the user request, never silently mix unrelated uploads. Call after the user finishes uploading, not in a tight polling loop. Sessions and images expire 24 hours after the session opens; request a fresh upload if expired. Reuse these URLs for generation without downloading, re-encoding, or making a permanent copy.',
   inputSchema: {
     type: 'object' as const,
     properties: { session_id: { type: 'string', format: 'uuid' } },
-    required: ['session_id'],
+
     additionalProperties: false,
   },
   annotations: {

@@ -1,4 +1,5 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
+import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -195,7 +196,7 @@ describe('uploaded references reach generation', () => {
       expect(JSON.stringify(result.content)).toContain('NEXT STEP:');
       // Following the returned example must carry the exact references to the API.
       await session.client.callTool({ name: 'generate_image', arguments: { prompt: 'Place the product beside the person', ...handoff.input_examples[0].arguments, request_id: 'fixture-reference-request' } });
-      const [, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+      const [, init] = fetchMock.mock.calls.find(call => String(call[0]).includes('/v2/generate/image')) as unknown as [string, RequestInit];
       expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Place the product beside the person', refs: urls });
     } finally { await session.close(); }
   });
@@ -207,6 +208,51 @@ describe('uploaded references reach generation', () => {
       expect((result.structuredContent as Record<string, unknown> | undefined)?.generation_handoff).toMatchObject({ ready: false });
       expect((result.structuredContent as Record<string, unknown> | undefined)?.generation_handoff).not.toHaveProperty('input_examples');
       expect(JSON.stringify(result.content)).toContain('Do not start the reference-dependent generation');
+    } finally { await session.close(); }
+  });
+});
+
+describe('image inspection and forgotten-session recovery', () => {
+  const id = '11111111-1111-1111-1111-111111111111';
+  const asset = '22222222-2222-2222-2222-222222222222';
+  it.each(['get_uploads', 'upload_image'])('delivers native image content through %s without fetching an arbitrary image host', async name => {
+    const jpeg = await sharp({ create: {width: 20, height: 20, channels: 3, background: '#dd2233'} }).jpeg().toBuffer();
+    const session = await connect(true);
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith('/previews')
+      ? { previews: [{asset_id: asset, filename: 'product.jpg', mimeType: 'image/jpeg', data: jpeg.toString('base64')}] }
+      : {session_id: id, images: [{asset_id: asset, filename: 'product.jpg', image_url: 'https://blocked-image-host.test/original.png'}]})));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const result = await session.client.callTool({name, arguments: name === 'get_uploads' ? {session_id: id} : {upload_key: `panel:${id}`}});
+      expect(result.content).toContainEqual({type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg'});
+      expect(JSON.stringify(result.structuredContent)).not.toContain(jpeg.toString('base64'));
+      expect(JSON.stringify(result.structuredContent)).toContain('https://blocked-image-host.test/original.png');
+      expect(fetchMock.mock.calls.every(c => !String(c[0]).includes('blocked-image-host'))).toBe(true);
+      expect(JSON.stringify(result.content)).toContain('email domain');
+    } finally { await session.close(); }
+  });
+  it.each(['get_uploads', 'upload_image'])('recovers recent session metadata through %s without creating a panel', async name => {
+    const session = await connect(true);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({sessions:[{session_id:id,images:[{asset_id:asset,filename:'product.jpg'}]}]})));
+    vi.stubGlobal('fetch',fetchMock);
+    try {
+      const result = await session.client.callTool({name, arguments: name === 'get_uploads' ? {} : {upload_key:'panel:recent'}});
+      expect(result.isError).not.toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/v1\/upload-sessions$/),expect.objectContaining({method:'GET'}));
+      expect(JSON.stringify(result.content)).toContain('multiple sessions');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { await session.close(); }
+  });
+  it('preserves original URLs and reports unavailable previews without pretending inspection succeeded', async () => {
+    const session = await connect(true);
+    vi.stubGlobal('fetch',vi.fn(async (url: string) => url.endsWith('/previews')
+      ? new Response('{}',{status:503})
+      : new Response(JSON.stringify({session_id:id,images:[{asset_id:asset,image_url:'https://example.test/reference.png'}]}))));
+    try {
+      const result = await session.client.callTool({name:'get_uploads',arguments:{session_id:id}});
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({visual_inspection:{preview_asset_ids:[],unavailable_asset_ids:[asset]},generation_handoff:{ready:true}});
+      expect((result.content as Array<{type:string}>).filter(c=>c.type==='image')).toEqual([]);
     } finally { await session.close(); }
   });
 });

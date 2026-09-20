@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.2
+
+- Retrieve uploads as native image previews with original generation URLs. Recover forgotten upload sessions with get_uploads({}) or the cached upload_image panel:recent key. Inspect the actual image; never guess its subject from account metadata.
+
 ## 2.3.1
 
 - Link the public documentation hub for setup, uploads, account checks, troubleshooting, REST and self-hosting. Generation still requires paid credits.

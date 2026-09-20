@@ -160,6 +160,15 @@
           ]
         },
         {
+          "id": "inspect",
+          "title": "Let the agent see and remember the uploads",
+          "paragraphs": [
+            "Retrieving an upload session returns small image previews directly in the tool response, alongside the original generation URLs. The agent should inspect these previews before describing the product or writing an image-specific prompt. It does not need to open the image host with a web-fetch tool. Previews are for inspection; generation must use the original image_url.",
+            "If the agent loses the session ID, ask it to call get_uploads with an empty object. Older connectors can call upload_image with upload_key set to panel:recent. This lists unexpired sessions on your account; retrieve the session that matches your request. If multiple sessions could match, the agent should ask which one instead of silently mixing references.",
+            "If a preview cannot be retrieved or the client cannot display images, the agent should explain the limitation without guessing from your email address, filename or account details. Your original upload URLs remain available until expiry."
+          ]
+        },
+        {
           "id": "expiry",
           "title": "Private storage and 24-hour expiry",
           "paragraphs": [
