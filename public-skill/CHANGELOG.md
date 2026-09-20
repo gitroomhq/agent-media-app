@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.0
+
+- Add free, read-only authenticated account/credit readiness. Cached catalogs receive the same check through list_models. Quote before the first generation; an unavailable balance is not zero credits.
+
 ## 2.2.1
 
 - Upload results now include exact generation input examples and instructions to continue an existing request with the uploaded references. Upload-only requests remain non-billable.

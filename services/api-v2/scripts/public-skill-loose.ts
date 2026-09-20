@@ -6,7 +6,7 @@
  * connector in services/api-v2/src/routes/mcp.ts).
  *
  * Everything an agent needs to make media with agent-media when the
- * agent is the director: the nine tools, the three video modes (text,
+ * agent is the director: the ten tools, the three video modes (text,
  * image-to-video, reference), how to write a prompt that comes out real,
  * which model for what, the recipes the fixed skills used to hard-code,
  * and the price of each move. Facts come from @agentmedia/schema/v2 (the
@@ -17,6 +17,7 @@
  * colons or "to".
  */
 
+import { ACCOUNT_READINESS_GUIDANCE } from '../src/account/readiness.js';
 import { IMAGE_UPLOAD_GUIDANCE } from '../src/uploads/guidance.js';
 import { openUploadPanelTool, getUploadsTool } from '../src/uploads/tools.js';
 import { readFileSync } from 'node:fs';
@@ -46,6 +47,7 @@ export const LOOSE_TOOLS = [
   'generate_audio',
   'quote',
   'list_models',
+  'get_account',
   'list_characters',
   'get_run_status',
   'upload_image',
@@ -161,7 +163,7 @@ export function usageSection(headingLevel = '##'): string[] {
 
 export function loosePluginDescription(): string {
   const live = liveModels().map((m) => m.id).join(', ');
-  return `Agent-Media, AI video, image and voice for agents, the loose way: you write the prompt, you pick the model (${live}), you pass frames or references. generate_video has three modes: text, image-to-video (first_frame, optional last_frame) and reference (refs, video_refs, audio_refs addressed as @image1 @video1 @audio1). Nine tools: generate_video, generate_image, generate_audio, quote, list_models, list_characters, get_run_status, upload_image, rate_run. list_models tells you what each model is good for, its modes, limits and price per quality. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.`;
+  return `Agent-Media, AI video, image and voice for agents, the loose way: you write the prompt, you pick the model (${live}), you pass frames or references. generate_video has three modes: text, image-to-video (first_frame, optional last_frame) and reference (refs, video_refs, audio_refs addressed as @image1 @video1 @audio1). Ten tools: generate_video, generate_image, generate_audio, quote, get_account, list_models, list_characters, get_run_status, upload_image, rate_run. list_models tells you what each model is good for, its modes, limits and price per quality. Optional image upload panel: discover open_upload_panel and get_uploads for user photos, with a browser fallback and 24-hour expiry. One MCP URL, browser sign-in.`;
 }
 
 export function looseReadme(): string {
@@ -203,7 +205,7 @@ export function looseReadme(): string {
     '',
     'Claude Code: after adding the server, run `/mcp`, select agent-media, and sign in. The command above uses user scope, so it works across projects. Codex: run `codex mcp login agent-media`. If Agent Media is already connected through a plugin or connector, use that connection instead of installing a duplicate.',
     '',
-    'Check setup without spending credits: call `list_models`, then open the existing image upload panel (`open_upload_panel` when listed, otherwise `upload_image` with `{}`). Opening the panel confirms authenticated upload access, not credit balance. Ask for a quote before the first generation.',
+    'Check setup without spending credits: call `get_account` (or `list_models` for a cached catalog), then open the existing image upload panel (`open_upload_panel` when listed, otherwise `upload_image` with `{}`). Use the account check for credit balance; opening the panel checks upload access separately. Ask for a quote before the first generation.',
     '',
     '## 2. Auth',
     '',
@@ -218,6 +220,7 @@ export function looseReadme(): string {
     `| \`generate_video\` | A clip from your prompt on the model you pick, in one of three modes: text (prompt only), image-to-video (\`first_frame\`, optional \`last_frame\`) or reference (\`refs\`, \`video_refs\`, \`audio_refs\`, addressed as @image1 @video1 @audio1). Native speech when the words are in the prompt. | seconds x the per-second rate at the chosen quality (${liveVideo.map((m) => `${m.id}: ${priceLadder(m)}`).join('; ')}); reference clip seconds are billed like output seconds |`,
     `| \`generate_image\` | One image from your prompt; with refs it edits/composes from them. The way to build a portrait, a product frame or a first frame for a video. | ${V2_MODELS['gpt-image-2'].credits!.perUnit} per image |`,
     '| `generate_audio` | Text to speech in a named voice. For voiceover over b-roll, or an audio reference for a clip; a talking head does not need it. | 1 per 100 characters |',
+    '| `get_account` | Authenticated connection and credit balance, with the next step. No billing changes. | 0 |',
     '| `quote` | The price of any of the above without running it. | 0 |',
     '| `list_models` | The catalog: modes, limits, prices per quality, what each model is good and bad at, how to select it, recent results. | 0 |',
     '| `list_characters` | Saved characters (sheet + portrait URLs) to pass as `refs`. | 0 |',
@@ -228,6 +231,7 @@ export function looseReadme(): string {
     '',
     '## User-provided images',
     '',
+    ACCOUNT_READINESS_GUIDANCE,
     IMAGE_UPLOAD_GUIDANCE,
     '',
     '## 4. Ten-second tour',
@@ -301,6 +305,7 @@ export function looseSkillBody(repoRoot: string): string {
     '',
     '## User-provided images: offer the upload panel',
     '',
+    ACCOUNT_READINESS_GUIDANCE,
     IMAGE_UPLOAD_GUIDANCE,
     '',
     '## The loop',
@@ -309,7 +314,7 @@ export function looseSkillBody(repoRoot: string): string {
     '2. **Pick the mode.** A still to animate: image-to-video (`first_frame`, optional `last_frame`). An identity, a look, a motion or a sound to keep: reference (`refs`, `video_refs`, `audio_refs`). Neither: text. Frames and refs cannot be mixed on Seedance.',
     '3. **Pick the model.** Omit `model` and you get the default (' + `\`${V2_DEFAULT_MODEL.video}\`` + ' for video, `' + V2_DEFAULT_MODEL.image + '` for images, `' + V2_DEFAULT_MODEL.audio + '` for speech); pass `"auto"` to let recent results decide. Call `list_models` when the job is unusual, it says what each model is good at, bad at, its modes and limits, what it costs per quality, and how it has actually performed lately. Only live models are accepted; naming a planned one returns the live list.',
     '4. **Get identity right.** Same face across clips: pass the same reference URL in `refs` every time and call it @image1 in the prompt. Make the reference with `generate_image` (a clean portrait), take it from `list_characters` (a saved character sheet), or `upload_image` the user\'s photo. References are the only way a series stays consistent; there is no other handle.',
-    '5. **Quote if the user cares about cost** (`quote` costs nothing), then call the tool.',
+    '5. **Quote before the first generation** (`quote` costs nothing), compare the cost with the account balance, then submit within the user-approved budget.',
     '6. **Poll `get_run_status`** with the job id (`wait: true`) until it is `completed`, and hand the user the URL. Never report success before you hold the URL.',
     '',
     '## The tools',
@@ -636,6 +641,7 @@ export function refTools(schemas: Record<string, unknown>): string {
     '',
     'Optional tools open_upload_panel and get_uploads appear only when temporary uploads are enabled. Discover them before use.',
     '',
+    ACCOUNT_READINESS_GUIDANCE,
     IMAGE_UPLOAD_GUIDANCE,
     '',
     'The JSON schema is the envelope; the per-model, per-mode limits (seconds, aspects, qualities, how many refs of each kind) are checked at submit against the catalog cell, see [models.md](models.md).',

@@ -1,5 +1,5 @@
 {
-  "pack_version": "2.2.1",
+  "pack_version": "2.3.0",
   "source": "https://github.com/gitroomhq/agent-media-app",
   "connector": {
     "url": "https://api.agent-media.ai/mcp",
@@ -361,7 +361,7 @@
       "title": "List Models",
       "read_only": true,
       "spends_credits": false,
-      "description": "List the generation models agent-media can use: for each, its MODES (video: text, image-to-video via first_frame, reference via refs / video_refs / audio_refs) with the exact inputs, limits, aspects, qualities and credits per second of every mode, a \"pick when\" line, prompting tips, expected latency, how to select it, plus `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model or a mode for generate_video / generate_image / generate_audio: the default seedance-2.0 is right for most jobs. Pass the id as `model`, or `model:\"auto\"` and the printed policy picks from the stats. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.",
+      "description": "List the generation models agent-media can use: for each, its MODES (video: text, image-to-video via first_frame, reference via refs / video_refs / audio_refs) with the exact inputs, limits, aspects, qualities and credits per second of every mode, a \"pick when\" line, prompting tips, expected latency, how to select it, plus `recent`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model or a mode for generate_video / generate_image / generate_audio: the default seedance-2.0 is right for most jobs. Pass the id as `model`, or `model:\"auto\"` and the printed policy picks from the stats. Costs NO credits. Includes the same authenticated balance check as get_account; compare it with quote before generation. Set include_candidates:true to also see planned models that cannot be selected yet.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -370,6 +370,18 @@
             "description": "Also return planned models (no price, not selectable). Default false."
           }
         },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_account",
+      "title": "Check Account Readiness",
+      "read_only": true,
+      "spends_credits": false,
+      "description": "Check this authenticated connection, available generation credits, and whether generation/upload services are configured. Free and read-only: does not create an upload session, generate media, refill credits or change billing. Call before the first generation; then quote the intended inputs and compare the cost with the balance. A positive balance is not a guarantee of sufficient funds for a specific request or provider availability.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       }
     },

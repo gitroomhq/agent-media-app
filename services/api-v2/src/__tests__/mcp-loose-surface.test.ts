@@ -16,7 +16,7 @@ vi.mock('../server.js', () => ({ supabase: {} }));
 vi.mock('../routes/v1/primitives.js', () => ({ isPrimitivesRouteEnabled: () => true }));
 
 const LOOSE = ['generate_video', 'generate_image', 'generate_audio', 'quote', 'rate_run'];
-const SHARED = ['list_characters', 'get_run_status', 'upload_image', 'list_models'];
+const SHARED = ['get_account', 'list_characters', 'get_run_status', 'upload_image', 'list_models'];
 
 async function connect(surface: string | undefined) {
   if (surface === undefined) delete process.env.AGENT_SURFACE;

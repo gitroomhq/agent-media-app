@@ -8,6 +8,7 @@
  * are one source.
  */
 
+import { getAccountTool } from '../account/readiness.js';
 import { IMAGE_UPLOAD_GUIDANCE } from '../uploads/guidance.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
@@ -144,7 +145,7 @@ export const uploadImageTool = {
 export const listModelsTool = {
   name: 'list_models',
   description:
-    `List the generation models agent-media can use: for each, its MODES (video: text, image-to-video via first_frame, reference via refs / video_refs / audio_refs) with the exact inputs, limits, aspects, qualities and credits per second of every mode, a "pick when" line, prompting tips, expected latency, how to select it, plus \`recent\`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model or a mode for generate_video / generate_image / generate_audio: the default ${V2_DEFAULT_MODEL.video} is right for most jobs. Pass the id as \`model\`, or \`model:"auto"\` and the printed policy picks from the stats. Costs NO credits. Set include_candidates:true to also see planned models that cannot be selected yet.`,
+    `List the generation models agent-media can use: for each, its MODES (video: text, image-to-video via first_frame, reference via refs / video_refs / audio_refs) with the exact inputs, limits, aspects, qualities and credits per second of every mode, a "pick when" line, prompting tips, expected latency, how to select it, plus \`recent\`: the last 30 days of real runs per model (fail rate, auto-judge score, user ratings, median render time). Read this BEFORE choosing a model or a mode for generate_video / generate_image / generate_audio: the default ${V2_DEFAULT_MODEL.video} is right for most jobs. Pass the id as \`model\`, or \`model:"auto"\` and the printed policy picks from the stats. Costs NO credits. Includes the same authenticated balance check as get_account; compare it with quote before generation. Set include_candidates:true to also see planned models that cannot be selected yet.`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -259,5 +260,6 @@ export const LOOSE_SURFACE_TOOLS = [
   getRunStatusTool,
   uploadImageTool,
   listModelsTool,
+  getAccountTool,
   rateRunTool,
 ];
