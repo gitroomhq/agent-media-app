@@ -24,6 +24,7 @@
  * presentation matching the dark dashboard.
  */
 
+import { ContinueCreating } from '@/components/continue-creating';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Crown, Loader2, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -299,6 +300,7 @@ export default function BillingPage() {
         >
           Manage your plan and credits
         </h1>
+      <ContinueCreating />
       </header>
 
       {error ? (

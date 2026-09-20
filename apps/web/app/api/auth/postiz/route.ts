@@ -7,6 +7,7 @@
  * user to Postiz's OAuth authorization page.
  */
 
+import { safeReturnTo } from '@/lib/navigation/return-to';
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
 
   // Preserve redirect destination if provided
   const { searchParams } = new URL(request.url);
-  const redirect = searchParams.get('redirect') || '/dashboard';
+  const redirect = safeReturnTo(searchParams.get('redirect'));
 
   const { origin } = new URL(request.url);
   const redirectUri = `${origin}/api/auth/postiz/callback`;

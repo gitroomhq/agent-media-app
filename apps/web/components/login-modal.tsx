@@ -7,6 +7,11 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Mail, X, ExternalLink } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { analytics } from '@/lib/analytics';
+import { safeReturnTo } from '@/lib/navigation/return-to';
+
+function currentDestination() {
+  return safeReturnTo(window.location.pathname + window.location.search);
+}
 
 interface LoginModalProps {
   open: boolean;
@@ -127,7 +132,7 @@ export function LoginModal({ open, onClose }: LoginModalProps) {
 
       analytics.trackEvent('login_completed', { method: 'otp' });
       onClose();
-      router.push('/gallery');
+      router.push(currentDestination());
       router.refresh();
     } catch {
       setError('An unexpected error occurred. Please try again.');
@@ -182,7 +187,7 @@ export function LoginModal({ open, onClose }: LoginModalProps) {
       const { error: authError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent('/dashboard')}`,
+          redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(currentDestination())}`,
         },
       });
 
@@ -200,7 +205,7 @@ export function LoginModal({ open, onClose }: LoginModalProps) {
     setError(null);
     setPostizLoading(true);
     analytics.trackEvent('login_completed', { method: 'postiz' });
-    window.location.href = `/api/auth/postiz?redirect=${encodeURIComponent('/dashboard')}`;
+    window.location.href = `/api/auth/postiz?redirect=${encodeURIComponent(currentDestination())}`;
   }
 
   if (!open) return null;

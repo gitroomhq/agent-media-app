@@ -8,6 +8,7 @@
  * signs in the corresponding Supabase user.
  */
 
+import { safeReturnTo } from '@/lib/navigation/return-to';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -183,12 +184,7 @@ export async function GET(request: Request) {
   }
 
   // ── Redirect to app ───────────────────────────────────────────────────
-  const ALLOWED_PREFIXES = ['/gallery', '/billing', '/settings', '/subscribe'];
-  const safeRedirect = ALLOWED_PREFIXES.some(
-    (p) => redirect === p || redirect.startsWith(p + '/') || redirect.startsWith(p + '?'),
-  )
-    ? redirect
-    : '/gallery';
+  const safeRedirect = safeReturnTo(redirect);
 
   const response = NextResponse.redirect(new URL(safeRedirect, origin));
 

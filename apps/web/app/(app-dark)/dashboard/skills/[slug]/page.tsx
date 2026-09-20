@@ -11,6 +11,7 @@
  */
 
 import Link from 'next/link';
+import { useSkillDraft } from '@/lib/creation/use-skill-draft';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { use } from 'react';
 import { Loader2, Play, ArrowLeft, ExternalLink, Copy, Check } from 'lucide-react';
@@ -156,7 +157,7 @@ export default function SkillDetailPage({ params }: { params: Promise<{ slug: st
       <p className="mt-3 max-w-3xl text-sm" style={{ color: 'rgba(255,255,255,0.6)' }}>{skill.description}</p>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
-        <RunPanel skill={skill} form={form} activeRun={activeRun} onLaunched={setActiveRun} />
+        <RunPanel key={skill.slug} skill={skill} form={form} activeRun={activeRun} onLaunched={setActiveRun} />
         <InstallPanel skill={skill} />
       </div>
 
@@ -217,13 +218,16 @@ function RunPanel({
     }
     return o;
   }, [form]);
-  const [values, setValues] = useState<Record<string, unknown>>(initial);
+  const draft = useSkillDraft(skill.slug, initial, form?.fields.map(field => field.name) ?? []);
+  const { values } = draft;
+  const [recovery, setRecovery] = useState<'login' | 'billing' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form) return;
+    if (!form || !draft.ready || submitting) return;
+    setRecovery(null);
     setSubmitErr(null);
     setSubmitting(true);
     const body: Record<string, unknown> = {};
@@ -240,12 +244,15 @@ function RunPanel({
       });
       const data = (await resp.json()) as Record<string, unknown>;
       if (!resp.ok) {
+        if (resp.status === 401) setRecovery('login');
+        if (resp.status === 402) setRecovery('billing');
         const msg = (data as any)?.error?.message ?? (data as any)?.error ?? `HTTP ${resp.status}`;
         setSubmitErr(typeof msg === 'string' ? msg : JSON.stringify(data));
         return;
       }
       const id = (data.skill_run_id ?? data.run_id) as string | undefined;
       if (!id) { setSubmitErr('no run id returned'); return; }
+      draft.clear();
       onLaunched({ composed: form.composed, id, status: 'submitted' });
     } catch (err) {
       setSubmitErr((err as Error).message);
@@ -254,21 +261,39 @@ function RunPanel({
     }
   };
 
+  async function resumeAfterRecovery() {
+    const destination = window.location.pathname + window.location.search;
+    if (recovery === 'login') {
+      window.location.href = '/login?redirect=' + encodeURIComponent(destination);
+      return;
+    }
+    try {
+      const response = await fetch('/api/onboarding/resume', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination }),
+      });
+      if (!response.ok) throw new Error('Could not save your return page. Please retry.');
+      window.location.href = '/billing';
+    } catch (error) { setSubmitErr((error as Error).message); }
+  }
+
   return (
     <div className="flex flex-col gap-4 rounded-2xl p-5" style={{ border: '1px solid rgba(255,255,255,0.06)', backgroundColor: '#14151F' }}>
       <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.55)' }}>Run</h2>
       {form ? (
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           {form.fields.map((f) => (
-            <FieldRow key={f.name} field={f} value={values[f.name]} onChange={(v) => setValues((p) => ({ ...p, [f.name]: v }))} />
+            <FieldRow key={f.name} field={f} value={values[f.name]} onChange={(v) => draft.update(f.name, v)} />
           ))}
           {submitErr && (
             <div className="rounded-lg px-3 py-2 text-xs" style={{ border: '1px solid rgba(255,79,79,0.3)', backgroundColor: 'rgba(255,79,79,0.08)', color: '#FCA5A5' }}>
               {submitErr}
             </div>
           )}
+          {draft.saved && <p className="text-xs text-purple-300">{draft.restored ? 'Your draft is restored. Review it before running.' : 'Draft saved in this tab for 24 hours.'}</p>}
+          {recovery && <button type="button" onClick={resumeAfterRecovery} className="text-left text-sm text-purple-300 underline">{recovery === 'login' ? 'Sign in to continue' : 'Open billing, then continue'}</button>}
           <div className="flex items-center justify-end">
-            <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors" style={{ backgroundColor: submitting ? 'rgba(167,139,250,0.4)' : '#A78BFA', color: '#0F1015' }}>
+            <button type="submit" disabled={submitting || !draft.ready} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors" style={{ backgroundColor: submitting ? 'rgba(167,139,250,0.4)' : '#A78BFA', color: '#0F1015' }}>
               {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
               Run skill
             </button>

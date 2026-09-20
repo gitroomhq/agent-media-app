@@ -10,6 +10,7 @@
  * edge functions (credits-check) and direct table queries.
  */
 
+import { ContinueCreating } from '@/components/continue-creating';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -572,6 +573,7 @@ export default function BillingPage() {
     return (
       <div>
         <h1 className="text-2xl font-semibold text-text">Billing</h1>
+      <ContinueCreating />
         <p className="mt-2 text-sm text-text-muted">
           Manage your plan and credits
         </p>
@@ -591,6 +593,7 @@ export default function BillingPage() {
     return (
       <div>
         <h1 className="text-2xl font-semibold text-text">Billing</h1>
+      <ContinueCreating />
         <p className="mt-2 text-sm text-text-muted">
           Manage your plan and credits
         </p>
@@ -627,6 +630,7 @@ export default function BillingPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-text">Billing</h1>
+      <ContinueCreating />
       <p className="mt-2 text-sm text-text-muted">
         Manage your plan and credits
       </p>

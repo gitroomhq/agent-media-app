@@ -14,6 +14,7 @@
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
+import { safeReturnTo, creationReturnTo, encodeCreationReturn, readCreationReturn, RETURN_COOKIE, RETURN_TTL_SECONDS } from '@/lib/navigation/return-to';
 import {
   updateSession,
   checkSubscription,
@@ -233,8 +234,24 @@ export async function middleware(request: NextRequest) {
     : hadHint
       ? 'clear'
       : 'none';
-  const finish = (res: NextResponse) =>
-    applySessionHint(applySecurityHeaders(res), hintAction);
+  const finish = (res: NextResponse) => {
+    // Redirects must carry refreshed auth cookies too, or an expired session can loop.
+    if (res !== supabaseResponse) {
+      for (const cookie of supabaseResponse.cookies.getAll()) res.cookies.set(cookie);
+    }
+    return applySessionHint(applySecurityHeaders(res), hintAction);
+  };
+  const returnTo = user ? readCreationReturn(request.cookies.get(RETURN_COOKIE)?.value, user.id) : null;
+  const rememberDestination = (res: NextResponse) => {
+    const target = creationReturnTo(pathname + request.nextUrl.search);
+    if (user && target && !request.headers.has('next-router-prefetch') && request.headers.get('purpose') !== 'prefetch') {
+      res.cookies.set(RETURN_COOKIE, encodeCreationReturn(target, user.id), {
+        httpOnly: true, secure: request.nextUrl.protocol === 'https:', sameSite: 'lax',
+        path: '/', maxAge: RETURN_TTL_SECONDS,
+      });
+    }
+    return res;
+  };
 
   // Check if this is a subscription-required route
   const requiresSubscription = SUBSCRIPTION_PREFIXES.some(
@@ -248,7 +265,7 @@ export async function middleware(request: NextRequest) {
   // Redirect unauthenticated users trying to access protected routes
   if ((requiresSubscription || isAuthNoSub) && !user) {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
+    loginUrl.searchParams.set('redirect', safeReturnTo(pathname + request.nextUrl.search));
     const redirectResponse = NextResponse.redirect(loginUrl);
     return finish(redirectResponse);
   }
@@ -270,7 +287,7 @@ export async function middleware(request: NextRequest) {
   if (AUTH_ROUTES.has(pathname) && user) {
     const rawRedirect = request.nextUrl.searchParams.get('redirect') || '/dashboard';
     // Sanitise redirect: must be a relative path starting with /
-    const redirectTo = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/dashboard';
+    const redirectTo = safeReturnTo(rawRedirect);
     const redirectResponse = NextResponse.redirect(new URL(redirectTo, request.url));
     return finish(redirectResponse);
   }
@@ -286,7 +303,7 @@ export async function middleware(request: NextRequest) {
       const isOnboarded = await checkOnboarded(supabase, user.id);
       if (!isOnboarded) {
         const onboardingUrl = new URL('/onboarding', request.url);
-        const redirectResponse = NextResponse.redirect(onboardingUrl);
+        const redirectResponse = rememberDestination(NextResponse.redirect(onboardingUrl));
         return finish(redirectResponse);
       }
     }
@@ -299,7 +316,7 @@ export async function middleware(request: NextRequest) {
     const hasSubscription = await checkSubscription(supabase, user.id);
     if (!hasSubscription) {
       const planUrl = new URL(SUBSCRIPTION_REDIRECT, request.url);
-      const redirectResponse = NextResponse.redirect(planUrl);
+      const redirectResponse = rememberDestination(NextResponse.redirect(planUrl));
       return finish(redirectResponse);
     }
   }
@@ -316,12 +333,18 @@ export async function middleware(request: NextRequest) {
   ) {
     const hasSubscription = await checkSubscription(supabase, user.id);
     if (hasSubscription) {
-      const dashboardUrl = new URL('/dashboard', request.url);
+      const dashboardUrl = new URL(returnTo ?? '/dashboard', request.url);
       const redirectResponse = NextResponse.redirect(dashboardUrl);
       return finish(redirectResponse);
     }
   }
 
+  // Consume only an actual successful page visit, never a link prefetch.
+  if (returnTo === safeReturnTo(pathname + request.nextUrl.search, '') &&
+      !request.headers.has('next-router-prefetch') &&
+      request.headers.get('purpose') !== 'prefetch') {
+    supabaseResponse.cookies.set(RETURN_COOKIE, '', { path: '/', maxAge: 0 });
+  }
   return finish(supabaseResponse);
 }
 

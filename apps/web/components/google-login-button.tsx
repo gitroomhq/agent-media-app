@@ -2,6 +2,7 @@
 
 'use client';
 
+import { safeReturnTo } from '@/lib/navigation/return-to';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -28,7 +29,7 @@ export function GoogleLoginButton({
       const { error: authError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirect)}`,
+          redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(safeReturnTo(redirect))}`,
         },
       });
       if (authError) {

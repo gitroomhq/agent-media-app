@@ -12,6 +12,7 @@
  */
 
 import Link from 'next/link';
+import { creationReturnTo } from '@/lib/navigation/return-to';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
@@ -54,7 +55,9 @@ export default function OnboardingPage() {
         if (cancelled) return;
         if (body.onboarded_at) {
           // Already done - nudge them into the app.
-          router.replace('/dashboard');
+          const resume = await fetch('/api/onboarding/resume', { cache: 'no-store' });
+          const saved = resume.ok ? await resume.json() : null;
+          if (!cancelled) router.replace(creationReturnTo(saved?.destination) ?? '/dashboard');
           return;
         }
         const step = body.onboarding_step;

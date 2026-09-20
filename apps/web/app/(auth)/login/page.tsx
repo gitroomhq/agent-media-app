@@ -10,6 +10,7 @@
  * OAuth. No password, no signup route — OTP auto-creates accounts.
  */
 
+import { safeReturnTo } from '@/lib/navigation/return-to';
 import { useEffect, useState, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -91,7 +92,7 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/dashboard';
+  const redirectTo = safeReturnTo(searchParams.get('redirect'));
 
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
