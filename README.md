@@ -8,12 +8,21 @@ AI UGC video generation from your terminal, your editor, or your AI agent.
 
 ## What it does
 
-### Agents (MCP / HTTP): one tool — `make_ugc`
+### Agents (MCP / HTTP): video, image and audio
 
-For AI agents (Claude Code, Cursor, Claude.ai/Cowork, …) the surface is a **single tool, `make_ugc` ("Agent-Media UGC Video")**. Give it a script plus an optional person description, image, or saved character, and it returns a finished vertical video — it resolves identity and routes to the right engine internally (no sub-skill picking).
+The hosted connector exposes `generate_video`, `generate_image` and `generate_audio`.
+Agents use `list_models` to choose a model and mode, `get_account` to check their
+connection and available credits, and `quote` before generation. These checks
+cost no credits; generation remains paid. See [account readiness](docs/account-readiness.md)
+and the [public skill](public-skill/skills/agent-media/SKILL.md) for the full workflow.
 
-- **Captions are opt-in.** They are **not** added automatically; the agent asks whether you want captions (and which style) before adding them.
-- **Same person within a session is reused.** After the first video the character is saved; a follow-up request reuses it (faster, on-model) unless you ask for a new one — the agent narrates each step (portrait → sheet → video → captions) as it runs.
+For reference images, open the existing upload panel, drag in one or more images,
+then pass the returned URLs into the requested generation. Images expire after
+24 hours. See [temporary image uploads](docs/temporary-image-uploads.md).
+Poll `get_run_status` with the returned job ID until the result is ready.
+
+Self-hosted deployments can explicitly select the fixed recipe surface; the
+hosted default uses the generation tools above.
 
 ### CLI / SDK: the low-level v2 generators
 
@@ -23,7 +32,7 @@ For AI agents (Claude Code, Cursor, Claude.ai/Cowork, …) the surface is a **si
 | **Character** | Persists a reusable character (`char_xxxxxxxxxx`) so subsequent Selfies stay on-model. |
 | **Subtitle** | Burns styled subs onto any existing video. Whisper transcribe or pass `--transcript`. |
 
-Pricing lives at <https://agent-media.ai/pricing>. The API debits internally — agents and SDK consumers should never need to quote credit numbers to end users.
+Pricing lives at <https://agent-media.ai/pricing>. Use a quote to check the intended generation cost against the available balance and the user’s approved budget. The API debits credits when a generation is accepted.
 
 ## Connect — no API key needed
 
