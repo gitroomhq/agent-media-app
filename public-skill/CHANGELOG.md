@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.3
+
+- Generation capacity now covers loose image, video, and audio jobs as well as composed skills. `TOO_MANY_ACTIVE_RENDERS` means wait for a current generation to finish, then retry the same request identity.
+
 ## 2.3.2
 
 - Retrieve uploads as native image previews with original generation URLs. Recover forgotten upload sessions with get_uploads({}) or the cached upload_image panel:recent key. Inspect the actual image; never guess its subject from account metadata.

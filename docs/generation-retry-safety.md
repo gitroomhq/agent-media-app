@@ -12,6 +12,8 @@ Request identities are scoped to the account and cover the generation kind and o
 
 The database commits the job, receipt, and credit debit in one transaction. A debit failure rolls back all three. Receipts are service-owned and survive administrative deletion of a job as recovery tombstones. Account deletion removes the account's receipts. Existing job retention and account-deletion restrictions still apply.
 
+New loose image, video, and audio submissions also reserve account capacity inside that transaction. The database serializes distinct submissions for one account and counts active loose jobs, composed skills, and standalone primitives before it inserts or debits. If the shared limit is full, HTTP 429 returns `TOO_MANY_ACTIVE_RENDERS` with `active` and `limit`; wait for a running generation to finish, then retry the same request identity. A replay of an already accepted request returns its receipt without needing another slot.
+
 HTTP 202 with `dispatch_status: unknown` means the job and debit are saved, but the worker acknowledgement was lost or uncertain. Poll the returned job ID. Do not create a new request or assume a refund. The existing stalled-job reconciler handles jobs that never progress; this change does not provide exactly-once execution at external providers or replace worker restart recovery.
 
 An explicit worker rejection preserves the job ID and reports `refund_status: refunded` only after the refund RPC confirms success (or an already-completed refund). Otherwise it reports `unconfirmed`. A failed job and a confirmed refund are separate facts.
@@ -20,9 +22,9 @@ The stdio proxy in `@agentmedia/mcp-server` 0.8.1 never automatically replays mu
 
 ## Deployment and verification
 
-Apply `20260919180000_generation_request_receipts.sql` before the API release. The additive migration leaves legacy requests untouched. Deploy the API, then publish/update the stdio package; retain the migration on application rollback. Updated API submission fails closed if its receipt lookup is unavailable.
+Apply `20260919180000_generation_request_receipts.sql` and then `20260920130000_atomic_generation_admission.sql` before the API release. The additive migrations leave legacy requests untouched. Deploy the API, then publish/update the stdio package; retain the migrations on application rollback. Updated API submission fails closed if its receipt lookup is unavailable.
 
-API tests cover receipt replay, input conflicts, distinct intents/accounts, atomic debit rollback, lost commit responses, uncertain dispatch, terminal replay, and refund failure. PGlite executes the real receipt and credit-ledger SQL. CI additionally runs overlapping PostgreSQL 16 transactions using independent connections. Run the latter with a disposable PostgreSQL container via `PGTEST_CONTAINER=<container-id> bash scripts/test-generation-request-postgres.sh`; never use a production database for fixtures.
+API tests cover receipt replay, input conflicts, distinct intents/accounts, atomic debit rollback, atomic last-slot admission, lost commit responses, uncertain dispatch, terminal replay, and refund failure. PGlite executes the real receipt and credit-ledger SQL. CI additionally runs overlapping PostgreSQL 16 transactions using independent connections. Run the latter with a disposable PostgreSQL container via `PGTEST_CONTAINER=<container-id> bash scripts/test-generation-request-postgres.sh`; never use a production database for fixtures.
 
 ## Status lookup outages
 

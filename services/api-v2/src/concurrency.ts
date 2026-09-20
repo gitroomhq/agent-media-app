@@ -16,14 +16,14 @@ import { logger } from './logger.js';
  * Renders are what cost money and occupy workers, so the cap is on renders in
  * flight. Everything else is free to be as chatty as the UI needs.
  */
-const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT_VIDEOS ?? 3);
+export const MAX_CONCURRENT_RENDERS = Number(process.env.MAX_CONCURRENT_VIDEOS ?? 3);
 
 /** Rows older than this are treated as dead, not in flight. */
 const STALE_AFTER_MS = 60 * 60_000;
 
-async function inFlightCount(userId: string): Promise<number> {
+export async function inFlightCount(userId: string): Promise<number> {
   const sinceIso = new Date(Date.now() - STALE_AFTER_MS).toISOString();
-  const [sk, pr] = await Promise.all([
+  const [sk, pr, gj] = await Promise.all([
     supabase
       .from('skill_runs')
       .select('id', { count: 'exact', head: true })
@@ -39,8 +39,16 @@ async function inFlightCount(userId: string): Promise<number> {
       .in('status', ['submitted', 'running'])
       .is('skill_run_id', null)
       .gte('created_at', sinceIso),
+    supabase
+      .from('generation_jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .in('status', ['submitted', 'processing'])
+      .gte('created_at', sinceIso),
   ]);
-  return (sk.count ?? 0) + (pr.count ?? 0);
+  const failed = [sk, pr, gj].find((result) => result.error);
+  if (failed?.error) throw failed.error;
+  return (sk.count ?? 0) + (pr.count ?? 0) + (gj.count ?? 0);
 }
 
 /**
@@ -56,7 +64,7 @@ export async function videoConcurrencyGate(
   next: NextFunction,
 ): Promise<void> {
   const userId = (req as Request & { userId?: string }).userId;
-  if (!userId || MAX_CONCURRENT <= 0) {
+  if (!userId || MAX_CONCURRENT_RENDERS <= 0) {
     next();
     return;
   }
@@ -70,13 +78,13 @@ export async function videoConcurrencyGate(
     return;
   }
 
-  if (active >= MAX_CONCURRENT) {
+  if (active >= MAX_CONCURRENT_RENDERS) {
     res.status(429).json({
       error: {
-        code: 'TOO_MANY_ACTIVE_VIDEOS',
-        message: `You already have ${active} videos generating. Wait for one to finish, then try again. (Limit ${MAX_CONCURRENT}.)`,
+        code: 'TOO_MANY_ACTIVE_RENDERS',
+        message: `You already have ${active} generations running. Wait for one to finish, then try again. (Limit ${MAX_CONCURRENT_RENDERS}.)`,
         active,
-        limit: MAX_CONCURRENT,
+        limit: MAX_CONCURRENT_RENDERS,
       },
     });
     return;

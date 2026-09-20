@@ -184,7 +184,7 @@ function slugToKebab(slug: string): string {
 
 function pluginVersion(): string {
   // The loose pack is a new major: the tool list changed shape.
-  if (SURFACE === 'loose') return '2.3.2';
+  if (SURFACE === 'loose') return '2.3.3';
   // Pin to the max(skill versions).
   const versions = Object.values(SKILLS).map((s) => s.version);
   return versions.sort().at(-1) ?? '1.0.0';
@@ -539,6 +539,10 @@ function cursorMarketplaceJson(): string {
 function changelog(): string {
   return [
     '# Changelog',
+    '',
+    '## 2.3.3',
+    '',
+    '- Generation capacity now covers loose image, video, and audio jobs as well as composed skills. `TOO_MANY_ACTIVE_RENDERS` means wait for a current generation to finish, then retry the same request identity.',
     '',
     '## 2.3.2',
     '',

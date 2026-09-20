@@ -3,7 +3,7 @@ name: 'agent-media'
 description: 'Use Agent Media to upload reference images, open an image upload panel, or generate AI images, video and speech. For an upload-only request, open the existing panel with open_upload_panel, or upload_image with {} if only older tools are available; show the browser link and wait. Do not build an upload page or request a local folder. Select live models with list_models, quote when needed, generate, then poll get_run_status. Covers UGC, portraits, product photos, image-to-video, reference video, voiceover and recurring characters.'
 allowed-tools: ['mcp__agent-media__generate_video', 'mcp__agent-media__generate_image', 'mcp__agent-media__generate_audio', 'mcp__agent-media__quote', 'mcp__agent-media__list_models', 'mcp__agent-media__get_account', 'mcp__agent-media__list_characters', 'mcp__agent-media__get_run_status', 'mcp__agent-media__upload_image', 'mcp__agent-media__rate_run', 'mcp__agent-media__open_upload_panel', 'mcp__agent-media__get_uploads']
 x-skill-slug: 'agent-media'
-x-skill-version: '2.3.2'
+x-skill-version: '2.3.3'
 x-surface: 'loose'
 ---
 # agent-media, the skill
@@ -229,7 +229,7 @@ The things the old fixed skills did, as prompts you write yourself, see [referen
 - `VALIDATION_ERROR` with `first_frame`, `refs`, `seconds`, `aspect` or `quality` in the message, the request does not fit the (model, mode) cell; the message says the allowed range. Fix the field, do not switch surfaces.
 - `VALIDATION_ERROR` with `prompt` in the message and `video_refs` given, the prompt reads as an edit or extend request; describe the new clip instead.
 - `INSUFFICIENT_CREDITS`, the account is out; point the user to agent-media.ai billing.
-- `TOO_MANY_ACTIVE_VIDEOS`, wait for one to finish.
+- `TOO_MANY_ACTIVE_RENDERS`, wait for one generation to finish.
 - `CONTENT_POLICY_BLOCKED`, the provider refused the prompt or the reference; rephrase, or use a different image.
 - `INVALID_REFERENCE_IMAGE`, one of your reference images does not decode; the message names the URL. Nothing was rendered and nothing was charged. It almost always means the file was uploaded through a truncated base64 string: re-upload the ORIGINAL with `upload_image` and `file_bytes`.
 - `INVALID_INPUT` from `upload_image` saying the image is incomplete or corrupt: same cause, caught at the door. Do not retry the same bytes, and do not shrink the file to make it fit; send it whole with `file_bytes`.

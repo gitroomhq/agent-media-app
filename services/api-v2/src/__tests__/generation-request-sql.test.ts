@@ -16,6 +16,9 @@ beforeAll(async () => {
   await db.exec(migration('20260216000004_credit_transactions'));
   await db.exec(migration('20260528130000_deduct_credits_idempotent'));
   await db.exec(migration('20260919180000_generation_request_receipts'));
+  await db.exec(`create table skill_runs(id uuid primary key, user_id uuid not null, status text not null, created_at timestamptz not null default now());
+    create table primitive_runs(id uuid primary key, user_id uuid not null, skill_run_id uuid, status text not null, created_at timestamptz not null default now());`);
+  await db.exec(migration('20260920130000_atomic_generation_admission'));
   await db.query('insert into profiles values ($1),($2)', [owner, other]);
   await db.query('insert into user_credits values ($1,1000,1000),($2,0,0)', [owner, other]);
   await db.exec("insert into models values ('gpt-image-2.5');");
@@ -27,6 +30,15 @@ async function submit(key: string, user = owner, hash = 'a'.repeat(64), cost = 2
     'select submit_generation_request($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) result',
     [id, user, `loose:${user}:${key}`, hash, 'gpt-image-2.5', 'image', 'Portrait', cost,
       { prompt: 'Portrait', model: 'gpt-image-2.5' }, { job_id: id, credits_deducted: cost, breakdown: 'image', request_id: key }],
+  );
+  return rows[0].result;
+}
+async function submitLimited(key: string, user = owner, limit = 3) {
+  const id = randomUUID();
+  const { rows } = await db.query<{ result: { created: boolean; status: string; response: { job_id: string; credits_deducted: number } } }>(
+    'select submit_generation_request($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) result',
+    [id, user, `loose:${user}:${key}`, 'c'.repeat(64), 'gpt-image-2.5', 'image', 'Portrait', 20,
+      { prompt: 'Portrait', model: 'gpt-image-2.5' }, { job_id: id, credits_deducted: 20, breakdown: 'image', request_id: key }, limit],
   );
   return rows[0].result;
 }
@@ -73,5 +85,19 @@ describe('durable generation request receipts and actual credit ledger', () => {
       has_function_privilege('anon','submit_generation_request(uuid,uuid,text,text,text,text,text,integer,jsonb,jsonb)','execute') anon,
       has_function_privilege('authenticated','submit_generation_request(uuid,uuid,text,text,text,text,text,integer,jsonb,jsonb)','execute') authenticated`);
     expect(rows[0]).toEqual({ anon: false, authenticated: false });
+  });
+  it('atomically admits only one request for the last account slot and keeps replay recoverable', async () => {
+    await db.query("update generation_jobs set status='completed' where user_id=$1", [owner]);
+    await db.query("insert into skill_runs(id,user_id,status) values ($1,$3,'running'),($2,$3,'submitted')", [randomUUID(), randomUUID(), owner]);
+    const keys = [randomUUID(), randomUUID()];
+    const outcomes = await Promise.allSettled(keys.map((key) => submitLimited(key)));
+    expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    expect(String(rejected?.reason)).toContain('TOO_MANY_ACTIVE_RENDERS:3:3');
+    const winner = outcomes.find((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof submitLimited>>> => result.status === 'fulfilled')!;
+    const winnerKey = keys[outcomes.indexOf(winner)];
+    expect(await submitLimited(winnerKey)).toMatchObject({ created: false, response: winner.value.response });
+    const { rows } = await db.query<{ count: number }>("select count(*)::int count from generation_jobs where user_id=$1 and status='submitted'", [owner]);
+    expect(rows[0].count).toBe(1);
   });
 });

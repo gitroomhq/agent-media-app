@@ -40,6 +40,7 @@ import {
 } from '@agentmedia/schema/v2';
 import { supabase } from '../../server.js';
 import { requestIdentity, replayResponse, type GenerationRequest } from '../../generation/request-identity.js';
+import { MAX_CONCURRENT_RENDERS } from '../../concurrency.js';
 import { loadModelStats } from '../v1/models.js';
 
 const WORKER_V2_URL = process.env.WORKER_V2_URL;
@@ -256,16 +257,20 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
     p_request_hash: identity.hash, p_model: model, p_kind: kind,
     p_prompt: String(input.prompt ?? input.text ?? ''), p_credit_cost: creditCost,
     p_input_params: { ...input, model, ...(v.video ?? {}) }, p_response: receipt,
+    p_max_concurrent: MAX_CONCURRENT_RENDERS,
   });
   if (submitErr) {
     const message = submitErr.message ?? '';
     const insufficient = /INSUFFICIENT_CREDITS/.test(message);
     const conflict = /IDEMPOTENCY_CONFLICT/.test(message);
-    res.status(insufficient ? 402 : conflict ? 409 : 503).json({ error: {
-      code: insufficient ? 'INSUFFICIENT_CREDITS' : conflict ? 'IDEMPOTENCY_CONFLICT' : 'SUBMISSION_UNCONFIRMED',
+    const capacity = message.match(/TOO_MANY_ACTIVE_RENDERS:(\d+):(\d+)/);
+    res.status(insufficient ? 402 : conflict ? 409 : capacity ? 429 : 503).json({ error: {
+      code: insufficient ? 'INSUFFICIENT_CREDITS' : conflict ? 'IDEMPOTENCY_CONFLICT' : capacity ? 'TOO_MANY_ACTIVE_RENDERS' : 'SUBMISSION_UNCONFIRMED',
       message: insufficient ? message : conflict ? 'This request identity was already used with different inputs.' :
+        capacity ? `You already have ${capacity[1]} generations running. Wait for one to finish, then try again. (Limit ${capacity[2]}.)` :
         'The submission result could not be confirmed. Retry the same inputs with the same Idempotency-Key to recover the job; do not create a new request.',
       request_id: identity.requestId,
+      ...(capacity ? { active: Number(capacity[1]), limit: Number(capacity[2]) } : {}),
     } });
     return;
   }

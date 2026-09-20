@@ -72,4 +72,9 @@ describe('POST /v2/generate/:kind + /v2/quote/:kind', () => {
     expect(server).toContain("app.post('/v2/generate/:kind', generateLimiter, authMiddleware, generationReplay, videoConcurrencyGate, looseGenerateRoute);");
     expect(server).toContain("app.post('/v2/quote/:kind',    readLimiter,     authMiddleware, looseQuoteRoute);");
   });
+
+  it('passes the configured render limit into atomic database admission', () => {
+    const route = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../routes/v2/generate.ts'), 'utf8');
+    expect(route).toContain('p_max_concurrent: MAX_CONCURRENT_RENDERS');
+  });
 });

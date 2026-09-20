@@ -9,10 +9,10 @@ vi.stubEnv('WORKER_V2_URL', 'https://worker.test');
 vi.stubEnv('WORKER_SECRET', 'test-only');
 const { generateRoute } = await import('../routes/v2/generate.js');
 const { generationReplay, requestIdentity } = await import('../generation/request-identity.js');
-let record: any, jobCount = 0, debitCount = 0, lostCommit = false, refundError = false;
+let record: any, jobCount = 0, debitCount = 0, lostCommit = false, refundError = false, capacityError = false;
 const worker = vi.fn();
 beforeEach(() => {
-  record = null; jobCount = 0; debitCount = 0; lostCommit = false; refundError = false;
+  record = null; jobCount = 0; debitCount = 0; lostCommit = false; refundError = false; capacityError = false;
   vi.clearAllMocks();
   vi.stubGlobal('fetch', worker);
   worker.mockResolvedValue(new Response('{}', { status: 200 }));
@@ -31,6 +31,7 @@ beforeEach(() => {
     if (name === 'get_generation_request') return { data: record ? { ...record, response: record.submission_response } : null, error: null };
     if (name === 'refund_credits') return refundError ? { error: { message: 'ledger unavailable' } } : { data: { success: true }, error: null };
     if (name !== 'submit_generation_request') throw new Error('Unexpected RPC');
+    if (capacityError) return { data: null, error: { message: 'TOO_MANY_ACTIVE_RENDERS:3:3' } };
     if (record) return { data: { created: false, status: record.status, response: record.submission_response }, error: null };
     jobCount++; debitCount++;
     record = { status: 'submitted', request_hash: args.p_request_hash, submission_response: args.p_response };
@@ -90,6 +91,12 @@ describe('generation submission recovery', () => {
   it('validates keys before any database or worker action', async () => {
     expect((await submit(undefined, 'bad key')).status).toBe(400);
     expect(mocks.from).not.toHaveBeenCalled(); expect(worker).not.toHaveBeenCalled();
+  });
+  it('returns a retryable capacity response without dispatching or charging', async () => {
+    capacityError = true;
+    const result = await submit();
+    expect(result).toMatchObject({ status: 429, body: { error: { code: 'TOO_MANY_ACTIVE_RENDERS', active: 3, limit: 3 } } });
+    expect(worker).not.toHaveBeenCalled();
   });
   it('scopes request identity to the user and ignores object key ordering', () => {
     const a = requestIdentity('user-a', 'video', { prompt: 'x', seconds: 5 }, 'key');
