@@ -18,6 +18,12 @@
         "note": "Available in all your projects. In Claude Code, run /mcp, select agent-media, and complete browser sign-in. If already connected, do not add a second copy."
       },
       {
+        "id": "chatgpt",
+        "label": "ChatGPT (web)",
+        "how": "Enable Developer mode where your account or workspace permits it. Create a custom MCP app with the connector URL and OAuth, complete sign-in, then select Agent Media in the conversation. Refresh the app tools when the catalog changes.",
+        "note": "Settings labels and availability vary by account and workspace policy. See the linked official ChatGPT setup guide below."
+      },
+      {
         "id": "codex",
         "label": "Codex",
         "command": "codex mcp add agent-media --url https://api.agent-media.ai/mcp",
@@ -25,8 +31,8 @@
       },
       {
         "id": "grok",
-        "label": "Grok",
-        "command": "grok mcp add agent-media -t http https://api.agent-media.ai/mcp"
+        "label": "Grok CLI",
+        "command": "grok mcp add --transport http agent-media https://api.agent-media.ai/mcp"
       },
       {
         "id": "cursor",
@@ -1632,9 +1638,9 @@
         "rate": "1 credit per 100 characters, rounded up"
       },
       {
-        "model": "quote, list_models, list_characters, get_run_status, upload_image, rate_run",
-        "kind": "free",
-        "rate": "0 credits"
+        "model": "get_account, quote, list_models, list_characters, get_run_status, upload_image, open_upload_panel, get_uploads, rate_run",
+        "kind": "no generation charge",
+        "rate": "0 credits; does not grant or refill credits"
       }
     ],
     "examples": [
@@ -1715,7 +1721,7 @@
         "breakdown": "250 characters on elevenlabs-tts at 0.01 credits/character"
       }
     ],
-    "refund": "Credits are deducted at submit. A job that fails refunds automatically."
+    "refund": "Credits are deducted when a new generation is accepted. Failure and refund confirmation are separate: report a refund only when the service confirms it. A timeout or unavailable status does not prove failure or a refund."
   },
   "limits": {
     "video": {
@@ -1963,17 +1969,17 @@
       ],
       "max_chars": 4000
     },
-    "refs": "https URLs only. Use upload_image (PNG/JPEG, 10 MB) to turn bytes or a foreign URL into one. Never inline base64. Reference clips and audio are https URLs too."
+    "refs": "Use HTTPS URLs. The temporary upload panel accepts up to 10 still PNG/JPEG/WebP images, 25 MB each, and expires 24 hours after session creation. For a local file, use the presign/PUT/confirm flow. The legacy base64/URL upload endpoint has separate limits. Never paste image bytes into chat."
   },
   "rest": {
     "base": "https://api.agent-media.ai",
-    "auth": "Authorization: Bearer ma_... (from `agent-media login` or the dashboard)",
+    "auth": "Authorization: Bearer YOUR_AGENT_MEDIA_API_KEY",
     "routes": [
       {
         "method": "POST",
         "path": "/v2/generate/{video|image|audio}",
         "body": "the tool arguments",
-        "returns": "201 { job_id, model, mode?, quality?, credits_deducted, breakdown, auto?, status_url }"
+        "returns": "201 new job; 200 saved receipt on retry; 202 acknowledgement uncertain. Returns job_id, request_id, credits_deducted, status_url and model details."
       },
       {
         "method": "POST",
@@ -1985,7 +1991,13 @@
         "method": "GET",
         "path": "/v1/videos/{job_id}",
         "body": "",
-        "returns": "{ status, video_url } (the URL is a png or mp3 for those kinds)"
+        "returns": "{ status, video_url, ... }; video_url holds the output for image/audio too. 503 STATUS_UNAVAILABLE: retry the same job."
+      },
+      {
+        "method": "GET",
+        "path": "/v1/me/readiness",
+        "body": "",
+        "returns": "{ authenticated, credits, generation, uploads, billing_url }; 503 means balance unknown"
       },
       {
         "method": "GET",
@@ -1998,6 +2010,30 @@
         "path": "/v1/runs/{job_id}/rate",
         "body": "{ score: 1..5, note? }",
         "returns": "200 { job_id, model, score }"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/upload-sessions",
+        "body": "{}; temporary uploads must be enabled",
+        "returns": "201 { session_id, upload_url, upload_token, expires_at, max_bytes, max_files, images }"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/upload-sessions/{session_id}",
+        "body": "",
+        "returns": "{ session_id, expires_at, max_bytes, max_files, images }; owner authentication required"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/uploads/presign",
+        "body": "{ bytes, content_type?, filename? }",
+        "returns": "{ put_url, upload_key, content_type, bytes, expires_in, ... }; PUT original bytes, then confirm"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/uploads/confirm",
+        "body": "{ upload_key }",
+        "returns": "{ image_url, mime, bytes }"
       },
       {
         "method": "POST",
@@ -2014,7 +2050,7 @@
     ],
     "openapi": "https://api.agent-media.ai/openapi.json",
     "reference": "https://api.agent-media.ai/docs",
-    "curl": "curl -X POST https://api.agent-media.ai/v2/generate/video \\\n  -H \"Authorization: Bearer ma_...\" -H \"Content-Type: application/json\" \\\n  -d '{ \"prompt\": \"A 28-year-old woman in a bright kitchen, phone framing, holds a serum bottle to the lens and says: \\\"Okay, I did not expect this to work.\\\"\", \"seconds\": 5 }'",
+    "curl": "curl -X POST https://api.agent-media.ai/v2/quote/video \\\n  -H \"Authorization: Bearer ma_...\" -H \"Content-Type: application/json\" \\\n  -d '{ \"prompt\": \"A 28-year-old woman in a bright kitchen, phone framing, holds a serum bottle to the lens and says: \\\"Okay, I did not expect this to work.\\\"\", \"seconds\": 5 }'",
     "fixed_skills_note": "The fixed recipes (make_ugc, make_podcast, make_subtitles, selfie, crazy look) remain REST and CLI routes for the dashboard. They are not MCP tools."
   },
   "recipes": [

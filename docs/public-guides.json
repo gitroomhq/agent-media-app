@@ -142,7 +142,7 @@
           "id": "add",
           "title": "Drop in your images",
           "paragraphs": [
-            "Drop one or more images into the panel, or choose them using the file picker. Wait until each upload is marked ready. Check the panel’s displayed limits and expiry. The first version supports images, not video or audio."
+            "Drop one or more images into the panel, or choose them using the file picker. A session accepts up to 10 images, up to 25 MB each. Wait until each upload is marked ready and check the displayed expiry. The panel supports images, not video or audio."
           ],
           "note": "Use still PNG, JPEG or WebP images. Convert unsupported formats such as HEIC or SVG to a supported still image."
         },
@@ -163,7 +163,7 @@
           "id": "expiry",
           "title": "Private storage and 24-hour expiry",
           "paragraphs": [
-            "Images are stored temporarily in private object storage and accessed through restricted URLs. Those URLs expire after 24 hours. Anyone holding a valid restricted image URL can use it until it expires, so treat it as private. Re-upload an expired reference before another generation."
+            "Images are stored temporarily in private object storage and accessed through restricted URLs. The session and all its image URLs expire 24 hours after the session was created; an image added later has less time remaining. Anyone holding a valid restricted image URL can use it until it expires, so treat it as private. Re-upload an expired reference before another generation."
           ],
           "note": "A local file path, an attachment visible in chat, or an expired URL is not a usable generation reference."
         },
@@ -329,7 +329,7 @@
           "id": "expired",
           "title": "An image reference expired",
           "paragraphs": [
-            "Temporary images last 24 hours. Open a new panel or follow the current session’s instructions, re-upload the image, and use the new URL."
+            "Temporary images expire with their upload session, 24 hours after the session was created. Open a new panel or follow the current session’s instructions, re-upload the image, and use the new URL."
           ]
         },
         {
@@ -377,7 +377,7 @@
           "id": "identity",
           "title": "Keep request identity and job IDs",
           "paragraphs": [
-            "Retain the request identity used for a generation retry and the returned job ID. Repeating an equivalent request with the same supported identity recovers the saved job; a new identity can create a separate generation. See the OSS contract for exact HTTP headers and payload rules."
+            "For MCP generate_image, generate_video and generate_audio, pass request_id. For POST /v2/generate/:kind, send the Idempotency-Key header. Generate a fresh identity for each intended generation and save it with the exact inputs before submitting. Reuse both after a lost response. A retry returns the original job without another debit; changed inputs under the same identity return HTTP 409. This protection does not cover every fixed recipe."
           ],
           "links": [
             {

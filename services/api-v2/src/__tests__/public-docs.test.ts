@@ -1,5 +1,6 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
 import { readFileSync } from 'node:fs';
+import { GenerateVideoSchema, quoteGenerate } from '@agentmedia/schema/v2';
 import { describe, expect, it } from 'vitest';
 const docs = JSON.parse(readFileSync(new URL('../../../../docs/public-guides.json', import.meta.url), 'utf8'));
 type Section = { id: string; title: string; paragraphs: string[]; steps?: string[]; code?: string; note?: string; links?: { href: string; label: string }[] };
@@ -31,5 +32,27 @@ describe('public documentation source', () => {
   it('documents paid generation, account checks, temporary uploads and same-job recovery', () => {
     const text = JSON.stringify(pages);
     for (const phrase of ['paid credits', 'get_account', '24 hours', 'first_frame', 'original job ID']) expect(text).toContain(phrase);
+  });
+});
+
+describe('public REST examples', () => {
+  const data = JSON.parse(readFileSync(new URL('../../../../public-skill/site-data.json', import.meta.url), 'utf8'));
+  it('starts with a valid quote that does not submit a paid generation', () => {
+    expect(data.rest.curl).toContain('/v2/quote/video');
+    const body = JSON.parse(data.rest.curl.match(/-d '([^']+)'/)[1]);
+    const parsed = GenerateVideoSchema.parse(body);
+    expect(quoteGenerate('video', parsed).credits).toBeGreaterThan(0);
+  });
+  it('includes account and upload recovery routes registered by the API', () => {
+    const server = readFileSync(new URL('../server.ts', import.meta.url), 'utf8');
+    const uploads = readFileSync(new URL('../uploads/routes.ts', import.meta.url), 'utf8');
+    for (const path of ['/v1/me/readiness', '/v1/upload-sessions', '/v1/uploads/presign', '/v1/uploads/confirm']) {
+      expect(data.rest.routes.some((r: {path: string}) => r.path === path)).toBe(true);
+      expect(server + uploads).toContain("'" + path + "'");
+    }
+    const presign = data.rest.routes.find((r: {path: string}) => r.path === '/v1/uploads/presign');
+    expect(presign.body).toContain('bytes');
+    expect(presign.returns).toContain('put_url');
+    expect(presign.body).not.toContain('file_bytes');
   });
 });
