@@ -20,6 +20,7 @@ let uploadToken = '';
 let view: UploadView | null = null;
 let app: App | null = null;
 let busy = false;
+const handoffModal = element<HTMLDialogElement>('handoff-modal');
 const failed = new Map<string, File>();
 function say(text: string, error = false) {
   notice.textContent = text;
@@ -111,6 +112,40 @@ function imageText() {
     .map((image) => `${image.filename}: ${image.image_url}\nExpires: ${image.expires_at}`)
     .join('\n\n');
 }
+function handoffPrompt() {
+  return `I uploaded reference images to Agent Media. Retrieve upload session ${sessionId} with get_uploads({"session_id":"${sessionId}"}), or upload_image({"upload_key":"panel:${sessionId}"}) if that is the available tool. Inspect the returned image previews before continuing my request. Use the original full-resolution image URLs below as generation references, not the thumbnails. Do not guess the image contents from my account or filenames. If my intended generation is unclear, ask before generating.\n\n${imageText()}`;
+}
+function showHandoff() {
+  if (!active() || !view?.images.length) return;
+  element('handoff-summary').textContent =
+    `${view.images.length} image${view.images.length === 1 ? '' : 's'} ready${failed.size ? ` · ${failed.size} upload${failed.size === 1 ? '' : 's'} still need retrying` : ''}. Links expire ${new Date(view.expires_at).toLocaleString()}.`;
+  element('prompt-status').textContent = '';
+  element('prompt-manual').hidden = true;
+  element<HTMLButtonElement>('copy-prompt').disabled = false;
+  element('copy-prompt').textContent = 'Copy prompt';
+  if (!handoffModal.open) handoffModal.showModal();
+}
+element('copy-prompt').onclick = async () => {
+  if (!active()) {
+    element('prompt-status').textContent =
+      'These images have expired. Ask your agent for a new upload panel.';
+    return;
+  }
+  const prompt = handoffPrompt();
+  try {
+    await navigator.clipboard.writeText(prompt);
+    element('copy-prompt').textContent = 'Copied!';
+    element('prompt-status').textContent = 'Now paste into your Claude or ChatGPT conversation.';
+  } catch {
+    const manual = element<HTMLTextAreaElement>('prompt-manual');
+    manual.hidden = false;
+    manual.value = prompt;
+    manual.focus();
+    manual.select();
+    element('prompt-status').textContent =
+      'Select and copy the prompt below, then paste it into your conversation.';
+  }
+};
 async function copyLinks() {
   const text = imageText();
   try {
@@ -130,6 +165,7 @@ async function uploadBatch(items: { id: string; file: File }[]) {
     say('Choose up to 10 images per panel.', true);
     return;
   }
+  const previousCount = view?.images.length ?? 0;
   busy = true;
   controls();
   for (const { id, file } of items) {
@@ -164,6 +200,7 @@ async function uploadBatch(items: { id: string; file: File }[]) {
   }
   busy = false;
   render();
+  if ((view?.images.length ?? 0) > previousCount) showHandoff();
 }
 function pick(chosen: FileList | File[]) {
   void uploadBatch(Array.from(chosen).map((file) => ({ id: crypto.randomUUID(), file })));
@@ -188,9 +225,7 @@ window.addEventListener('drop', (event) => event.preventDefault());
 copy.onclick = () => void copyLinks();
 use.onclick = async () => {
   if (!app) {
-    say(
-      'Your images are ready. Return to your conversation and tell your agent you have finished uploading.',
-    );
+    showHandoff();
     return;
   }
   try {
@@ -205,9 +240,7 @@ use.onclick = async () => {
     }
     const sent = await app.sendMessage({
       role: 'user',
-      content: [
-        { type: 'text', text: `Use these uploaded images for my generation.\n\n${imageText()}` },
-      ],
+      content: [{ type: 'text', text: handoffPrompt() }],
     });
     if (sent.isError) throw new Error('The host could not send this message.');
     say('Images shared with your agent. Continue in the conversation.');

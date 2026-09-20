@@ -520,3 +520,64 @@ progress {
     transition: none !important;
   }
 }
+
+#handoff-modal {
+  position: fixed;
+  margin: auto;
+  box-sizing: border-box;
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 36px;
+  border: 1px solid #ddd5ef;
+  border-radius: 24px;
+  background: #fff;
+  color: #25202d;
+  box-shadow: 0 24px 90px #24123b33;
+}
+#handoff-modal::backdrop {
+  background: #17102080;
+  backdrop-filter: blur(5px);
+}
+#handoff-modal h2 {
+  font-size: 28px;
+  line-height: 1.15;
+  margin: 18px 0 12px;
+}
+#handoff-modal p {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #655d70;
+}
+#handoff-modal .primary {
+  width: 100%;
+  justify-content: center;
+  margin-top: 12px;
+}
+#handoff-modal .secondary {
+  width: 100%;
+  justify-content: center;
+}
+#handoff-modal .modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  border: 0;
+  background: transparent;
+  color: #655d70;
+  font-size: 28px;
+  cursor: pointer;
+}
+#handoff-modal .manual {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 16px;
+}
+#handoff-summary {
+  font-size: 13px !important;
+}
+@media (max-width: 480px) {
+  #handoff-modal {
+    padding: 28px 24px;
+  }
+}

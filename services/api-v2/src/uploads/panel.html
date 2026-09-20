@@ -198,6 +198,31 @@
         </p>
       </footer>
     </main>
+    <dialog
+      id="handoff-modal"
+      aria-labelledby="handoff-title"
+      aria-describedby="handoff-description"
+    >
+      <form method="dialog">
+        <button class="modal-close" aria-label="Close" type="submit">×</button>
+      </form>
+      <span class="eyebrow">ONE LAST STEP</span>
+      <h2 id="handoff-title">Your images are ready.</h2>
+      <p id="handoff-description">
+        Copy the prompt, then paste it into Claude or ChatGPT to continue with these images.
+      </p>
+      <p id="handoff-summary"></p>
+      <button id="copy-prompt" class="primary" type="button">Copy prompt</button>
+      <p id="prompt-status" role="status" aria-live="polite"></p>
+      <textarea
+        id="prompt-manual"
+        class="manual"
+        aria-label="Prompt to copy"
+        readonly
+        hidden
+      ></textarea>
+      <form method="dialog"><button class="secondary" type="submit">Add more images</button></form>
+    </dialog>
     <script>
       window.__UPLOAD_CONFIG__ = __UPLOAD_BOOTSTRAP_JSON__;
     </script>
