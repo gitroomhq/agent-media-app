@@ -275,7 +275,7 @@ const spec = {
   info: {
     title: 'agent-media API',
     version: '1.0.0',
-    description: `AI UGC video production API. Generate talking head videos with lip-synced AI actors, SaaS reviews, and styled subtitles.
+    description: `AI UGC video production API. Generate video, images and audio with the v2 loose surface, selfie and product clips with the fixed generators, and styled subtitles.
 
 ## Authentication
 All endpoints require a Bearer token. Use either:

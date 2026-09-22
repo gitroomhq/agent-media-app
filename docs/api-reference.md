@@ -138,13 +138,13 @@ curl -X POST https://api.agent-media.ai/v1/account/keys \
 ### 2. Create a video
 
 ```bash
-curl -X POST https://api.agent-media.ai/v1/videos \
+curl -X POST https://api.agent-media.ai/v2/generate/video \
   -H "Authorization: Bearer ma_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "script": "Ever wonder why top founders wake up at 5am? It is not about the alarm clock. It is about the mindset. Here is what they know that you do not.",
-    "actor_slug": "emma",
-    "style": "hormozi"
+    "prompt": "A 28-year-old woman in a bright kitchen, phone framing, looks into the lens and says: \"Okay, this actually works.\"",
+    "seconds": 5,
+    "aspect": "9:16"
   }'
 ```
 
@@ -154,12 +154,15 @@ Response:
 {
   "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "submitted",
-  "estimated_duration": 10,
+  "kind": "video",
+  "model": "seedance-2.0",
   "credits_deducted": 300,
-  "selected_voice": "cgSgspJ2msm6clMCkdW9",
-  "voice_auto_detected": false
+  "status_url": "/v1/videos/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 }
 ```
+
+Every field, the image-to-video and reference modes, the quality ladder and
+`POST /v2/quote/{kind}` are in the [v2 API reference](v2/api-reference.md).
 
 ### 3. Poll for completion
 
@@ -180,124 +183,27 @@ When `status` is `completed`, the response includes `output_url` with the final 
 
 ---
 
-### POST /api/v1/videos
+### POST /api/v1/videos (retired 2026-09-22)
 
-Create a new video generation job.
-
-**Request Body (JSON):**
-
-#### Core Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `script` | string | Yes* | - | The video script (50-3000 characters). Required unless `prompt` is provided. |
-| `prompt` | string | Yes* | - | A text prompt to auto-generate the script via GPT-4o. Required unless `script` is provided. Costs 5 extra credits. |
-| `product_url` | string | No | - | URL of a product page. Used alongside `prompt` for context when generating scripts. |
-| `actor_slug` | string | No | - | Slug of a library actor for talking heads. Use GET /v1/actors to browse available actors. |
-| `target_duration` | number | No | auto | Target video duration in seconds. Valid values: `5`, `10`, `15`. Auto-estimated from script length if omitted. |
-| `style` | string | No | `"hormozi"` | Subtitle animation style. See [Subtitle Styles](#subtitle-styles). |
-
-#### Advanced Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `tone` | string | No | - | Video tone. Values: `energetic`, `calm`, `confident`, `dramatic` |
-| `voice_speed` | number | No | - | TTS voice speed multiplier. Range: `0.7` to `1.5` |
-| `music` | string | No | - | Background music genre. Values: `chill`, `energetic`, `corporate`, `dramatic`, `upbeat` |
-| `cta` | string | No | - | Call-to-action text for end screen. Max 100 characters. |
-| `aspect_ratio` | string | No | `"9:16"` | Video aspect ratio. Values: `9:16`, `16:9`, `1:1` |
-| `template` | string | No | - | Script/video template. Values: `monologue`, `testimonial`, `problem-solution`, `saas-review`, `before-after`, `listicle`, `product-demo` |
-| `allow_broll` | boolean | No | `false` | Enable AI-generated B-roll cutaway scenes. |
-| `broll_model` | string | No | - | B-roll video generation model. Values: `kling3`, `hailuo2`, `wan21` |
-| `broll_images` | string[] | No | - | Array of image URLs to use as B-roll (max 10). Each must be a valid HTTP URL. |
-| `product_image_url` | string | No | - | Product image URL for product-focused videos. Must be a valid HTTP URL. |
-| `dub_language` | string | No | - | BCP-47 language code for dubbing (e.g. `"es"`, `"fr"`, `"de"`). |
-| `webhook_url` | string | No | - | URL to receive a webhook when the job completes. |
-
-#### Composition Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `composition_mode` | string | No | - | Set to `"pip"` for picture-in-picture layout. |
-| `pip_options` | object | No | - | PIP overlay configuration (only used when `composition_mode` is `"pip"`). |
-| `pip_options.position` | string | No | - | PIP position: `bottom-center`, `bottom-left`, `bottom-right` |
-| `pip_options.size` | string | No | - | PIP size: `small`, `medium`, `large` |
-| `pip_options.animation` | string | No | - | PIP animation: `slide-up`, `slide-left`, `slide-right`, `fade`, `scale` |
-| `pip_options.frame_style` | string | No | - | PIP frame style: `none`, `rounded`, `shadow` |
-
-#### Scene Control
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `scenes` | array | No | - | Manual scene definitions (max 30). Each scene object has the fields below. |
-| `scenes[].type` | string | No | - | Scene type: `talking_head` or `broll` |
-| `scenes[].text` | string | Yes | - | Narration text for this scene (required, non-empty) |
-| `scenes[].visual_prompt` | string | No | - | Prompt for AI-generated visuals |
-| `scenes[].image` | string | No | - | Image URL for the scene (must be valid HTTP URL) |
-
-**Response (201):**
+The v1 UGC generator behind this endpoint (`ugc_video`, and `saas_review` with
+its `product_review` alias) rendered its talking head on a Kling model that
+Kling discontinued. The endpoint, `POST /v1/generate/ugc_video` and the CLI
+path `POST /functions/v1/ugc-video` now answer:
 
 ```json
+HTTP 410
 {
-  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "status": "submitted",
-  "estimated_duration": 10,
-  "credits_deducted": 300,
-  "selected_voice": "cgSgspJ2msm6clMCkdW9",
-  "voice_auto_detected": false
+  "error": {
+    "code": "GENERATOR_RETIRED",
+    "message": "ugc_video is retired and no longer renders. ... Use the \"selfie\" generator instead (CLI: agent-media selfie).",
+    "replacement": "selfie"
+  }
 }
 ```
 
-When using `prompt` (script generation), the response also includes:
-
-```json
-{
-  "generated_script": "The auto-generated script text..."
-}
-```
-
-**curl example:**
-
-```bash
-# Minimal — just a script
-curl -X POST https://api.agent-media.ai/v1/videos \
-  -H "Authorization: Bearer ma_your_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "script": "Ever wonder why top founders wake up at 5am? It is not about the alarm clock. It is about the mindset.",
-    "actor_slug": "emma",
-    "style": "hormozi"
-  }'
-
-# With AI script generation
-curl -X POST https://api.agent-media.ai/v1/videos \
-  -H "Authorization: Bearer ma_your_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Create a 10 second video about why developers love TypeScript",
-    "actor_slug": "naomi",
-    "target_duration": 10,
-    "style": "bold",
-    "music": "chill"
-  }'
-
-# PIP composition
-curl -X POST https://api.agent-media.ai/v1/videos \
-  -H "Authorization: Bearer ma_your_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "script": "Check out this amazing product that changed my morning routine...",
-    "actor_slug": "sofia",
-    "composition_mode": "pip",
-    "pip_options": {
-      "position": "bottom-right",
-      "size": "medium",
-      "animation": "slide-up",
-      "frame_style": "rounded"
-    },
-    "allow_broll": true
-  }'
-```
+No job is created and no credits are touched. Use `POST /v2/generate/video`
+(above) or the v2 selfie generator (`POST /v2/selfie`, CLI `agent-media selfie`).
+The `GET`, `DELETE` and `cancel` routes below still work for every job.
 
 ---
 
@@ -323,7 +229,7 @@ List your video generation jobs with optional filtering and pagination.
       "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "user_id": "user-uuid",
       "model_slug": "ugc-basic",
-      "operation": "ugc_video",
+      "operation": "generate_video",
       "status": "completed",
       "prompt": "Ever wonder why top founders wake up at 5am?...",
       "credit_cost": 300,
@@ -368,7 +274,7 @@ Get the status and details of a single video generation job.
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "user_id": "user-uuid",
   "model_slug": "ugc-basic",
-  "operation": "ugc_video",
+  "operation": "generate_video",
   "status": "processing",
   "prompt": "Ever wonder why top founders...",
   "credit_cost": 300,
@@ -786,7 +692,7 @@ Get usage statistics for your account over a specified time period.
   ],
   "by_operation": [
     {
-      "operation": "ugc_video",
+      "operation": "generate_video",
       "job_count": 45
     }
   ]
@@ -929,17 +835,14 @@ The `style` parameter on video creation accepts these values:
 
 ## Credit Costs
 
-Videos are billed per second at **30 credits/second**, rounded up to the nearest duration bucket.
+1 credit = $0.01. Video is billed per output second at the model's rate for the
+chosen quality (seedance-2.0: 30 credits/s at 480p, 60 at 720p, 150 at 1080p;
+seedance-2.5: 60 / 125 / 225). Reference clip seconds are billed like output
+seconds. Images are 20 credits each, text to speech 1 credit per 100 characters.
+`POST /v2/quote/{kind}` returns the exact price for a request before you pay.
 
-| Duration | Credits | USD Equivalent |
-|----------|--------:|---------------:|
-| 5s | 150 | ~$1.50 |
-| 10s | 300 | ~$3.00 |
-| 15s | 450 | ~$4.50 |
-
-AI script generation (using `prompt` instead of `script`) adds a surcharge of **5 credits**.
-
-Credits are deducted immediately when a job is created. If the job fails at the worker dispatch stage, credits are automatically refunded. You can also cancel in-progress jobs for a full refund.
+Credits are deducted when a job is created and refunded automatically when the
+job fails. You can also cancel in-progress jobs for a full refund.
 
 ---
 

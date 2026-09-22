@@ -24,9 +24,9 @@ agent-media selfie \
   --script "Stop scrolling. This tool changed everything for me." \
   --duration 10
 
-# 3. Check the job, then download the mp4
-agent-media status <job-id>
-agent-media download <job-id>
+# 3. Follow the job, then download the mp4
+agent-media status <job-id> --watch
+agent-media download <job-id> -o clip.mp4
 ```
 
 ## Selfie pipeline
@@ -48,8 +48,8 @@ agent-media selfie --description "..." --script "..." \
 # Silent reaction clip with a burned caption
 agent-media crazy-look --help
 
-# Burn subtitles onto any existing video (17 styles)
-agent-media subs ./video.mp4 --style hormozi
+# Burn subtitles onto any hosted video (17 styles)
+agent-media subs --video https://cdn.example.com/clip.mp4 --style hormozi
 ```
 
 ## Selfie flags
@@ -83,10 +83,10 @@ Run `agent-media selfie --help` for the full list of presets.
 agent-media selfie ...                     # Generate a selfie clip
 agent-media character create|list|show     # Saved characters
 agent-media crazy-look ...                 # Silent reaction clip
-agent-media subs ./video.mp4               # Burn subtitles
+agent-media subs --video <url>             # Burn subtitles
 agent-media product-acting ...             # Product-in-hand clip with a library actor
 agent-media actor list                     # Actor library for product-acting
-agent-media status <job-id>                # Check job status
+agent-media status <job-id> --watch        # Follow a job
 agent-media download <job-id>              # Download the mp4
 agent-media list                           # List your jobs
 agent-media credits                        # Credit balance
@@ -137,7 +137,7 @@ Self-updates use npm by default. If you intentionally manage global packages wit
 ## Links
 
 - [Docs](https://agent-media.ai/docs)
-- [OpenAPI Spec](https://agent-media.ai/openapi.json)
+- [OpenAPI Spec](https://api.agent-media.ai/openapi.json)
 - [Website](https://agent-media.ai)
 - [GitHub](https://github.com/gitroomhq/agent-media-app)
 

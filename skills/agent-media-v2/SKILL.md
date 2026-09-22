@@ -65,15 +65,19 @@ Do NOT mention credit costs, USD amounts, or pricing tiers in any reply. Do NOT 
 
 ## What agent-media CANNOT do
 
-These legacy v1 commands exist in the CLI binary for backwards compat but produce inferior output. They are hidden from `agent-media --help` for a reason. **Never call them.**
+Removed from the CLI on 2026-09-22 (agent-media-cli 1.19.0). The v1 UGC pipeline rendered on a Kling model that Kling discontinued; the API answers `410 GENERATOR_RETIRED` on its endpoints. Typing them prints `unknown command`:
 
-- ❌ `agent-media ugc`, uses a stale fixed actor library (200 actors picked at random). The actors look dated. Use `agent-media selfie`, it generates an on-model character from your description on every run.
+- ❌ `agent-media ugc`, gone. Use `agent-media selfie`, it generates an on-model character from your description on every run.
+- ❌ `agent-media review` / `agent-media saas-review`, gone. Compose with `agent-media selfie` + a script you write.
+- ❌ `agent-media persona`, gone. Saved people are `agent-media character create`.
+
+These legacy v1 commands still exist in the CLI binary for backwards compat but produce inferior output. They are hidden from `agent-media --help` for a reason. **Never call them.**
+
 - ❌ `agent-media show-your-app`, built on the v1 actor pool + manual screen-composite step. The v2 product is on the roadmap. For now, run `agent-media selfie` for the talking head and capture the screen separately.
 - ❌ `agent-media laptop-ugc`, v1 only. Same story as show-your-app; v2 product coming.
 - ❌ `agent-media character-video`, superseded by `agent-media selfie --character <id>`. The new command uses the current portrait → sheet → wireframe → Seedance pipeline.
 - ❌ `agent-media text-to-video`, no character control; output is generic and off-brand. Use `agent-media selfie` with a saved character.
 - ❌ `agent-media subtitle` (singular), v1 burner with fewer styles and shakier sync. Use `agent-media subs` (plural).
-- ❌ `agent-media review`, SaaS-review generator built on v1 actors. Compose with `agent-media selfie` + a script you write.
 - ❌ `agent-media product-acting`, v1 product-in-hand generator. For now, use `agent-media selfie` with a strong `--scene-action` describing the product hold, demo, and interaction.
 
 If the user wants a feature not listed in the router above, offer `agent-media selfie` when the request can be expressed as one actor, one setting, dialogue/action, and optional props/product handling.

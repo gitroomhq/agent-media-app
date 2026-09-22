@@ -430,8 +430,8 @@ Three composable primitives with no recipe: your prompt, your model, your frames
 
 | Route | Body | Credits |
 |---|---|---|
-| `POST /v2/generate/video` | GenerateVideo (below) | seconds x the model rate at the chosen quality: 150 for 5s on `seedance-2.0` at 720p (75 at 480p, 375 at 1080p), 495 on `seedance-2.5` at 720p; reference clip seconds (video_refs) are billed at the same rate (300 for 5s plus a 5s reference clip) |
-| `POST /v2/generate/image` | GenerateImage | 20 per image on `gpt-image-2` |
+| `POST /v2/generate/video` | GenerateVideo (below) | seconds x the model rate at the chosen quality: 300 for 5s on `seedance-2.0` at 720p (150 at 480p, 750 at 1080p), 625 on `seedance-2.5` at 720p; reference clip seconds (video_refs) are billed at the same rate (600 for 5s plus a 5s reference clip) |
+| `POST /v2/generate/image` | GenerateImage | 20 per image on `gpt-image-2.5` |
 | `POST /v2/generate/audio` | GenerateAudio | 1 per 100 characters on `elevenlabs-tts`, rounded up |
 | `POST /v2/quote/{kind}` | the same body | 0: returns `{ credits, usd, model, mode?, quality?, breakdown, auto? }` without running |
 | `POST /v1/runs/{job_id}/rate` | `{ score: 1..5, note? }` | 0: records the user's verdict on a finished loose-surface run |
@@ -444,7 +444,7 @@ Response: `201 { job_id, status: "submitted", kind, model, mode?, quality?, cred
 
 The mode is derived from the body, one provider model per (catalog model, mode): `first_frame` (and optional `last_frame`) is **image-to-video**, the still becomes frame one and the clip animates it; `refs` / `video_refs` / `audio_refs` is **reference**, the identity, look, motion or sound is kept and the prompt addresses them as `@image1`, `@video1`, `@audio1` (numbered per list); neither is **text**. Frames and refs cannot be mixed on Seedance. Every limit of the (model, mode) cell is checked at submit, so an out-of-range `seconds`, `aspect`, `quality` or ref count is a 400 naming the allowed values, never a provider failure minutes later.
 
-`aspect` is one of `9:16`, `16:9`, `1:1`, `4:3`, `3:4`, `21:9`, `adaptive` (default 9:16 for text and reference, adaptive for image-to-video; `seedance-2.5` accepts adaptive only in image mode). `quality` is one of `480p`, `720p`, `1080p` (default 720p); the price per second follows it: `seedance-2.0` 15 credits/s at 480p, 30 at 720p, 75 at 1080p; `seedance-2.5` 50 credits/s at 480p, 99 at 720p, 180 at 1080p. No live model accepts a seed; the field exists for planned models only and is refused on every live one.
+`aspect` is one of `9:16`, `16:9`, `1:1`, `4:3`, `3:4`, `21:9`, `adaptive` (default 9:16 for text and reference, adaptive for image-to-video; `seedance-2.5` accepts adaptive only in image mode). `quality` is one of `480p`, `720p`, `1080p` (default 720p); the price per second follows it: `seedance-2.0` 30 credits/s at 480p, 60 at 720p, 150 at 1080p; `seedance-2.5` 60 credits/s at 480p, 125 at 720p, 225 at 1080p. No live model accepts a seed; the field exists for planned models only and is refused on every live one.
 
 | Model | Mode | Inputs | Seconds | Aspects | Qualities |
 |---|---|---|---|---|---|
@@ -684,9 +684,11 @@ MCP `list_models` includes that account check for cached clients; the public
 
 | Model | Kind | Tier | User price | Modes | Selectable via |
 |---|---|---|---|---|---|
-| `seedance-2.0` (default) | video | standard | 15 credits/s at 480p, 30 at 720p, 75 at 1080p | text 4 to 15 s; image 4 to 15 s; reference 4 to 15 s | `model` on `/v2/generate/video` and the `generate_video` MCP tool; `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
-| `seedance-2.5` | video | premium | 50 credits/s at 480p, 99 at 720p, 180 at 1080p | text 4 to 15 s; image 4 to 15 s; reference 4 to 15 s | `model` on `/v2/generate/video` and the `generate_video` MCP tool; `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
-| `gpt-image-2` (default) | image | standard | 20 credits/image | text-to-image, image-edit | `model` on `/v2/generate/image` and the `generate_image` MCP tool |
+| `seedance-2.0` (default) | video | standard | 30 credits/s at 480p, 60 at 720p, 150 at 1080p | text 4 to 15 s; image 4 to 15 s; reference 4 to 15 s | `model` on `/v2/generate/video` and the `generate_video` MCP tool; `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
+| `seedance-2.5` | video | premium | 60 credits/s at 480p, 125 at 720p, 225 at 1080p | text 4 to 15 s; image 4 to 15 s; reference 4 to 15 s | `model` on `/v2/generate/video` and the `generate_video` MCP tool; `engine` on `/v2/selfie`, `/v2/crazy-look`, CLI `--engine` |
+| `gpt-image-2.5` (default) | image | premium | 20 credits/image | text-to-image, image-edit | `model` on `/v2/generate/image` and the `generate_image` MCP tool |
+| `gpt-image-2.5-flare` | image | standard | 20 credits/image | text-to-image, image-edit | `model` on `/v2/generate/image` and the `generate_image` MCP tool |
+| `gpt-image-2` | image | standard | 20 credits/image | text-to-image, image-edit | `model` on `/v2/generate/image` and the `generate_image` MCP tool |
 | `elevenlabs-tts` (default) | audio | standard | 0.01 credits/character | text-to-speech | `model` on `/v2/generate/audio` and the `generate_audio` MCP tool |
 
 Planned, not selectable and unpriced until a real run is recorded: `seedance-2.0-mini`, `kling-o3`, `wan-3.0`, `omnihuman-1.5`, `sora-2`, `nano-banana-2`, `seedream-5.0-pro`, `z-image-turbo`, `doubao-seed-audio-1.0`, `suno`. One page per model lives under `docs/models/`.

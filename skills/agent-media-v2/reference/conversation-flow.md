@@ -215,4 +215,4 @@ There is no 5th gate about pricing. The API debits internally and allows a soft 
 - ❌ Asking for a photo when the user only gave a text description.
 - ❌ Suggesting a duration not in {5, 10, 15}.
 - ❌ **Mentioning credit cost, USD, or pricing to the user.** The API handles billing transparently. If asked about cost, point at <https://agent-media.ai/pricing>.
-- ❌ Falling back to `agent-media ugc` or any v1 command if v2 errors. Surface the error to the user instead.
+- ❌ Falling back to any v1 command if v2 errors (`agent-media ugc` no longer exists). Surface the error to the user instead.

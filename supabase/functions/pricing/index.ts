@@ -31,8 +31,7 @@
  *         "operation": "text_to_video",
  *         "durationSeconds": 5,
  *         "resolution": "720p",
- *         "creditCost": 38,
- *         "providerCostUsd": 0.25
+ *         "creditCost": 38
  *       },
  *       ...
  *     ]
@@ -50,7 +49,6 @@ interface PricingRow {
   duration_seconds: number | null;
   resolution: string | null;
   credit_cost: number;
-  provider_cost_usd: number;
   models: {
     is_active: boolean;
   } | null;
@@ -62,7 +60,6 @@ interface PricingEntry {
   durationSeconds: number | null;
   resolution: string | null;
   creditCost: number;
-  providerCostUsd: number;
 }
 
 // ── Simple IP-based rate limiting ────────────────────────────────────────────
@@ -168,7 +165,7 @@ async function handlePricing(req: Request): Promise<Response> {
   let query = db
     .from("model_pricing")
     .select(
-      "model_slug, operation, duration_seconds, resolution, credit_cost, provider_cost_usd, models!inner(is_active)",
+      "model_slug, operation, duration_seconds, resolution, credit_cost, models!inner(is_active)",
     )
     .eq("models.is_active", true)
     .order("model_slug")
@@ -198,7 +195,6 @@ async function handlePricing(req: Request): Promise<Response> {
     durationSeconds: row.duration_seconds,
     resolution: row.resolution,
     creditCost: row.credit_cost,
-    providerCostUsd: Number(row.provider_cost_usd),
   }));
 
   return jsonResponse({ pricing }, 200, origin);

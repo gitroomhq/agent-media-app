@@ -459,7 +459,7 @@ app.get('/health', (_req, res) => {
 
 function buildOpenApiSpec() {
   const paths: Record<string, unknown> = {};
-  for (const [id, gen] of Object.entries(GENERATORS).filter(([, gen]) => !(gen as { legacy?: boolean }).legacy)) {
+  for (const [id, gen] of Object.entries(GENERATORS).filter(([, gen]) => !(gen as { legacy?: boolean; retired?: boolean }).legacy && !(gen as { retired?: boolean }).retired)) {
     const jsonSchema = zodToJsonSchema(gen.inputSchema, { name: `${id}_input`, $refStrategy: 'none' });
     const schema = (jsonSchema as any).definitions?.[`${id}_input`] ?? jsonSchema;
     paths[`/v1/generate/${id}`] = {
@@ -780,7 +780,7 @@ function buildOpenApiSpec() {
 
   return {
     openapi: '3.1.0',
-    info: { title: 'agent-media API', version: '1.0.0', description: 'AI UGC video production API. Generate talking head videos, SaaS reviews, and styled subtitles.', contact: { url: 'https://agent-media.ai' }, license: { name: 'Apache-2.0' }, termsOfService: 'https://agent-media.ai/terms' },
+    info: { title: 'agent-media API', version: '1.0.0', description: 'AI UGC video production API. Generate video, images and audio with the v2 loose surface (/v2/generate/{kind}), selfie and product clips with the fixed generators, and styled subtitles.', contact: { url: 'https://agent-media.ai' }, license: { name: 'Apache-2.0' }, termsOfService: 'https://agent-media.ai/terms' },
     servers: [{ url: 'https://api.agent-media.ai', description: 'Production' }],
     paths,
     components: {

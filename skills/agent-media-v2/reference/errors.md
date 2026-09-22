@@ -13,7 +13,8 @@
 | `ERR_MODULE_NOT_FOUND: @agentmedia/schema` | You're on an old CLI. Run `npm install -g agent-media-cli@latest`. |
 | `Not authenticated. Run agent-media login first.` | API key missing. Run `agent-media login`. |
 | `LOGIN_TIMEOUT` | Browser didn't complete OAuth in time. Re-run `agent-media login`. |
-| `DEPRECATED v1 command: agent-media ugc` | You called a legacy command. Switch to `agent-media selfie`. |
+| `error: unknown command 'ugc'` | `ugc`, `review` and `persona` were removed in 1.19.0. Switch to `agent-media selfie`. |
+| `GENERATOR_RETIRED` (HTTP 410) | The v1 UGC pipeline is retired on the API. Use `agent-media selfie`. |
 
 ## API
 
