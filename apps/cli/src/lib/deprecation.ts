@@ -3,7 +3,7 @@
 /**
  * Legacy v1 command deprecation banner.
  *
- * Every v1 command (ugc, show-your-app, laptop-ugc, character-video,
+ * Every v1 command (show-your-app, laptop-ugc, character-video,
  * text-to-video, subtitle, product-acting) calls printDeprecation() at the
  * top of its action handler. The banner:
  *   - Prints a yellow stderr warning so HUMAN users see it
@@ -19,11 +19,6 @@
 import chalk from 'chalk';
 
 const REPLACEMENT: Record<string, { v2: string; explainer: string }> = {
-  ugc: {
-    v2: 'agent-media selfie',
-    explainer:
-      'v2 selfie ships a fully on-model character via a portrait → multi-pose sheet → wireframe → Seedance pipeline. Higher quality, consistent across clips, supports saved character ids.',
-  },
   'show-your-app': {
     v2: 'agent-media selfie  (Show Your App as a v2 product is on the roadmap)',
     explainer:

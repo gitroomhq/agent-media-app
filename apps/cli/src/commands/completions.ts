@@ -33,13 +33,11 @@ const COMMANDS = [
   'list',
   'login',
   'logout',
-  'persona',
   'plan',
   'profile',
   'status',
   'subscribe',
   'subtitle',
-  'ugc',
   'update',
   'usage',
   'version',
@@ -107,17 +105,9 @@ _agent_media_completions() {
                 COMPREPLY=( $(compgen -W "estimate history topup" -- "\${cur}") )
             fi
             ;;
-        ugc)
-            # UGC has many options but no positional subcommands to complete
-            ;;
         actor)
             if [[ \${COMP_CWORD} -eq 2 ]]; then
                 COMPREPLY=( $(compgen -W "list preview" -- "\${cur}") )
-            fi
-            ;;
-        persona)
-            if [[ \${COMP_CWORD} -eq 2 ]]; then
-                COMPREPLY=( $(compgen -W "list create delete" -- "\${cur}") )
             fi
             ;;
         apikey)
@@ -206,18 +196,10 @@ ${cmdLines}
                     credits_subcmds=(estimate history topup)
                     _describe -t subcommands 'credits subcommand' credits_subcmds
                     ;;
-                ugc)
-                    # UGC has many options but no positional subcommands
-                    ;;
                 actor)
                     local -a actor_subcmds
                     actor_subcmds=(list preview)
                     _describe -t subcommands 'actor subcommand' actor_subcmds
-                    ;;
-                persona)
-                    local -a persona_subcmds
-                    persona_subcmds=(list create delete)
-                    _describe -t subcommands 'persona subcommand' persona_subcmds
                     ;;
                 apikey)
                     local -a apikey_subcmds
@@ -282,13 +264,8 @@ complete -c agent-media -n "__fish_seen_subcommand_from config" -a "get set list
 # credits subcommand
 complete -c agent-media -n "__fish_seen_subcommand_from credits" -a "estimate history topup" -d "Credits action"
 
-# ugc subcommand (no positional completions, uses flags)
-
 # actor subcommand
 complete -c agent-media -n "__fish_seen_subcommand_from actor" -a "list preview" -d "Actor action"
-
-# persona subcommand
-complete -c agent-media -n "__fish_seen_subcommand_from persona" -a "list create delete" -d "Persona action"
 
 # apikey subcommand
 complete -c agent-media -n "__fish_seen_subcommand_from apikey" -a "list create revoke" -d "API key action"

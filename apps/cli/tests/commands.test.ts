@@ -114,27 +114,26 @@ describe('agent-media --help', () => {
 });
 
 // =============================================================================
-// saas-review command
+// retired v1 commands (2026-09-22)
 // =============================================================================
+//
+// ugc, saas-review/review and persona rendered on the v1 UGC pipeline, whose
+// Kling talking-head model was discontinued. They are gone from the CLI, not
+// hidden: an agent that still types them gets commander's unknown-command
+// error, and the API answers 410 for the old endpoints.
 
-describe('agent-media saas-review', () => {
-  it('remains callable as a hidden deprecated command', () => {
-    const topLevelHelp = run('--help');
-    assert.ok(!topLevelHelp.includes('saas-review'), 'top-level help hides legacy saas-review command');
+describe('retired v1 commands', () => {
+  for (const cmd of ['ugc', 'saas-review', 'review', 'persona']) {
+    it(`${cmd} is no longer a command`, () => {
+      const { stderr } = runExpectFail(`${cmd} "hello there"`);
+      assert.ok(stderr.includes(`unknown command '${cmd}'`), `${cmd} must be unknown, got: ${stderr}`);
+      assert.ok(!run('--help').includes(`  ${cmd} `), `top-level help must not list ${cmd}`);
+    });
+  }
 
-    const output = run('saas-review --help');
-    assert.ok(output.includes('Generate a SaaS review video'));
-    assert.ok(output.includes('--saas'));
-  });
-
-  it('keeps review as a hidden deprecated alias', () => {
-    const topLevelHelp = run('--help');
-    assert.ok(!topLevelHelp.includes('saas-review'), 'top-level help hides legacy saas-review command');
-    assert.ok(!topLevelHelp.includes('review      Generate a SaaS review'), 'top-level help hides legacy review command');
-
-    const aliasHelp = run('review --help');
-    assert.ok(aliasHelp.includes('Generate a SaaS review video'));
-    assert.ok(aliasHelp.includes('--saas'));
+  it('actor help points at product-acting and selfie, not ugc', () => {
+    const output = run('actor --help');
+    assert.ok(!output.includes('agent-media ugc'));
   });
 });
 
@@ -306,7 +305,7 @@ describe('command registration', () => {
       'list', 'profile', 'doctor', 'inspect',
       'delete', 'cancel', 'apikey', 'usage', 'subscribe', 'debug',
       'alias', 'update', 'completions',
-      'persona', 'actor', 'selfie', 'character', 'subs', 'skill',
+      'actor', 'selfie', 'character', 'subs', 'skill',
     ];
 
     for (const cmd of expectedCommands) {

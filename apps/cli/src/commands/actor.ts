@@ -111,7 +111,7 @@ export function registerActorCommand(program: Command): void {
         }
 
         console.log('');
-        console.log(chalk.dim(`  Use: agent-media ugc "script..." --actor <slug> --sync`));
+        console.log(chalk.dim(`  Use: agent-media product-acting --actor <slug> ...`));
       } catch (err) {
         if (mode === 'human') {
           console.error(chalk.red(`Error: ${(err as Error).message}`));
@@ -163,7 +163,7 @@ export function registerActorCommand(program: Command): void {
         console.log(`  ${chalk.gray('Lip Sync:')} ${a.lip_sync_engine}`);
         console.log(`  ${chalk.gray('Portrait:')} ${a.portrait_url}`);
         console.log('');
-        console.log(chalk.dim(`  Usage: agent-media ugc "your script..." --actor ${a.slug} --sync`));
+        console.log(chalk.dim(`  Usage: agent-media product-acting --actor ${a.slug} --product-image <file> ...`));
         console.log(chalk.dim(`  Variants: agent-media actor variants ${a.slug}`));
       } catch (err) {
         if (mode === 'human') {
@@ -234,7 +234,7 @@ export function registerActorCommand(program: Command): void {
 
         console.log('');
         console.log(chalk.dim(`  To use a specific variant, pass --face-url with the variant image URL.`));
-        console.log(chalk.dim(`  Example: agent-media ugc "script..." --face-url <variant-url> --sync`));
+        console.log(chalk.dim(`  Example: agent-media selfie --photo <variant-url> --description "..." --script "..."`));
       } catch (err) {
         if (mode === 'human') {
           console.error(chalk.red(`Error: ${(err as Error).message}`));
