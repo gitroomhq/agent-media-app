@@ -1,6 +1,6 @@
 {
   "name": "@agentmedia/sdk",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "description": "TypeScript SDK for agent-media \u2014 generate AI UGC videos with talking heads, B-roll, and subtitles programmatically.",
   "type": "module",
   "license": "Apache-2.0",

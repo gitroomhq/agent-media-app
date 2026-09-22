@@ -73,6 +73,19 @@ export interface ApiError {
   details?: unknown[];
 }
 
+/**
+ * The v1 UGC generators (ugc_video, saas_review, product_review) were retired
+ * on 2026-09-22 after Kling discontinued the model behind their talking head.
+ * The API answers 410 GENERATOR_RETIRED; the SDK raises the same error
+ * locally so the failure is typed and costs no request.
+ */
+function retiredError(method: string): AgentMediaError {
+  return new AgentMediaError(410, {
+    code: 'GENERATOR_RETIRED',
+    message: `${method}() is retired: the v1 UGC pipeline no longer renders. Use client.v2.selfie({ description, script }) for a talking-head clip with a generated person, or client.v2.generateVideo({ prompt, seconds }) for a clip from a prompt.`,
+  });
+}
+
 export class AgentMediaError extends Error {
   readonly code: string;
   readonly status: number;
@@ -92,7 +105,7 @@ export class AgentMediaError extends Error {
 // for users who want only the v2 surface and tree-shake the legacy class.
 import { AgentMediaV2 } from './v2/index.js';
 export { AgentMediaV2 } from './v2/index.js';
-export type { V2JobSubmitted, V2JobStatus, V2Config } from './v2/index.js';
+export type { V2JobSubmitted, V2JobStatus, V2Config, V2LooseSubmitted, V2Quote } from './v2/index.js';
 
 export class AgentMedia {
   private readonly apiKey: string;
@@ -138,9 +151,14 @@ export class AgentMedia {
     return this.request<JobStatus>('GET', `/v1/videos/${jobId}`);
   }
 
-  /** Submit a UGC video generation job. Returns immediately with job ID. */
-  async submitVideo(input: CreateVideoInput): Promise<JobSubmitted> {
-    return this.request<JobSubmitted>('POST', '/v1/generate/ugc_video', input);
+  /**
+   * @deprecated Retired on 2026-09-22. The v1 UGC pipeline no longer renders
+   * (its talking-head model was discontinued); the API answers 410. Use
+   * `client.v2.selfie(...)` for a talking-head clip with a generated person,
+   * or `client.v2.generateVideo(...)` for a clip from a prompt.
+   */
+  async submitVideo(_input: CreateVideoInput): Promise<JobSubmitted> {
+    throw retiredError('submitVideo');
   }
 
   /** Submit a subtitle job. */
@@ -148,17 +166,17 @@ export class AgentMedia {
     return this.request<JobSubmitted>('POST', '/v1/generate/subtitle', input);
   }
 
-  /** Submit a SaaS Review job. */
-  async submitSaasReview(input: SaasReviewInput): Promise<JobSubmitted> {
-    return this.request<JobSubmitted>('POST', '/v1/generate/saas_review', input);
+  /**
+   * @deprecated Retired on 2026-09-22 with the v1 UGC pipeline. Compose the
+   * review with `client.v2.selfie({ description, script })` instead.
+   */
+  async submitSaasReview(_input: SaasReviewInput): Promise<JobSubmitted> {
+    throw retiredError('submitSaasReview');
   }
 
-  /**
-   * Submit a SaaS Review job.
-   * @deprecated Use submitSaasReview. The product_review endpoint remains accepted as a legacy alias for one release.
-   */
-  async submitProductReview(input: ProductReviewInput): Promise<JobSubmitted> {
-    return this.submitSaasReview(input);
+  /** @deprecated Retired on 2026-09-22 with the v1 UGC pipeline. Use `client.v2.selfie(...)`. */
+  async submitProductReview(_input: ProductReviewInput): Promise<JobSubmitted> {
+    throw retiredError('submitProductReview');
   }
 
   /**
@@ -506,8 +524,8 @@ export class AgentMedia {
   }
 
   /**
-   * Generate a video and wait for completion.
-   * Polls every 5 seconds until done or timeout (default 10 minutes).
+   * @deprecated Retired on 2026-09-22 with the v1 UGC pipeline. Use
+   * `client.v2.runUntilDone(client.v2.selfie({ description, script }))`.
    */
   async createVideo(input: CreateVideoInput, options?: { timeoutMs?: number }): Promise<VideoResult> {
     const job = await this.submitVideo(input);

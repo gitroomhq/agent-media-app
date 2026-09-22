@@ -24,6 +24,20 @@ class AgentMediaError(Exception):
         self.details = details
 
 
+def _retired_error(method: str) -> AgentMediaError:
+    """The v1 UGC generators (ugc_video, saas_review, product_review) were retired
+    on 2026-09-22 after Kling discontinued the model behind their talking head.
+    The API answers 410 GENERATOR_RETIRED; the SDK raises the same error locally
+    so the failure is typed and costs no request."""
+    return AgentMediaError(
+        410,
+        "GENERATOR_RETIRED",
+        f"{method}() is retired: the v1 UGC pipeline no longer renders. Use "
+        "client.v2.selfie(description=..., script=...) for a talking-head clip with a "
+        "generated person, or client.v2.generate_video(prompt=..., seconds=...) for a clip from a prompt.",
+    )
+
+
 class AgentMedia:
     """Sync client for agent-media video generation API.
 
@@ -75,20 +89,26 @@ class AgentMedia:
         return self._request("GET", f"/v1/videos/{job_id}")
 
     def submit_video(self, **params: Any) -> dict:
-        """Submit a UGC video generation job. Returns immediately."""
-        return self._request("POST", "/v1/generate/ugc_video", json=params)
+        """Retired on 2026-09-22. Raises AgentMediaError(410, GENERATOR_RETIRED).
+
+        The v1 UGC pipeline no longer renders (its talking-head model was
+        discontinued). Use ``client.v2.selfie(description=..., script=...)`` for a
+        talking-head clip with a generated person, or
+        ``client.v2.generate_video(prompt=..., seconds=...)`` for a clip from a prompt.
+        """
+        raise _retired_error("submit_video")
 
     def submit_subtitle(self, **params: Any) -> dict:
         """Submit a subtitle job."""
         return self._request("POST", "/v1/generate/subtitle", json=params)
 
     def submit_saas_review(self, **params: Any) -> dict:
-        """Submit a SaaS Review job."""
-        return self._request("POST", "/v1/generate/saas_review", json=params)
+        """Retired on 2026-09-22 with the v1 UGC pipeline. Use ``client.v2.selfie``."""
+        raise _retired_error("submit_saas_review")
 
     def submit_product_review(self, **params: Any) -> dict:
-        """Deprecated wrapper for submit_saas_review."""
-        return self.submit_saas_review(**params)
+        """Retired on 2026-09-22 with the v1 UGC pipeline. Use ``client.v2.selfie``."""
+        raise _retired_error("submit_product_review")
 
     def submit_show_your_app(
         self,
@@ -299,9 +319,9 @@ class AgentMedia:
         raise AgentMediaError(408, "TIMEOUT", f"Timed out. Job: {job['job_id']}")
 
     def create_video(self, timeout_seconds: int = 600, poll_interval: int = 5, **params: Any) -> dict:
-        """Generate a video and wait for completion.
+        """Retired on 2026-09-22 with the v1 UGC pipeline.
 
-        Returns dict with job_id, video_url, credits_deducted.
+        Use ``client.v2.run_until_done(client.v2.selfie(description=..., script=...))``.
         """
         job = self.submit_video(**params)
         start = time.time()
@@ -584,16 +604,19 @@ class AsyncAgentMedia:
         return await self._request("GET", f"/v1/videos/{job_id}")
 
     async def submit_video(self, **params: Any) -> dict:
-        return await self._request("POST", "/v1/generate/ugc_video", json=params)
+        """Retired on 2026-09-22. See AgentMedia.submit_video."""
+        raise _retired_error("submit_video")
 
     async def submit_subtitle(self, **params: Any) -> dict:
         return await self._request("POST", "/v1/generate/subtitle", json=params)
 
     async def submit_saas_review(self, **params: Any) -> dict:
-        return await self._request("POST", "/v1/generate/saas_review", json=params)
+        """Retired on 2026-09-22 with the v1 UGC pipeline. Use ``client.v2.selfie``."""
+        raise _retired_error("submit_saas_review")
 
     async def submit_product_review(self, **params: Any) -> dict:
-        return await self.submit_saas_review(**params)
+        """Retired on 2026-09-22 with the v1 UGC pipeline. Use ``client.v2.selfie``."""
+        raise _retired_error("submit_product_review")
 
     async def submit_show_your_app(
         self,

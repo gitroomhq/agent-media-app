@@ -1,8 +1,8 @@
 # @agentmedia/sdk
 
-TypeScript SDK for [agent-media](https://agent-media.ai) — UGC video generation for developers.
+TypeScript SDK for [agent-media](https://agent-media.ai), AI UGC video generation for developers.
 
-Generate AI videos with realistic talking heads, B-roll, voiceover, animated subtitles, and music. One function call, finished video.
+Describe a person, give them a script, get a 9:16 clip with native audio and burned subtitles. Or generate any clip, image or voice from a prompt.
 
 [![npm version](https://img.shields.io/npm/v/@agentmedia/sdk)](https://www.npmjs.com/package/@agentmedia/sdk)
 [![license](https://img.shields.io/npm/l/@agentmedia/sdk)](https://github.com/gitroomhq/agent-media-app/blob/main/LICENSE)
@@ -20,20 +20,34 @@ import { AgentMedia } from '@agentmedia/sdk';
 
 const client = new AgentMedia({ apiKey: 'ma_YOUR_KEY' });
 
-// Generate a video — polls until complete, returns the URL
-const video = await client.createVideo({
-  script: 'Have you tried building UGC content at scale? This API makes it trivial.',
-  actor_slug: 'sofia',
-  tone: 'energetic',
-  style: 'hormozi',
-  target_duration: 10,
-});
+// A selfie clip: generated on-model person, native audio, subtitles burned in.
+// runUntilDone polls until the job lands (completed | failed).
+const done = await client.v2.runUntilDone(
+  client.v2.selfie({
+    description: 'woman in her late 20s, warm and natural, kitchen morning light',
+    script: 'Have you tried building UGC content at scale? This API makes it trivial.',
+    duration: 10,
+  }),
+);
 
-console.log(video.video_url);
+console.log(done.video_url);
 // → https://...mp4
 ```
 
-That's it. Script in, video URL out.
+Or one clip from a prompt on the loose surface:
+
+```typescript
+const job = await client.v2.generateVideo({
+  prompt: 'A 28-year-old woman in a bright kitchen, phone framing, says: "Okay, this actually works."',
+  seconds: 5,
+  aspect: '9:16',
+});
+const status = await client.v2.runUntilDone(Promise.resolve(job));
+```
+
+## Retired on 2026-09-22
+
+`createVideo`, `submitVideo`, `submitSaasReview` and `submitProductReview` wrapped the v1 UGC pipeline, whose talking-head model was discontinued by its provider. They now throw `AgentMediaError` with `status 410` and `code GENERATOR_RETIRED` without making a request. Move to `client.v2.selfie(...)` (a person delivering your script) or `client.v2.generateVideo(...)` (any clip from a prompt).
 
 ## API Reference
 
@@ -43,31 +57,6 @@ That's it. Script in, video URL out.
 |---|---|---|---|
 | `apiKey` | `string` | Yes | — |
 | `baseUrl` | `string` | No | `https://api.agent-media.ai` |
-
-### `client.createVideo(input, options?)`
-
-Generate a UGC video and wait for completion. Returns `{ job_id, video_url, credits_deducted, duration }`.
-
-```typescript
-const video = await client.createVideo({
-  script: 'Your script here (50-3000 chars)',
-  actor_slug: 'sofia',           // use listActors() to browse
-  tone: 'energetic',             // energetic | calm | confident | dramatic
-  music: 'chill',                // chill | energetic | corporate | dramatic | upbeat
-  style: 'hormozi',              // 17 subtitle styles available
-  target_duration: 10,           // 5 | 10 | 15 seconds
-  aspect_ratio: '9:16',          // 9:16 | 16:9 | 1:1
-  allow_broll: true,             // include AI-generated B-roll
-  template: 'saas-review',       // optional template
-  webhook_url: 'https://...',    // optional async callback
-});
-```
-
-**Timeout:** Default 10 minutes. Override with `{ timeoutMs: 300_000 }`.
-
-### `client.submitVideo(input)`
-
-Submit a video job without waiting. Returns `{ job_id, status, credits_deducted }`. Use with `getVideoStatus()` for custom polling.
 
 ### `client.submitSubtitle(input)`
 
@@ -80,19 +69,32 @@ const job = await client.submitSubtitle({
 });
 ```
 
-### `client.submitSaasReview(input)`
+### `client.v2.selfie(input)`
 
-Generate a SaaS Review video from a URL.
+Submit a selfie clip. Returns `{ job_id, status }`; poll with `client.v2.status(jobId)` or wrap in `client.v2.runUntilDone(...)`.
 
 ```typescript
-const job = await client.submitSaasReview({
-  product_url: 'https://example.com/product',
-  angle: 'enthusiastic', // honest | enthusiastic | roast | tutorial | comparison
-  actor_slug: 'sofia',
+const job = await client.v2.selfie({
+  description: 'woman in her late 20s, warm and natural',   // or character_id: 'char_...' from createCharacter
+  photo_url: 'https://cdn.example.com/me.png',              // optional exact likeness
+  script: 'Stop scrolling. This tool changed everything for me.',
+  duration: 10,                                             // 5 | 10 | 15
+  subtitles: true,
+  shot_preset: 'kitchen-glow-up',                           // optional scene
+  vibe: 'excited',                                          // excited | calm | sassy | serious | curious
+  engine: 'seedance-2.0',                                   // or seedance-2.5
 });
 ```
 
-`submitProductReview(input)` remains available as a deprecated wrapper for one release.
+75 credits plus 60 per second on seedance-2.0 (375 for 5s, 675 for 10s). Failed jobs are refunded.
+
+### `client.v2.generateVideo(input)`, `generateImage(input)`, `generateAudio(input)`, `quote(kind, input)`
+
+The loose surface, `POST /v2/generate/{kind}`. `generateVideo` takes `prompt`, `seconds`, `aspect`, `quality` (480p | 720p | 1080p), and either `first_frame` (+ `last_frame`) for image-to-video or `refs` / `video_refs` / `audio_refs` for reference-to-video. `quote` returns the credits for the same body without running it.
+
+### `client.v2.createCharacter(input)`
+
+Persist a person once (`name`, `description`, optional `photo_url`) and reuse the returned `character_id` on every selfie.
 
 ### `client.createProductActing(input, options?)`
 
@@ -179,7 +181,7 @@ if (status.status === 'completed') console.log(status.video_url);
 import { AgentMedia, AgentMediaError } from '@agentmedia/sdk';
 
 try {
-  const video = await client.createVideo({ script: '...' });
+  const job = await client.v2.selfie({ description: '...', script: '...' });
 } catch (err) {
   if (err instanceof AgentMediaError) {
     console.error(`${err.code}: ${err.message} (HTTP ${err.status})`);
@@ -192,39 +194,13 @@ try {
 All input types are exported from `@agentmedia/schema`:
 
 ```typescript
-import type { CreateVideoInput, SubtitleInput, ProductReviewInput, ProductActingInput } from '@agentmedia/sdk';
-```
-
-## PIP (Picture-in-Picture) Mode
-
-Compose talking head over custom background:
-
-```typescript
-const video = await client.createVideo({
-  script: '...',
-  actor_slug: 'sofia',
-  composition_mode: 'pip',
-  pip_options: {
-    position: 'bottom-center',  // bottom-center | bottom-left | bottom-right
-    size: 'medium',             // small | medium | large
-    animation: 'slide-up',      // slide-up | slide-left | slide-right | fade | scale
-    frame_style: 'rounded',     // none | rounded | shadow
-  },
-  broll_images: ['https://example.com/bg.jpg'],
-});
+import type { SubtitleInput, ProductActingInput, V2LooseSubmitted, V2Quote } from '@agentmedia/sdk';
+import type { SelfieInput, CharacterCreateInput } from '@agentmedia/schema/v2';
 ```
 
 ## Webhooks
 
-Skip polling — pass `webhook_url` and agent-media will POST to it when the job completes or fails.
-
-```typescript
-const job = await client.submitVideo({
-  script: '...',
-  actor_slug: 'sofia',
-  webhook_url: 'https://example.com/webhooks/agent-media?secret=MY_TOKEN',
-});
-```
+The v2 routes have no `webhook_url` field. Poll `client.v2.status(jobId)` (the API sends `Retry-After: 5` while a job runs) or let `client.v2.runUntilDone(...)` do it. `webhook_url` still works on the remaining v1 generators (`submitSubtitle`, `createProductActing`, `createShowYourApp`, `createLaptopUgc`):
 
 **Payload on success:**
 
@@ -242,7 +218,7 @@ const job = await client.submitVideo({
 {
   "job_id": "550e8400-e29b-41d4-a716-446655440000",
   "status": "failed",
-  "error_message": "Script exceeded maximum duration for selected actor."
+  "error_message": "Reference image is corrupt or unreadable."
 }
 ```
 
@@ -251,20 +227,22 @@ const job = await client.submitVideo({
 - Publicly reachable
 - Max 2048 characters
 - Retries on non-2xx: 3 attempts with exponential backoff (1 s, 4 s, 16 s)
-- Query strings are preserved — append `?secret=MY_TOKEN` to verify authenticity
+- Query strings are preserved: append `?secret=MY_TOKEN` to verify authenticity
 
 ## Batch Generation
 
 ```typescript
 const scripts = ['Script 1...', 'Script 2...', 'Script 3...'];
 
-const videos = await Promise.all(
+const results = await Promise.all(
   scripts.map(script =>
-    client.createVideo({ script, actor_slug: 'sofia', tone: 'confident' })
-  )
+    client.v2.runUntilDone(
+      client.v2.selfie({ description: 'woman in her late 20s, warm and natural', script, vibe: 'serious' }),
+    ),
+  ),
 );
 
-videos.forEach(v => console.log(v.video_url));
+results.forEach(r => console.log(r.video_url));
 ```
 
 ## Related Packages

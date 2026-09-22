@@ -52,6 +52,25 @@ class AgentMediaV2:
         """Create + persist a v2 character. Returns immediately with job_id."""
         return self._request("POST", "/v2/characters", json=params)
 
+    # ── the loose surface: POST /v2/generate/{kind} ────────────────────
+    def generate_video(self, **params: Any) -> dict:
+        """One clip from a prompt (text, image-to-video via first_frame, or
+        reference via refs/video_refs/audio_refs). Fields: prompt, model, seconds,
+        aspect, quality, first_frame, last_frame, refs, video_refs, audio_refs, audio."""
+        return self._request("POST", "/v2/generate/video", json=params)
+
+    def generate_image(self, **params: Any) -> dict:
+        """One image from a prompt. Fields: prompt, model, refs, size."""
+        return self._request("POST", "/v2/generate/image", json=params)
+
+    def generate_audio(self, **params: Any) -> dict:
+        """Text to speech. Fields: text, model, voice, tone."""
+        return self._request("POST", "/v2/generate/audio", json=params)
+
+    def quote(self, kind: str, **params: Any) -> dict:
+        """Price a generate call (kind: video | image | audio) without running it. Free."""
+        return self._request("POST", f"/v2/quote/{kind}", json=params)
+
     # ── status + polling ───────────────────────────────────────────────
     def status(self, job_id: str) -> dict:
         """Status of any v2 job. Same shape as the v1 status route."""
@@ -114,6 +133,18 @@ class AsyncAgentMediaV2:
 
     async def create_character(self, **params: Any) -> dict:
         return await self._request("POST", "/v2/characters", json=params)
+
+    async def generate_video(self, **params: Any) -> dict:
+        return await self._request("POST", "/v2/generate/video", json=params)
+
+    async def generate_image(self, **params: Any) -> dict:
+        return await self._request("POST", "/v2/generate/image", json=params)
+
+    async def generate_audio(self, **params: Any) -> dict:
+        return await self._request("POST", "/v2/generate/audio", json=params)
+
+    async def quote(self, kind: str, **params: Any) -> dict:
+        return await self._request("POST", f"/v2/quote/{kind}", json=params)
 
     async def status(self, job_id: str) -> dict:
         return await self._request("GET", f"/v1/videos/{job_id}")
