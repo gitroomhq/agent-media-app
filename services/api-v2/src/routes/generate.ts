@@ -12,6 +12,7 @@ import type { Request, Response } from 'express';
 import {
   GENERATOR_IDS,
   GENERATORS,
+  RETIRED_GENERATORS,
   type GeneratorId,
   CREDITS_PER_SECOND,
   SCRIPT_GENERATION_CREDIT_SURCHARGE,
@@ -231,6 +232,19 @@ export async function generateRoute(req: Request, res: Response): Promise<void> 
   const generatorId = requestedGeneratorId === 'product_review' ? 'saas_review' : requestedGeneratorId;
   const userId = (req as any).userId as string;
   const authToken = (req as any).authToken as string;
+
+  // ── Retired generators answer 410, never create a job, never touch credits ──
+  if (generatorId in RETIRED_GENERATORS) {
+    const retired = RETIRED_GENERATORS[generatorId];
+    res.status(410).json({
+      error: {
+        code: 'GENERATOR_RETIRED',
+        message: `${requestedGeneratorId} is retired and no longer renders. ${retired.description} Use the "${retired.replacement}" generator instead (CLI: agent-media ${retired.replacement}).`,
+        replacement: retired.replacement,
+      },
+    });
+    return;
+  }
 
   // ── Look up generator ──────────────────────────────────────────────────
   if (!(generatorId in GENERATORS)) {

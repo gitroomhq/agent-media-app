@@ -22,20 +22,26 @@ import {
 
 export const GENERATORS = {
   ugc_video: {
-    description: 'Generate a UGC-style video from a script or prompt',
+    description: 'Retired on 2026-09-22. The v1 UGC pipeline rendered its talking head on a Kling model that Kling discontinued. Use the v2 selfie generator.',
     inputSchema: CreateVideoSchema,
     output: 'video_url' as const,
+    retired: true,
+    replacement: 'selfie',
   },
   saas_review: {
-    description: 'Generate a SaaS review video from a SaaS product URL',
+    description: 'Retired on 2026-09-22. SaaS review ran on the same v1 UGC pipeline and its discontinued Kling talking head. Use the v2 selfie generator with your own script.',
     inputSchema: SaasReviewSchema,
     output: 'video_url' as const,
+    retired: true,
+    replacement: 'selfie',
   },
   product_review: {
-    description: 'Legacy alias for SaaS Review video generation',
+    description: 'Retired on 2026-09-22. Legacy alias of saas_review. Use the v2 selfie generator.',
     inputSchema: ProductReviewSchema,
     output: 'video_url' as const,
     legacy: true,
+    retired: true,
+    replacement: 'selfie',
   },
   subtitle: {
     description: 'Add styled subtitles to an existing video',
@@ -71,6 +77,14 @@ export const GENERATORS = {
 
 export type GeneratorId = keyof typeof GENERATORS;
 
-export const GENERATOR_IDS = Object.keys(GENERATORS).filter(
-  (id) => !(GENERATORS[id as GeneratorId] as { legacy?: boolean }).legacy,
-) as GeneratorId[];
+export const GENERATOR_IDS = Object.keys(GENERATORS).filter((id) => {
+  const gen = GENERATORS[id as GeneratorId] as { legacy?: boolean; retired?: boolean };
+  return !gen.legacy && !gen.retired;
+}) as GeneratorId[];
+
+/** Generators that no longer run. A request for one is answered 410 with the replacement. */
+export const RETIRED_GENERATORS: Record<string, { replacement: string; description: string }> = Object.fromEntries(
+  Object.entries(GENERATORS)
+    .filter(([, gen]) => (gen as { retired?: boolean }).retired)
+    .map(([id, gen]) => [id, { replacement: (gen as { replacement: string }).replacement, description: gen.description }]),
+);

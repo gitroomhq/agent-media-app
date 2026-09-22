@@ -129,7 +129,7 @@ describeIfKey('Contract: response shapes match spec', () => {
   });
 
   it('error response matches Error schema', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {});
+    const { status, data } = await api('POST', '/v1/generate/text_to_video', {});
     expect(status).toBe(400);
     // Error required: error.code, error.message
     expect(data).toHaveProperty('error');
@@ -153,114 +153,55 @@ describeIfKey('Contract: response shapes match spec', () => {
     expect(typeof data.error.message).toBe('string');
   });
 
-  it('spec enum values match API validation for all enums', async () => {
-    // Fetch spec and extract enums
+  it('spec enum values match API validation (text_to_video aspect_ratio)', async () => {
     const spec = await (await fetch(`${BASE}/openapi.json`)).json();
-    const ugcSchema = spec.paths['/v1/generate/ugc_video'].post.requestBody.content['application/json'].schema;
-
-    // Test tone enum
-    const toneEnum = ugcSchema.properties.tone.enum;
-    expect(toneEnum).toContain('energetic');
-    expect(toneEnum).toContain('calm');
-    expect(toneEnum).toContain('confident');
-    expect(toneEnum).toContain('dramatic');
-    expect(toneEnum).toHaveLength(4);
-
-    // Test music enum
-    const musicEnum = ugcSchema.properties.music.enum;
-    expect(musicEnum).toContain('chill');
-    expect(musicEnum).toContain('upbeat');
-    expect(musicEnum).toHaveLength(5);
-
-    // Test aspect_ratio enum
-    const arEnum = ugcSchema.properties.aspect_ratio.enum;
+    const schema = spec.paths['/v1/generate/text_to_video'].post.requestBody.content['application/json'].schema;
+    const arEnum = schema.properties.aspect_ratio.enum;
     expect(arEnum).toContain('9:16');
     expect(arEnum).toContain('16:9');
-    expect(arEnum).toContain('1:1');
-    expect(arEnum).toHaveLength(3);
 
     // Verify API rejects values NOT in the spec enum
-    const { status } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A'.repeat(50),
-      tone: 'nonexistent_tone',
+    const { status } = await api('POST', '/v1/generate/text_to_video', {
+      prompt: 'A'.repeat(50),
+      aspect_ratio: '7:3',
     });
-    expect(status).toBe(400);
-  });
-});
-
-// ── POST /v1/generate/ugc_video — validation ────────────────────────────────
-
-describeIfKey('POST /v1/generate/ugc_video — validation', () => {
-  it('rejects empty body', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {});
-    expect(status).toBe(400);
-    expect(data.error.code).toBe('VALIDATION_ERROR');
-  });
-
-  it('rejects script too short', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', { script: 'short' });
-    expect(status).toBe(400);
-    expect(data.error.message).toContain('50');
-  });
-
-  it('rejects invalid tone', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A'.repeat(50),
-      tone: 'angry',
-    });
-    expect(status).toBe(400);
-    expect(data.error.message).toContain('tone');
-    expect(data.error.details[0].options).toEqual(['energetic', 'calm', 'confident', 'dramatic']);
-  });
-
-  it('rejects invalid music', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A'.repeat(50),
-      music: 'jazz',
-    });
-    expect(status).toBe(400);
-    expect(data.error.details[0].options).toEqual(['chill', 'energetic', 'corporate', 'dramatic', 'upbeat']);
-  });
-
-  it('rejects invalid aspect_ratio', async () => {
-    const { status } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A'.repeat(50),
-      aspect_ratio: '4:3',
-    });
-    expect(status).toBe(400);
-  });
-
-  it('rejects SSRF in webhook_url', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A'.repeat(50),
-      webhook_url: 'https://169.254.169.254/latest/meta-data/',
-    });
-    expect(status).toBe(400);
-    expect(data.error.message).toContain('private IP');
-  });
-
-  it('rejects SSRF in broll_images', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A'.repeat(50),
-      broll_images: ['http://localhost:3000/admin'],
-    });
-    expect(status).toBe(400);
-    expect(data.error.message).toContain('localhost');
-  });
-
-  it('returns 404 for invalid actor slug with suggestion', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A'.repeat(50),
-      actor_slug: 'sofya',
-    });
-    // May get 429 if rate limited from prior tests
     if (status === 429) return;
-    expect(status).toBe(404);
-    expect(data.error.message).toContain('sofia');
+    expect(status).toBe(400);
   });
 });
 
-// ── POST /v1/generate — generator routing ───────────────────────────────────
+// ── POST /v1/generate/ugc_video — retired 2026-09-22 ───────────────────────
+//
+// The v1 UGC pipeline rendered its talking head on a Kling model that Kling
+// discontinued (code 1203). ugc_video, saas_review and product_review answer
+// 410 with the replacement and never create a job. The validation and
+// word-budget regressions that used to run through ugc_video are covered by
+// product_acting_ugc below and by the schema unit tests.
+
+describeIfKey('POST /v1/generate/ugc_video — retired', () => {
+  it.each(['ugc_video', 'saas_review', 'product_review'])('%s answers 410 GENERATOR_RETIRED pointing at selfie', async (id) => {
+    const { status, data } = await api('POST', `/v1/generate/${id}`, { script: 'A'.repeat(50) });
+    if (status === 429) return;
+    expect(status).toBe(410);
+    expect(data.error.code).toBe('GENERATOR_RETIRED');
+    expect(data.error.replacement).toBe('selfie');
+  });
+
+  it('the CLI compatibility path answers the same 410', async () => {
+    const { status, data } = await api('POST', '/functions/v1/ugc-video', { script: 'A'.repeat(50) });
+    if (status === 429) return;
+    expect(status).toBe(410);
+    expect(data.error.code).toBe('GENERATOR_RETIRED');
+  });
+
+  it('retired generators are absent from the OpenAPI spec and /health', async () => {
+    const spec = await (await fetch(`${BASE}/openapi.json`)).json();
+    for (const id of ['ugc_video', 'saas_review', 'product_review']) expect(spec.paths[`/v1/generate/${id}`]).toBeUndefined();
+    const health = await (await fetch(`${BASE}/health`)).json();
+    expect(health.generators).not.toContain('ugc_video');
+    expect(health.generators).not.toContain('saas_review');
+  });
+});
 
 describeIfKey('POST /v1/generate — routing', () => {
   it('returns 404 for unknown generator', async () => {
@@ -271,7 +212,7 @@ describeIfKey('POST /v1/generate — routing', () => {
   });
 
   it('returns 401 without auth', async () => {
-    const resp = await fetch(`${BASE}/v1/generate/ugc_video`, {
+    const resp = await fetch(`${BASE}/v1/generate/text_to_video`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
@@ -307,73 +248,6 @@ function skipIf403(status: number): boolean {
   }
   return false;
 }
-
-describeIfKey('Validation regression — script_too_long for ugc_video', () => {
-  it('rejects a 13-word script for duration=5 with code script_too_long', async () => {
-    const script = 'one two three four five six seven eight nine ten eleven twelve thirteen';
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script,
-      target_duration: 5,
-    });
-    if (skipIf403(status)) return;
-    expect(status).toBe(400);
-    expect(data.error).toBe('script_too_long');
-    expect(data.error_description).toContain('13 words');
-    expect(data.error_description).toContain('max 12 for 5s');
-  });
-
-  it('error message recommends a longer duration as fix', async () => {
-    const script = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen';
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script,
-      target_duration: 5,
-    });
-    if (skipIf403(status)) return;
-    expect(status).toBe(400);
-    expect(data.error).toBe('script_too_long');
-    expect(data.error_description).toMatch(/--duration\s+\d+/);
-  });
-
-  it('rejects an over-37-word script even at duration=15', async () => {
-    const script = 'word '.repeat(50).trim();
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script,
-      target_duration: 15,
-    });
-    if (skipIf403(status)) return;
-    expect(status).toBe(400);
-    expect(data.error).toBe('script_too_long');
-  });
-});
-
-describeIfKey('Validation regression — simple-mode duration cap', () => {
-  it('rejects duration=15 simple-mode (no broll, no scenes, has actor)', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A short script that fits well within the fifteen second word budget for this regression test.',
-      target_duration: 15,
-      actor_slug: 'sofia',
-    });
-    if (skipIf403(status)) return;
-    expect(status).toBe(400);
-    expect(data.error).toBe('duration_exceeds_simple_mode_cap');
-    expect(data.error_description).toMatch(/--broll|--scenes/);
-  });
-
-  it('does NOT reject duration=10 simple-mode (boundary value, allowed)', async () => {
-    const { status, data } = await api('POST', '/v1/generate/ugc_video', {
-      script: 'A script that fits within twenty-five word budget for ten seconds duration.',
-      target_duration: 10,
-      actor_slug: 'sofia',
-    });
-    if (skipIf403(status)) return;
-    // Should not be the simple-mode cap error (200, 402 insufficient credits,
-    // or another validation error are all acceptable — anything except this
-    // specific cap rejection).
-    if (status === 400) {
-      expect(data.error).not.toBe('duration_exceeds_simple_mode_cap');
-    }
-  });
-});
 
 describeIfKey('Validation regression — product_acting_ugc script length', () => {
   it('rejects a too-long script (Zod-level VALIDATION_ERROR or app-level SCRIPT_TOO_LONG)', async () => {

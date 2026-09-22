@@ -60,7 +60,8 @@ const FIELD_DESCRIPTIONS: Record<string, string> = {
 
 const paths: Record<string, unknown> = {};
 
-for (const [id, gen] of Object.entries(GENERATORS).filter(([, gen]) => !(gen as { legacy?: boolean }).legacy)) {
+const isPublic = (gen: unknown) => !(gen as { legacy?: boolean; retired?: boolean }).legacy && !(gen as { retired?: boolean }).retired;
+for (const [id, gen] of Object.entries(GENERATORS).filter(([, gen]) => isPublic(gen))) {
   const jsonSchema = zodToJsonSchema(gen.inputSchema, {
     name: `${id}_input`,
     $refStrategy: 'none',
@@ -95,21 +96,9 @@ for (const [id, gen] of Object.entries(GENERATORS).filter(([, gen]) => !(gen as 
         content: {
           'application/json': {
             schema,
-            example: id === 'ugc_video' ? {
-              script: 'Have you ever struggled with creating video content? This tool changed everything for me.',
-              actor_slug: 'sofia',
-              tone: 'energetic',
-              music: 'upbeat',
-              style: 'hormozi',
-              target_duration: 10,
-              aspect_ratio: '9:16',
-            } : id === 'subtitle' ? {
+            example: id === 'subtitle' ? {
               video_url: 'https://example.com/video.mp4',
               style: 'hormozi',
-            } : id === 'saas_review' ? {
-              product_url: 'https://example.com/product',
-              angle: 'honest',
-              actor_slug: 'marcus',
             } : id === 'show_your_app' ? {
               app_screenshot_url: 'https://cdn.example.com/my-app.png',
               script: 'You really need to try this',
@@ -128,52 +117,7 @@ for (const [id, gen] of Object.entries(GENERATORS).filter(([, gen]) => !(gen as 
           },
         },
       },
-      'x-codeSamples': id === 'ugc_video' ? [
-        {
-          lang: 'curl',
-          label: 'cURL',
-          source: `curl -X POST https://api.agent-media.ai/v1/generate/ugc_video \\
-  -H "Authorization: Bearer ma_YOUR_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "script": "Have you ever struggled with creating video content? This tool changed everything for me.",
-    "actor_slug": "sofia",
-    "tone": "energetic",
-    "style": "hormozi",
-    "target_duration": 10
-  }'`,
-        },
-        {
-          lang: 'python',
-          label: 'Python',
-          source: `from agent_media import AgentMedia
-
-client = AgentMedia(api_key="ma_YOUR_KEY")
-video = client.create_video(
-    script="Have you ever struggled with creating video content? This tool changed everything for me.",
-    actor_slug="sofia",
-    tone="energetic",
-    style="hormozi",
-    target_duration=10,
-)
-print(video["video_url"])`,
-        },
-        {
-          lang: 'typescript',
-          label: 'TypeScript',
-          source: `import { AgentMedia } from '@agent-media/sdk';
-
-const client = new AgentMedia({ apiKey: 'ma_YOUR_KEY' });
-const video = await client.createVideo({
-  script: 'Have you ever struggled with creating video content? This tool changed everything for me.',
-  actor_slug: 'sofia',
-  tone: 'energetic',
-  style: 'hormozi',
-  target_duration: 10,
-});
-console.log(video.video_url);`,
-        },
-      ] : undefined,
+      'x-codeSamples': undefined,
       responses: {
         '201': {
           description: 'Job submitted successfully',
@@ -473,4 +417,4 @@ mkdirSync(outputDir, { recursive: true });
 writeFileSync(outputPath, JSON.stringify(spec, null, 2), 'utf-8');
 console.log(`Generated: ${outputPath}`);
 console.log(`Endpoints: ${Object.keys(paths).length}`);
-console.log(`Generators: ${Object.values(GENERATORS).filter((gen) => !(gen as { legacy?: boolean }).legacy).length}`);
+console.log(`Generators: ${Object.values(GENERATORS).filter((gen) => isPublic(gen)).length}`);

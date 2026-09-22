@@ -328,9 +328,12 @@ describe('Parity: pip_options', () => {
 // ── Enum completeness: verify schema arrays match production ────────────────
 
 describe('Enum completeness: values match production', () => {
-  it('promotes saas_review and keeps product_review as an undocumented legacy alias', () => {
-    expect(GENERATOR_IDS).toContain('saas_review');
+  it('retires the v1 UGC family (ugc_video, saas_review, product_review) out of the public generator list', () => {
+    expect(GENERATOR_IDS).not.toContain('ugc_video');
+    expect(GENERATOR_IDS).not.toContain('saas_review');
     expect(GENERATOR_IDS).not.toContain('product_review');
+    expect(GENERATORS.ugc_video.retired).toBe(true);
+    expect(GENERATORS.saas_review.retired).toBe(true);
     expect(GENERATORS.product_review.legacy).toBe(true);
     expect(GENERATORS.product_review.inputSchema).toBe(GENERATORS.saas_review.inputSchema);
   });
