@@ -265,9 +265,10 @@ generic 500 mid-render. Pin models with `EVOLINK_SEEDANCE_MODEL`,
 it in `providers/index.js`, add it to `PROVIDERS`. No pipeline changes.
 
 Images go through `gpt-image-2` (`OPENAI_API_KEY`) and prompt craft through
-Anthropic (`ANTHROPIC_API_KEY`). The legacy b-roll and talking-head lanes still
-read `BROLL_PROVIDER` / `TALKING_HEAD_PROVIDER` directly and have not yet been
-migrated onto the registry — see [CONTRIBUTING.md](CONTRIBUTING.md).
+Anthropic (`ANTHROPIC_API_KEY`). The v1 b-roll and talking-head lanes
+(`BROLL_PROVIDER` / `TALKING_HEAD_PROVIDER`, Kling and Replicate) were retired
+on 2026-09-22 together with the v1 UGC pipeline; the worker no longer reads
+those variables.
 
 ## Security model
 

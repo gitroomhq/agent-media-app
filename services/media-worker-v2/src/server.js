@@ -1,15 +1,17 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
 
 /**
- * Media Worker — Express server that processes subtitle and UGC video jobs.
+ * Media Worker — Express server that processes subtitle and video jobs.
  *
  * POST /subtitle — Subtitle burning pipeline
- * POST /ugc — UGC video production pipeline (script → scenes → TTS → B-roll → assembly)
+ *
+ * The v1 UGC pipeline (POST /ugc: script → scenes → Kling talking head →
+ * B-roll → assembly) was retired on 2026-09-22 after Kling discontinued its
+ * model. The API answers 410 for it; nothing reaches this worker.
  */
 
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { processUGC } from './ugc-pipeline.js';
 import { transcribeWithWhisper } from './whisper.js';
 import { generateASS } from './ass-generator.js';
 import { execFile } from 'node:child_process';
@@ -166,85 +168,30 @@ app.post('/subtitle', verifySecret, async (req, res) => {
   );
 });
 
-// ── UGC endpoint ────────────────────────────────────────────────────────────
+// ── Retired pipelines ───────────────────────────────────────────────────────
+//
+// A queued item with no known `_pipeline` tag cannot be run. This only happens
+// if a stale caller still posts a v1 UGC payload; the job is failed through
+// the callback so credits are refunded, and the user's queue keeps draining.
 
-app.post('/ugc', verifySecret, async (req, res) => {
-  const { job_id, script, voice, model, style, user_id, callback_url, face_photo_url, target_duration, aspect_ratio, music, cta, tts_provider, tone, allow_broll, broll_images, dub_language, scenes_input, product_image_url, template, broll_model, voice_speed, composition_mode, pip_position, pip_size, pip_animation, pip_style, overlay_text, overlay_image, unified_voice, webhook_url } = req.body;
-
-  if (!job_id || !script) {
-    return res.status(400).json({ error: 'missing job_id or script' });
-  }
-
-  const queueKey = user_id || 'anonymous';
-  if (!userQueues.has(queueKey)) {
-    userQueues.set(queueKey, { running: false, queue: [] });
-  }
-  const userQ = userQueues.get(queueKey);
-
-  const jobParams = { job_id, script, voice, model, style, user_id, callback_url, face_photo_url, target_duration, aspect_ratio, music, cta, tts_provider, tone, allow_broll, broll_images, dub_language, scenes_input, product_image_url, template, broll_model, voice_speed, composition_mode, pip_position, pip_size, pip_animation, pip_style, overlay_text, overlay_image, unified_voice: true, webhook_url };
-
-  if (userQ.running) {
-    // Another job is already running for this user — enqueue
-    userQ.queue.push(jobParams);
-    const position = userQ.queue.length;
-    console.log(`[${job_id}] Queued for user ${queueKey} (position ${position})`);
-    return res.status(202).json({ accepted: true, job_id, queued: true, position });
-  }
-
-  // No job running — start immediately
-  res.status(202).json({ accepted: true, job_id });
-  runUGCJob(queueKey, jobParams);
-});
-
-function runUGCJob(queueKey, params) {
+function runRetiredJob(queueKey, params) {
   const userQ = userQueues.get(queueKey);
   userQ.running = true;
-  const { job_id, callback_url } = params;
-
-  console.log(`[${job_id}] Starting UGC job for user ${queueKey} (${userQ.queue.length} queued)`);
+  const { job_id, callback_url, _pipeline } = params;
+  console.error(`[${job_id}] refusing retired/unknown pipeline "${_pipeline ?? 'ugc'}" for user ${queueKey}`);
   sendCallback(callback_url, {
     job_id,
-    status: 'processing',
-    stage: 'started',
-    message: 'UGC job started',
-  }).catch(() => {});
-
-  processUGC(params)
-    .catch((err) => {
-      console.error(`[${job_id}] Fatal error:`, err.message);
-      const { code, message } = classifyError(err);
-      return sendCallback(callback_url, {
-        job_id,
-        status: 'failed',
-        error: message,
-        error_code: code,
-      }).catch(() => {});
-    })
+    status: 'failed',
+    error: 'This pipeline is retired. Use the v2 selfie generator.',
+    error_code: 'GENERATOR_RETIRED',
+  })
+    .catch(() => {})
     .finally(() => {
-      // Process next job in queue or mark idle
       if (userQ.queue.length > 0) {
-        const next = userQ.queue.shift();
-        console.log(`[${next.job_id}] Dequeuing for user ${queueKey} (${userQ.queue.length} remaining)`);
-        if (next._pipeline === 'show-your-app') {
-          runShowYourAppJob(queueKey, next);
-        } else if (next._pipeline === 'product-acting') {
-          runProductActingJob(queueKey, next);
-        } else if (next._pipeline === 'laptop-ugc') {
-          runLaptopUgcJob(queueKey, next);
-        } else if (next._pipeline === 'character-video') {
-          runCharacterVideoJob(queueKey, next);
-        } else if (next._pipeline === 'character-sheet') {
-          runCharacterSheetJob(queueKey, next);
-        } else if (next._pipeline === 'character-storyboard') {
-          runCharacterStoryboardJob(queueKey, next);
-        } else if (next._pipeline === 'text-to-video') {
-          runTextToVideoJob(queueKey, next);
-        } else {
-          runUGCJob(queueKey, next);
-        }
+        dispatchNext(queueKey, userQ.queue.shift());
       } else {
         userQ.running = false;
-        userQueues.delete(queueKey); // clean up idle entries
+        userQueues.delete(queueKey);
       }
     });
 }
@@ -330,7 +277,7 @@ function runShowYourAppJob(queueKey, params) {
         } else if (next._pipeline === 'text-to-video') {
           runTextToVideoJob(queueKey, next);
         } else {
-          runUGCJob(queueKey, next);
+          runRetiredJob(queueKey, next);
         }
       } else {
         userQ.running = false;
@@ -444,7 +391,7 @@ function runProductActingJob(queueKey, params) {
         } else if (next._pipeline === 'text-to-video') {
           runTextToVideoJob(queueKey, next);
         } else {
-          runUGCJob(queueKey, next);
+          runRetiredJob(queueKey, next);
         }
       } else {
         userQ.running = false;
@@ -554,7 +501,7 @@ function runLaptopUgcJob(queueKey, params) {
         } else if (next._pipeline === 'text-to-video') {
           runTextToVideoJob(queueKey, next);
         } else {
-          runUGCJob(queueKey, next);
+          runRetiredJob(queueKey, next);
         }
       } else {
         userQ.running = false;
@@ -770,7 +717,7 @@ function runCharacterVideoJob(queueKey, params) {
         } else if (next._pipeline === 'text-to-video') {
           runTextToVideoJob(queueKey, next);
         } else {
-          runUGCJob(queueKey, next);
+          runRetiredJob(queueKey, next);
         }
       } else {
         userQ.running = false;
@@ -876,7 +823,7 @@ function runTextToVideoJob(queueKey, params) {
         } else if (next._pipeline === 'text-to-video') {
           runTextToVideoJob(queueKey, next);
         } else {
-          runUGCJob(queueKey, next);
+          runRetiredJob(queueKey, next);
         }
       } else {
         userQ.running = false;
@@ -1103,7 +1050,7 @@ function dispatchNext(queueKey, next) {
   } else if (next._pipeline === 'text-to-video') {
     runTextToVideoJob(queueKey, next);
   } else {
-    runUGCJob(queueKey, next);
+    runRetiredJob(queueKey, next);
   }
 }
 

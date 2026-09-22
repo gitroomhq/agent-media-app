@@ -24,8 +24,9 @@ const POLL_BATCH_SIZE = Number(process.env.QUEUE_POLL_BATCH ?? 1);
 const POLL_IDLE_MS = Number(process.env.QUEUE_POLL_IDLE_MS ?? 2000);
 const VISIBILITY_TIMEOUT_SEC = Number(process.env.QUEUE_VISIBILITY_TIMEOUT_SEC ?? 900); // 15 min
 
+// 'ugc' (the v1 UGC pipeline) was retired on 2026-09-22; a stale message
+// with that target is archived by the invalid-target branch below.
 const ALLOWED_TARGETS = new Set([
-  'ugc',
   'show-your-app',
   'product-acting',
   'laptop-ugc',
