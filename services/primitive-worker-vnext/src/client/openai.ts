@@ -285,6 +285,33 @@ export async function generateImageWithFallback(
  * (bad prompt, content policy, auth, payload too large) must not retry —
  * each retry burns more credit. 5xx and network errors are transient.
  */
+/**
+ * OpenAI's image safety system refuses a request outright (400) when the
+ * reference photo shows a recognizable public figure, or the prompt or image
+ * is explicit or violent. Retrying never helps and the raw provider sentence
+ * ("rejected by the safety system ... contact help.openai.com") reads as our
+ * outage. Translate it into a user-fixable instruction and a stable code so
+ * the API and the agent can act on it.
+ */
+export const SAFETY_REJECTED_MESSAGE =
+  'The image provider refused this request: the reference photo or prompt was rejected by its safety system. ' +
+  'The usual cause is a photo of a recognizable public figure (celebrity, athlete, politician), which it will not render, ' +
+  'or explicit or violent content. Use a photo of a private person or a text description instead, and re-upload the ORIGINAL file. ' +
+  'Credits for this run are refunded.';
+
+export function classifySafetyRejection(message: string): OpenAIErrorClassification | null {
+  const m = message.toLowerCase();
+  if (
+    m.includes('safety system') ||
+    m.includes('content_policy_violation') ||
+    m.includes('content policy') ||
+    m.includes('moderation_blocked')
+  ) {
+    return { retryable: false, code: 'SAFETY_REJECTED', message: SAFETY_REJECTED_MESSAGE };
+  }
+  return null;
+}
+
 export function classifyOpenAIError(err: unknown): OpenAIErrorClassification {
   if (err instanceof ProxyImageError) {
     return { retryable: err.retryable, code: err.code, message: err.message };
@@ -292,6 +319,8 @@ export function classifyOpenAIError(err: unknown): OpenAIErrorClassification {
   if (err instanceof OpenAI.APIError) {
     const status = err.status ?? 0;
     if (status >= 400 && status < 500) {
+      const safety = classifySafetyRejection(err.message);
+      if (safety) return safety;
       return {
         retryable: false,
         code: `OPENAI_${status}`,
