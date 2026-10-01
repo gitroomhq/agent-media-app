@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { VariableContextComponent } from '@/components/variable-context';
 import './globals.css';
+import OpenAIPixel from '@/components/OpenAIPixel';
 
 /**
  * Rendered per-request, not at build time.
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen bg-background text-text antialiased">
+        <OpenAIPixel />
         <VariableContextComponent
           backendUrl={process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.API_V2_URL ?? ''}
           supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}

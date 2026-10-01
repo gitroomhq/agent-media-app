@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
 import { analytics } from '@/lib/analytics';
+import { oaiq } from '@/components/OpenAIPixel';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -436,6 +437,17 @@ export default function BillingPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
+    // ChatGPT Ads conversions: Stripe returns here with status=success for both
+    // plans (subscription_created, the custom conversion's base event) and PAYG
+    // packs (order_created). session_id dedupes a refreshed success page.
+    if (params.get('status') === 'success') {
+      const sessionId = params.get('session_id') ?? undefined;
+      if (params.get('type') === 'payg') {
+        oaiq('measure', 'order_created', { type: 'customer_action', currency: 'USD' }, sessionId ? { event_id: sessionId } : undefined);
+      } else {
+        oaiq('measure', 'subscription_created', { type: 'customer_action', currency: 'USD' }, sessionId ? { event_id: sessionId } : undefined);
+      }
+    }
     if (params.get('status') === 'success' && params.get('type') === 'payg') {
       setPaygSuccess(
         'Payment successful. Credits will appear in your balance within a few seconds.',
