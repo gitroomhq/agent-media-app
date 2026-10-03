@@ -6,6 +6,7 @@ import { VariableContextComponent } from '@/components/variable-context';
 import './globals.css';
 import OpenAIPixel from '@/components/OpenAIPixel';
 import TikTokPixel from '@/components/TikTokPixel';
+import MetaPixel from '@/components/MetaPixel';
 import TikTokSignup from '@/components/TikTokSignup';
 
 /**
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-background text-text antialiased">
         <OpenAIPixel />
         <TikTokPixel />
+        <MetaPixel />
         <VariableContextComponent
           backendUrl={process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.API_V2_URL ?? ''}
           supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}

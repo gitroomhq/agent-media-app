@@ -37,6 +37,7 @@ import { invokeFn } from '@/lib/supabase/fn-proxy';
 import { analytics } from '@/lib/analytics';
 import { oaiq } from '@/components/OpenAIPixel';
 import { trackCheckoutReturn } from '@/lib/tiktok-pixel';
+import { trackMetaCheckoutReturn } from '@/lib/meta-pixel';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -449,6 +450,7 @@ export default function BillingPage() {
         oaiq('measure', 'subscription_created', { type: 'customer_action', currency: 'USD' }, sessionId ? { event_id: sessionId } : undefined);
       }
       trackCheckoutReturn(params);
+      trackMetaCheckoutReturn(params);
     }
     if (params.get('status') === 'success' && params.get('type') === 'payg') {
       setPaygSuccess(

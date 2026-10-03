@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { trackSignupOnce } from '@/lib/tiktok-pixel';
+import { trackMetaSignupOnce } from '@/lib/meta-pixel';
 
 export default function TikTokSignup() {
   useEffect(() => {
@@ -21,7 +22,9 @@ export default function TikTokSignup() {
       supabase.auth
         .getSession()
         .then(({ data }) => {
-          if (data.session?.user) trackSignupOnce(data.session.user);
+          if (!data.session?.user) return;
+          trackSignupOnce(data.session.user);
+          trackMetaSignupOnce(data.session.user);
         })
         .catch(() => {});
     fire();
