@@ -62,7 +62,7 @@ const COPY: Record<EmailKind, Copy> = {
       'We couldn\'t charge your card for your agent-media plan.',
       'Update your payment method in Billing to keep your credits and your videos running.',
     ],
-    cta: { label: 'Update my card', path: '/billing' },
+    cta: { label: 'Update my card', path: '/billing/update-card' },
   },
   winback_d3: {
     subject: 'what didn\'t work?',

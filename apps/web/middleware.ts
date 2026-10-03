@@ -19,7 +19,9 @@ import {
   updateSession,
   checkSubscription,
   checkOnboarded,
+  getSubscriptionStatus,
 } from '@/lib/supabase/middleware';
+import { pastDueRedirect } from '@/lib/billing-gate';
 import { SECURITY_HEADERS } from '@/lib/security-headers';
 
 /** Routes that require NO authentication. */
@@ -300,6 +302,11 @@ export async function middleware(request: NextRequest) {
       const planUrl = new URL(SUBSCRIPTION_REDIRECT, request.url);
       const redirectResponse = rememberDestination(NextResponse.redirect(planUrl));
       return finish(redirectResponse);
+    }
+    // A failed renewal locks the app until the card is updated.
+    const blockedTo = pastDueRedirect(await getSubscriptionStatus(supabase, user.id), pathname);
+    if (blockedTo) {
+      return finish(NextResponse.redirect(new URL(blockedTo, request.url)));
     }
   }
 

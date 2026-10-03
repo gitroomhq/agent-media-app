@@ -74,6 +74,21 @@ export async function checkSubscription(
   return !!data;
 }
 
+/** Status of the user's paid subscription row, or null when there is none. */
+export async function getSubscriptionStatus(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('status')
+    .eq('user_id', userId)
+    .neq('plan_slug', 'free')
+    .limit(1)
+    .maybeSingle();
+  return (data?.status as string | undefined) ?? null;
+}
+
 /**
  * Check whether a user has finished the post-login onboarding flow.
  * Reads profiles.onboarded_at - any non-null timestamp counts. The

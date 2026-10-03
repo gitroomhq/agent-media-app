@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-const auth = vi.hoisted(() => ({ updateSession: vi.fn(), checkSubscription: vi.fn(), checkOnboarded: vi.fn() }));
+const auth = vi.hoisted(() => ({ updateSession: vi.fn(), checkSubscription: vi.fn(), checkOnboarded: vi.fn(), getSubscriptionStatus: vi.fn() }));
 vi.mock('@/lib/supabase/middleware', () => auth);
 vi.stubEnv('ENFORCE_ONBOARDING', 'true');
 vi.stubEnv('SUBSCRIPTION_REDIRECT', '/onboarding/plan');
@@ -8,7 +8,7 @@ const { middleware } = await import('../middleware');
 beforeEach(() => {
   vi.clearAllMocks();
   auth.updateSession.mockResolvedValue({ user: { id: 'owner' }, supabase: {}, supabaseResponse: NextResponse.next() });
-  auth.checkSubscription.mockResolvedValue(false); auth.checkOnboarded.mockResolvedValue(false);
+  auth.checkSubscription.mockResolvedValue(false); auth.checkOnboarded.mockResolvedValue(false); auth.getSubscriptionStatus.mockResolvedValue('active');
 });
 describe('account setup and recovery access', () => {
   it.each(['/billing', '/billing/success', '/settings', '/settings/api-keys'])('lets a new signed-in user reach %s without a plan or onboarding', async (path) => {
@@ -29,6 +29,14 @@ describe('account setup and recovery access', () => {
     expect(new URL((await middleware(request)).headers.get('location')!).pathname).toBe('/onboarding/plan');
     auth.checkSubscription.mockResolvedValue(true);
     expect((await middleware(request)).status).toBe(200);
+  });
+  it('locks a past_due subscriber out of the app until the card is updated, billing stays open', async () => {
+    auth.checkOnboarded.mockResolvedValue(true); auth.checkSubscription.mockResolvedValue(true);
+    auth.getSubscriptionStatus.mockResolvedValue('past_due');
+    const res = await middleware(new NextRequest('https://app.agent-media.ai/dashboard'));
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/billing/update-card');
+    const billing = await middleware(new NextRequest('https://app.agent-media.ai/billing/update-card'));
+    expect(billing.headers.get('location')).toBeNull();
   });
 });
 
