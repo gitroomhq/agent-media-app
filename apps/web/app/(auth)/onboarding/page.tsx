@@ -19,8 +19,6 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { AgentMediaLogo } from '@/components/agent-media-logo';
 import { Home2CTAButton } from '@/components/home2-cta-button';
 import { useOnboardingEvent, logOnboardingEvent } from '@/components/onboarding/use-onboarding-event';
-import { createClient } from '@/lib/supabase/client';
-import { trackSignupOnce } from '@/lib/tiktok-pixel';
 
 // Map a stored onboarding_step back to the route the user should resume
 // on. Welcome itself is also a valid resume target (or first visit).
@@ -40,16 +38,6 @@ export default function OnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   useOnboardingEvent('welcome');
 
-  // TikTok Ads signup conversion. New accounts are gated into /onboarding,
-  // so this is the first page every fresh signup lands on.
-  useEffect(() => {
-    createClient()
-      .auth.getSession()
-      .then(({ data }) => {
-        if (data.session?.user) trackSignupOnce(data.session.user);
-      })
-      .catch(() => {});
-  }, []);
 
   // Resume logic: if profiles.onboarding_step is anything other than
   // null/'welcome', skip past the welcome screen and drop the user

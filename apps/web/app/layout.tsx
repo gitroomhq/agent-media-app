@@ -6,6 +6,7 @@ import { VariableContextComponent } from '@/components/variable-context';
 import './globals.css';
 import OpenAIPixel from '@/components/OpenAIPixel';
 import TikTokPixel from '@/components/TikTokPixel';
+import TikTokSignup from '@/components/TikTokSignup';
 
 /**
  * Rendered per-request, not at build time.
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           sentryDsn={process.env.NEXT_PUBLIC_SENTRY_DSN ?? ''}
           posthogKey={process.env.NEXT_PUBLIC_POSTHOG_KEY ?? ''}
         >
+          <TikTokSignup />
           {children}
         </VariableContextComponent>
       </body>
