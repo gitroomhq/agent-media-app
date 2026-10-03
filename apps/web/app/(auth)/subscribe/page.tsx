@@ -28,6 +28,7 @@ import { ChevronRight, Loader2, Plus } from 'lucide-react';
 import { invokeFn } from '@/lib/supabase/fn-proxy';
 import { createClient } from '@/lib/supabase/client';
 import { analytics } from '@/lib/analytics';
+import { ExitOfferModal, useExitOffer } from '@/components/exit-offer-modal';
 
 interface PlanOption {
   /** Plan tier id sent to the Supabase `checkout` function. */
@@ -111,6 +112,7 @@ const PLANS: PlanOption[] = [
 export default function SubscribePage() {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+  const exitOffer = useExitOffer(loading !== null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -153,17 +155,17 @@ export default function SubscribePage() {
     };
   }, [router]);
 
-  async function handleSubscribe(tier: string, trial = false) {
+  async function handleSubscribe(tier: string, trial = false, exitOffer = false) {
     setLoading(trial ? 'trial' : tier);
     setError(null);
-    analytics.trackEvent('plan_selected', { tier, trial });
+    analytics.trackEvent('plan_selected', { tier, trial, exitOffer });
 
     try {
       // dub.co affiliate click id, set as a cookie by the analytics script.
       const dubId = document.cookie.match(/(?:^|;\s*)dub_id=([^;]*)/)?.[1] || undefined;
 
       const { data, error: fnError } = await invokeFn('checkout', {
-        body: { plan_tier: tier, ...(trial ? { trial: true } : {}), ...(dubId ? { dub_id: dubId } : {}) },
+        body: { plan_tier: tier, ...(trial ? { trial: true } : {}), ...(exitOffer ? { exit_offer: true } : {}), ...(dubId ? { dub_id: dubId } : {}) },
       });
 
       if (fnError) throw new Error(fnError.message || 'Checkout failed');
@@ -185,6 +187,22 @@ export default function SubscribePage() {
           {error}
         </div>
       )}
+
+      {exitOffer.open ? (
+        <ExitOfferModal
+          dark
+          plans={PLANS.map((p) => ({ tier: p.tier, name: p.title, priceMonthly: p.price }))}
+          loadingTier={loading}
+          onAccept={(tier) => {
+            analytics.trackEvent('exit_offer_accepted', { tier });
+            void handleSubscribe(tier, false, true);
+          }}
+          onClose={() => {
+            analytics.trackEvent('exit_offer_dismissed');
+            exitOffer.setOpen(false);
+          }}
+        />
+      ) : null}
 
       <div
         data-testid="free-trial"

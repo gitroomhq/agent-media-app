@@ -23,6 +23,7 @@
  */
 
 import Link from 'next/link';
+import { ExitOfferModal, useExitOffer } from '@/components/exit-offer-modal';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Loader2, Check, AlertCircle, LogOut } from 'lucide-react';
@@ -87,9 +88,14 @@ export default function OnboardingPlanPage() {
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   useOnboardingEvent('plan');
+  const exitOffer = useExitOffer(loadingTier !== null);
+  useEffect(() => {
+    if (exitOffer.open) void logOnboardingEvent('plan', 'exit_offer_shown');
+  }, [exitOffer.open]);
 
   async function handleSignOut() {
     if (signingOut) return;
+    if (exitOffer.interceptLogout()) return; // show the offer once before leaving
     setSigningOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -105,14 +111,14 @@ export default function OnboardingPlanPage() {
     if (m?.[1]) setDubId(m[1]);
   }, []);
 
-  async function handleSelect(plan: Plan, trial = false) {
+  async function handleSelect(plan: Plan, trial = false, exitOfferAccepted = false) {
     if (loadingTier) return;
     setLoadingTier(trial ? 'trial' : plan.tier);
     setError(null);
     try {
-      void logOnboardingEvent('plan', 'checkout_started', { tier: plan.tier, trial });
+      void logOnboardingEvent('plan', 'checkout_started', { tier: plan.tier, trial, exit_offer: exitOfferAccepted });
       const { data, error: fnError } = await invokeFn('checkout', {
-        body: { plan_tier: plan.tier, ...(trial ? { trial: true } : {}), ...(dubId ? { dub_id: dubId } : {}) },
+        body: { plan_tier: plan.tier, ...(trial ? { trial: true } : {}), ...(exitOfferAccepted ? { exit_offer: true } : {}), ...(dubId ? { dub_id: dubId } : {}) },
       });
       if (fnError) {
         throw new Error(fnError.message || 'Checkout failed');
@@ -175,6 +181,22 @@ export default function OnboardingPlanPage() {
               Pick a plan to start creating. Cancel anytime.
             </p>
           </div>
+
+          {exitOffer.open ? (
+            <ExitOfferModal
+              plans={PLANS.map((p) => ({ tier: p.tier, name: p.name, priceMonthly: p.priceMonthly }))}
+              loadingTier={loadingTier}
+              onAccept={(tier) => {
+                void logOnboardingEvent('plan', 'exit_offer_accepted', { tier });
+                const plan = PLANS.find((p) => p.tier === tier);
+                if (plan) void handleSelect(plan, false, true);
+              }}
+              onClose={() => {
+                void logOnboardingEvent('plan', 'exit_offer_dismissed');
+                exitOffer.setOpen(false);
+              }}
+            />
+          ) : null}
 
           <div
             data-testid="free-trial"

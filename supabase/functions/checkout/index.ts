@@ -24,6 +24,7 @@ import { checkRateLimit, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders, getSecurityHeaders } from "../_shared/security-headers.ts";
 import Stripe from "https://esm.sh/stripe@17?target=deno";
 import { trialSubscriptionData } from "../_shared/free-trial.ts";
+import { EXIT_OFFER, exitOfferDiscount } from "../_shared/exit-offer.ts";
 
 // ── Env Validation ──────────────────────────────────────────────────────────
 
@@ -116,6 +117,8 @@ interface CheckoutRequestBody {
   elements?: boolean;
   /** Card-required free 5s video trial (Creator only, first subscription). */
   trial?: boolean;
+  /** Exit-intent offer: 30% off the first month (first subscription only). */
+  exit_offer?: boolean;
 }
 
 const VALID_PLAN_TIERS = new Set(["starter", "creator", "pro_plus"]);
@@ -337,17 +340,42 @@ async function createSubscriptionCheckout(
     // Fall through to new checkout if subscription check fails
   }
 
-  // Free 5s video trial: only for customers who never had a subscription.
+  // Free 5s video trial and the exit-intent offer: only for customers who
+  // never had a subscription.
   let trial: ReturnType<typeof trialSubscriptionData> = null;
-  if (body?.trial === true) {
-    let hadSubscription = true; // fail closed: no trial if we cannot check
+  let discounts: ReturnType<typeof exitOfferDiscount> = null;
+  if (body?.trial === true || body?.exit_offer === true) {
+    let hadSubscription = true; // fail closed: no offer if we cannot check
     try {
       const anySub = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 1 });
       hadSubscription = anySub.data.length > 0;
     } catch (err) {
-      console.error("Trial eligibility check failed:", err);
+      console.error("Offer eligibility check failed:", err);
     }
-    trial = trialSubscriptionData({ planTier, wantsTrial: true, hadSubscription });
+    trial = trialSubscriptionData({ planTier, wantsTrial: body?.trial === true, hadSubscription });
+    discounts = exitOfferDiscount({
+      planTier,
+      wantsOffer: body?.exit_offer === true,
+      hadSubscription,
+      trial: trial !== null,
+    });
+    if (discounts) {
+      try {
+        await stripe.coupons.retrieve(EXIT_OFFER.couponId);
+      } catch {
+        try {
+          await stripe.coupons.create({
+            id: EXIT_OFFER.couponId,
+            name: EXIT_OFFER.name,
+            percent_off: EXIT_OFFER.percentOff,
+            duration: EXIT_OFFER.duration,
+          });
+        } catch (err) {
+          console.error("Exit offer coupon unavailable:", err);
+          discounts = null; // never block checkout over the coupon
+        }
+      }
+    }
   }
 
   // No existing subscription — create a new checkout session
@@ -405,6 +433,7 @@ async function createSubscriptionCheckout(
       checkout_type: "subscription",
       dubCustomerExternalId: userId,
       ...(trial ? trial.metadata : {}),
+      ...(discounts ? { offer: "exit30" } : {}),
     },
     subscription_data: {
       metadata: {
@@ -416,6 +445,7 @@ async function createSubscriptionCheckout(
     },
     // A trial costs $0 today, but the card is still required.
     ...(trial ? { payment_method_collection: "always" as const } : {}),
+    ...(discounts ? { discounts } : {}),
   };
 
   if (isEmbedded) {

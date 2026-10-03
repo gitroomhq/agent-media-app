@@ -1,7 +1,7 @@
 // Copyright 2026 agent-media contributors. Apache-2.0 license.
 export const ONBOARDING_STEPS = ['welcome', 'showcase', 'product', 'source', 'goal', 'tool', 'preparing', 'plan', 'completed'] as const;
 export type OnboardingStep = typeof ONBOARDING_STEPS[number];
-export const ONBOARDING_EVENTS = ['entered', 'completed', 'skipped', 'checkout_started', 'checkout_ready', 'checkout_failed'] as const;
+export const ONBOARDING_EVENTS = ['entered', 'completed', 'skipped', 'checkout_started', 'checkout_ready', 'checkout_failed', 'exit_offer_shown', 'exit_offer_accepted', 'exit_offer_dismissed'] as const;
 export type OnboardingEvent = typeof ONBOARDING_EVENTS[number];
 export function parseOnboardingEvent(body: unknown) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Expected an event object' } as const;
