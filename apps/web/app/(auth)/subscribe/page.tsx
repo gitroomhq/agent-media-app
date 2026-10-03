@@ -29,6 +29,11 @@ import { invokeFn } from '@/lib/supabase/fn-proxy';
 import { createClient } from '@/lib/supabase/client';
 import { analytics } from '@/lib/analytics';
 import { ExitOfferModal, useExitOffer } from '@/components/exit-offer-modal';
+import { logOnboardingEvent } from '@/lib/onboarding/log-event';
+
+// Funnel rows in onboarding_events. page=subscribe keeps them apart from the
+// onboarding plan step and stops them moving the onboarding resume pointer.
+const PAGE = { page: 'subscribe' } as const;
 
 interface PlanOption {
   /** Plan tier id sent to the Supabase `checkout` function. */
@@ -118,7 +123,12 @@ export default function SubscribePage() {
   useEffect(() => {
     analytics.init();
     analytics.trackEvent('subscribe_page_viewed');
+    void logOnboardingEvent('plan', 'entered', PAGE);
   }, []);
+
+  useEffect(() => {
+    if (exitOffer.open) void logOnboardingEvent('plan', 'exit_offer_shown', PAGE);
+  }, [exitOffer.open]);
 
   // Middleware already guarantees anyone landing here is unsubscribed, so the
   // pricing renders immediately and this never blocks the UI. It exists only to
@@ -159,6 +169,7 @@ export default function SubscribePage() {
     setLoading(trial ? 'trial' : tier);
     setError(null);
     analytics.trackEvent('plan_selected', { tier, trial, exitOffer });
+    void logOnboardingEvent('plan', 'checkout_started', { ...PAGE, tier, trial, exit_offer: exitOffer });
 
     try {
       // dub.co affiliate click id, set as a cookie by the analytics script.
@@ -169,8 +180,11 @@ export default function SubscribePage() {
       });
 
       if (fnError) throw new Error(fnError.message || 'Checkout failed');
-      if (data?.checkout_url) window.location.href = data.checkout_url;
+      if (!data?.checkout_url) throw new Error('Checkout failed');
+      void logOnboardingEvent('plan', 'checkout_ready', { ...PAGE, tier, trial, exit_offer: exitOffer });
+      window.location.href = data.checkout_url;
     } catch (err) {
+      void logOnboardingEvent('plan', 'checkout_failed', { ...PAGE, tier, trial });
       setError(err instanceof Error ? err.message : 'Checkout failed');
     } finally {
       setLoading(null);
@@ -195,10 +209,12 @@ export default function SubscribePage() {
           loadingTier={loading}
           onAccept={(tier) => {
             analytics.trackEvent('exit_offer_accepted', { tier });
+            void logOnboardingEvent('plan', 'exit_offer_accepted', { ...PAGE, tier });
             void handleSubscribe(tier, false, true);
           }}
           onClose={() => {
             analytics.trackEvent('exit_offer_dismissed');
+            void logOnboardingEvent('plan', 'exit_offer_dismissed', PAGE);
             exitOffer.setOpen(false);
           }}
         />

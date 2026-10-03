@@ -44,4 +44,13 @@ describe('shared onboarding contract', () => {
     expect(mocks.captureMessage).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(mocks.captureMessage.mock.calls)).not.toContain('sensitive');
   });
+  it('logs a /subscribe visit without moving the user\'s onboarding resume step', async () => {
+    expect((await POST(request({ step: 'plan', event: 'entered', data: { page: 'subscribe' } }))).status).toBe(200);
+    expect(mocks.insert).toHaveBeenCalledWith({ user_id: 'owner', step: 'plan', event: 'entered', data: { page: 'subscribe' } });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it('still mirrors the step for onboarding pages', async () => {
+    await POST(request({ step: 'plan', event: 'entered' }));
+    expect(mocks.update).toHaveBeenCalledWith({ onboarding_step: 'plan' });
+  });
 });

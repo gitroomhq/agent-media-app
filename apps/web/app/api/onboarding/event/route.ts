@@ -68,7 +68,9 @@ export async function POST(req: Request) {
   // load. We do NOT update for the "completed" pseudo-step here
   // (that's what profiles.onboarded_at is for, set by
   // /api/onboarding/complete).
-  if (event === 'entered' && step !== 'completed') {
+  // The /subscribe wall logs as the plan step too; it is not part of the
+  // onboarding flow, so it must not move the resume pointer.
+  if (event === 'entered' && step !== 'completed' && data.page !== 'subscribe') {
     const { error: updateErr } = await supabase
       .from('profiles')
       .update({ onboarding_step: step })
