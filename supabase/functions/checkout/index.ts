@@ -23,6 +23,7 @@ import { verifyAuth } from "../_shared/auth.ts";
 import { checkRateLimit, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders, getSecurityHeaders } from "../_shared/security-headers.ts";
 import Stripe from "https://esm.sh/stripe@17?target=deno";
+import { trialSubscriptionData } from "../_shared/free-trial.ts";
 
 // ── Env Validation ──────────────────────────────────────────────────────────
 
@@ -113,6 +114,8 @@ interface CheckoutRequestBody {
   dub_id?: string;
   embedded?: boolean;
   elements?: boolean;
+  /** Card-required free 5s video trial (Creator only, first subscription). */
+  trial?: boolean;
 }
 
 const VALID_PLAN_TIERS = new Set(["starter", "creator", "pro_plus"]);
@@ -334,6 +337,19 @@ async function createSubscriptionCheckout(
     // Fall through to new checkout if subscription check fails
   }
 
+  // Free 5s video trial: only for customers who never had a subscription.
+  let trial: ReturnType<typeof trialSubscriptionData> = null;
+  if (body?.trial === true) {
+    let hadSubscription = true; // fail closed: no trial if we cannot check
+    try {
+      const anySub = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 1 });
+      hadSubscription = anySub.data.length > 0;
+    } catch (err) {
+      console.error("Trial eligibility check failed:", err);
+    }
+    trial = trialSubscriptionData({ planTier, wantsTrial: true, hadSubscription });
+  }
+
   // No existing subscription — create a new checkout session
   const siteUrl = Deno.env.get("SITE_URL") ?? "http://localhost:3000";
   const isEmbedded = body?.embedded === true;
@@ -388,13 +404,18 @@ async function createSubscriptionCheckout(
       plan_tier: planTier,
       checkout_type: "subscription",
       dubCustomerExternalId: userId,
+      ...(trial ? trial.metadata : {}),
     },
     subscription_data: {
       metadata: {
         user_id: userId,
         plan_tier: planTier,
+        ...(trial ? trial.metadata : {}),
       },
+      ...(trial ? { trial_period_days: trial.trial_period_days } : {}),
     },
+    // A trial costs $0 today, but the card is still required.
+    ...(trial ? { payment_method_collection: "always" as const } : {}),
   };
 
   if (isEmbedded) {

@@ -105,14 +105,14 @@ export default function OnboardingPlanPage() {
     if (m?.[1]) setDubId(m[1]);
   }, []);
 
-  async function handleSelect(plan: Plan) {
+  async function handleSelect(plan: Plan, trial = false) {
     if (loadingTier) return;
-    setLoadingTier(plan.tier);
+    setLoadingTier(trial ? 'trial' : plan.tier);
     setError(null);
     try {
-      void logOnboardingEvent('plan', 'checkout_started', { tier: plan.tier });
+      void logOnboardingEvent('plan', 'checkout_started', { tier: plan.tier, trial });
       const { data, error: fnError } = await invokeFn('checkout', {
-        body: { plan_tier: plan.tier, ...(dubId ? { dub_id: dubId } : {}) },
+        body: { plan_tier: plan.tier, ...(trial ? { trial: true } : {}), ...(dubId ? { dub_id: dubId } : {}) },
       });
       if (fnError) {
         throw new Error(fnError.message || 'Checkout failed');
@@ -174,6 +174,29 @@ export default function OnboardingPlanPage() {
             <p className="mt-3 text-sm" style={{ color: 'rgba(0,0,0,0.55)' }}>
               Pick a plan to start creating. Cancel anytime.
             </p>
+          </div>
+
+          <div
+            data-testid="free-trial"
+            className="mx-auto mt-8 flex max-w-3xl flex-col items-center gap-3 rounded-3xl px-6 py-5 text-center md:flex-row md:justify-between md:text-left"
+            style={{ border: '1px solid rgba(124,58,237,0.35)', background: 'rgba(124,58,237,0.05)' }}
+          >
+            <div>
+              <p className="text-base font-semibold text-black">Try it first: one free 5-second video</p>
+              <p className="mt-1 text-xs" style={{ color: 'rgba(0,0,0,0.6)' }}>
+                Card required, $0 today. After 3 days you&apos;re on Creator at $39/mo unless you cancel.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleSelect(PLANS[0], true)}
+              disabled={loadingTier !== null}
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold text-white disabled:opacity-60"
+              style={{ background: '#0E0E0E' }}
+            >
+              {loadingTier === 'trial' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Start free video
+            </button>
           </div>
 
           <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-3">

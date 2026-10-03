@@ -37,6 +37,7 @@ import { captureEdgeError } from "../_shared/sentry.ts";
 import { notifyTelegram } from "../_shared/telegram.ts";
 import { PLANS, PAYG_PACKS, planByPriceId } from "./plans.ts";
 import type { PlanDefinition } from "./plans.ts";
+import { checkoutAllowance, firstInvoiceAllowance, isTrialMetadata } from "../_shared/free-trial.ts";
 
 // ─── Env Validation ─────────────────────────────────────────────────────────
 
@@ -338,7 +339,17 @@ async function handleInvoicePaid(
     plan = PLANS[subscription.plan_slug as string];
   }
 
-  const monthlyAllowance = plan?.monthlyCredits ?? 0;
+  // A $0 trial invoice (free 5s video) grants only the trial credits; the
+  // first real period after the trial is a subscription_cycle and resets
+  // to the full allowance.
+  const subDetails = invoice.subscription_details as { metadata?: Record<string, unknown> } | undefined;
+  const isTrialInvoice = billingReason === "subscription_create" &&
+    ((invoice.total as number | undefined) ?? 0) === 0 &&
+    isTrialMetadata(subDetails?.metadata);
+  const monthlyAllowance = firstInvoiceAllowance(
+    { billingReason, total: invoice.total as number | undefined, subMetadata: subDetails?.metadata },
+    plan?.monthlyCredits ?? 0,
+  );
 
   // Extract period from the invoice
   const periodStart = lineItem?.period as Record<string, unknown> | undefined;
@@ -351,7 +362,7 @@ async function handleInvoicePaid(
 
   // Update subscription status + period
   const subUpdate: Record<string, unknown> = {
-    status: "active",
+    status: isTrialInvoice ? "trialing" : "active",
     cancel_at_period_end: false,
   };
   const currentPlan = PLANS[subscription.plan_slug as string];
@@ -836,7 +847,9 @@ async function handleCheckoutSessionCompleted(
   if (mode === "subscription" && stripeSubscriptionId && userId) {
     const planTier = metadata?.plan_tier ?? "starter";
     const plan = PLANS[planTier];
-    const monthlyCredits = plan?.monthlyCredits ?? 0;
+    const isTrial = isTrialMetadata(metadata);
+    // Free 5s video trial: grant one video's worth now, full plan on conversion.
+    const monthlyCredits = checkoutAllowance(metadata, plan?.monthlyCredits ?? 0);
 
     // Link Stripe customer + subscription to our subscription record.
     // If the record doesn't exist yet, create it.
@@ -851,7 +864,7 @@ async function handleCheckoutSessionCompleted(
       const shouldApplyPlan =
         monthlyCredits >= (existingPlan?.monthlyCredits ?? 0);
       const updatePayload: Record<string, unknown> = {
-        status: "active",
+        status: isTrial ? "trialing" : "active",
         cancel_at_period_end: false,
         stripe_customer_id: stripeCustomerId,
         stripe_subscription_id: stripeSubscriptionId,
@@ -909,7 +922,7 @@ async function handleCheckoutSessionCompleted(
         plan_slug: planTier,
         stripe_customer_id: stripeCustomerId,
         stripe_subscription_id: stripeSubscriptionId,
-        status: "active",
+        status: isTrial ? "trialing" : "active",
         cancel_at_period_end: false,
       });
 

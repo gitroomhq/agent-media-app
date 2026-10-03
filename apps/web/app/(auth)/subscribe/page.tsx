@@ -153,17 +153,17 @@ export default function SubscribePage() {
     };
   }, [router]);
 
-  async function handleSubscribe(tier: string) {
-    setLoading(tier);
+  async function handleSubscribe(tier: string, trial = false) {
+    setLoading(trial ? 'trial' : tier);
     setError(null);
-    analytics.trackEvent('plan_selected', { tier });
+    analytics.trackEvent('plan_selected', { tier, trial });
 
     try {
       // dub.co affiliate click id, set as a cookie by the analytics script.
       const dubId = document.cookie.match(/(?:^|;\s*)dub_id=([^;]*)/)?.[1] || undefined;
 
       const { data, error: fnError } = await invokeFn('checkout', {
-        body: { plan_tier: tier, ...(dubId ? { dub_id: dubId } : {}) },
+        body: { plan_tier: tier, ...(trial ? { trial: true } : {}), ...(dubId ? { dub_id: dubId } : {}) },
       });
 
       if (fnError) throw new Error(fnError.message || 'Checkout failed');
@@ -185,6 +185,27 @@ export default function SubscribePage() {
           {error}
         </div>
       )}
+
+      <div
+        data-testid="free-trial"
+        className="mb-6 flex flex-col items-center gap-4 rounded-[20px] border border-[#9162FF]/50 bg-[#9162FF]/10 px-5 py-5 text-center md:flex-row md:justify-between md:text-left"
+      >
+        <div>
+          <p className="text-[18px]/[130%] font-bold text-white">Try it first: one free 5-second video</p>
+          <p className="mt-1 text-[14px]/[150%] text-white/70">
+            Card required, $0 today. After 3 days you&apos;re on Creator at $39/mo unless you cancel.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={!!loading}
+          onClick={() => handleSubscribe('starter', true)}
+          className="inline-flex h-[52px] shrink-0 items-center justify-center gap-2 rounded-full bg-[#9162FF] px-7 text-[16px] font-bold text-white shadow-[0_0_28px_rgba(145,98,255,0.45)] transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {loading === 'trial' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+          {loading === 'trial' ? 'Starting checkout…' : 'Start free video'}
+        </button>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {PLANS.map(({ tier, bgImg, title, badge, price, description, features, credits }, index) => (
