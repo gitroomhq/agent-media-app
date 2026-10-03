@@ -20,6 +20,7 @@ import {
   checkSubscription,
   checkOnboarded,
 } from '@/lib/supabase/middleware';
+import { SECURITY_HEADERS } from '@/lib/security-headers';
 
 /** Routes that require NO authentication. */
 const PUBLIC_ROUTES = new Set(['/', '/login', '/device', '/terms', '/privacy', '/docs', '/status', '/showcase']);
@@ -96,25 +97,6 @@ const ENFORCE_SUBSCRIPTION_WALL = true;
 const ENFORCE_ONBOARDING = process.env.ENFORCE_ONBOARDING !== 'false';
 const SUBSCRIPTION_REDIRECT = process.env.SUBSCRIPTION_REDIRECT ?? '/onboarding/plan';
 
-/** Security headers applied to every response. */
-const SECURITY_HEADERS: Record<string, string> = {
-  'Content-Security-Policy': [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://plausible.io https://www.dubcdn.com",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: *.supabase.co *.fal.media fal.media *.r2.dev *.postiz.com uploads.postiz.com platform.postiz.com *.licdn.com *.pbs.twimg.com *.cdninstagram.com *.fbcdn.net *.googleusercontent.com *.ytimg.com *.tiktokcdn.com *.tiktokcdn-us.com *.bsky.social",
-    "media-src 'self' blob: *.supabase.co *.fal.media fal.media *.r2.dev",
-    "connect-src 'self' *.supabase.co *.supabase.in wss://*.supabase.co https://api.stripe.com https://plausible.io https://api.dub.co",
-    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
-    "frame-ancestors 'none'",
-  ].join('; '),
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'X-XSS-Protection': '1; mode=block',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-};
 
 /**
  * Cross-domain "is this browser signed in?" hint.

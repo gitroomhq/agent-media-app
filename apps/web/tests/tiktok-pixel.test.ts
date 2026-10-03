@@ -56,3 +56,16 @@ describe('tiktok pixel', () => {
     expect(trackSignupOnce({ id: 'u', created_at: new Date(now).toISOString() }, now)).toBe(false);
   });
 });
+
+describe('app CSP lets the TikTok pixel run', () => {
+  it('allows the SDK script and its beacons', async () => {
+    const { SECURITY_HEADERS } = await import('../lib/security-headers');
+    const csp = Object.fromEntries(
+      SECURITY_HEADERS['Content-Security-Policy'].split('; ').map((d) => [d.split(' ')[0], d]),
+    );
+    expect(csp['script-src']).toContain('https://analytics.tiktok.com');
+    expect(csp['connect-src']).toContain('https://analytics.tiktok.com');
+    expect(csp['connect-src']).toContain('https://analytics-ipv6.tiktokw.us');
+    expect(csp['img-src']).toContain('https://analytics.tiktok.com');
+  });
+});
